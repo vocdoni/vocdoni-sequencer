@@ -18,6 +18,7 @@ func main() {
 
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
+	flag.BoolVar(&useBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
 	flag.Parse()
 
 	// Timing the DKG phase

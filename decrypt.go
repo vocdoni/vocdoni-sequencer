@@ -9,10 +9,13 @@ import (
 
 const (
 	// discreteLogMaxMessage is the maximum value for the discrete logarithm problem
-	discreteLogMaxMessage           = 7000000000 * 16 // world population * 16 (maxValue)
+	discreteLogMaxMessage = 7000000000 * 16 // world population * 16 (maxValue)
+	// numWorkersDiscreteLogBruteForce is the number of workers for parallel brute-force search
 	numWorkersDiscreteLogBruteForce = 10
-	useBabyStepGiantStep            = true
 )
+
+// useBabyStepGiantStep determines whether to use the Baby-Step Giant-Step algorithm for discrete logarithm.
+var useBabyStepGiantStep = true
 
 // ComputePartialDecryption computes the partial decryption using the participant's private share.
 func (p *Participant) ComputePartialDecryption(c1 *G1) *G1 {
