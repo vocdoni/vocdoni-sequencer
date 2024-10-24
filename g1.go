@@ -67,6 +67,20 @@ func (g *G1) SetZero() {
 	g.inner.Y.SetZero()
 }
 
+// Set sets the G1 element to the value of another G1 element.
+func (g *G1) Set(a *G1) {
+	g.inner.X.Set(&a.inner.X)
+	g.inner.Y.Set(&a.inner.Y)
+}
+
+// SetGenerator sets the G1 element to the generator point.
+func (g *G1) SetGenerator() *G1 {
+	var gen bn254.G1Affine
+	gen.FromJacobian(&bn254.G1Jac{})
+	g.inner = gen
+	return g
+}
+
 func (g *G1) String() string {
 	bytes := g.Marshal()
 	return fmt.Sprintf("%x", bytes)

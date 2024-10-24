@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -86,7 +87,19 @@ func main() {
 
 	// Generate random votes, encrypt and aggregate
 	log.Printf("Simulating %d votes...", numVoters)
+	var votesDone atomic.Uint32
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			votesDoneVal := votesDone.Load()
+			if votesDoneVal == uint32(numVoters) {
+				return
+			}
+			log.Printf("Votes done %d (%.2f%%)", votesDoneVal, float64(votesDoneVal)/float64(numVoters)*100)
+		}
+	}()
 	wg := sync.WaitGroup{}
+	sem := make(chan struct{}, 100)
 	for i := 0; i < numVoters; i++ {
 		voteValue, err := rand.Int(rand.Reader, big.NewInt(int64(maxValue)))
 		if err != nil {
@@ -94,6 +107,7 @@ func main() {
 		}
 		expectedSum.Add(expectedSum, voteValue)
 		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
 			c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
 			if err != nil {
@@ -103,6 +117,8 @@ func main() {
 			aggC1.SafeAdd(aggC1, c1)
 			aggC2.SafeAdd(aggC2, c2)
 			wg.Done()
+			votesDone.Add(1)
+			<-sem
 		}()
 	}
 	wg.Wait()

@@ -3,12 +3,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 )
 
 const (
-	discreteLogMaxMessage = 1000000
-	numWorkersDiscreteLog = 8
+	// discreteLogMaxMessage is the maximum value for the discrete logarithm problem
+	discreteLogMaxMessage           = 7000000000 * 16 // world population * 16 (maxValue)
+	numWorkersDiscreteLogBruteForce = 10
+	useBabyStepGiantStep            = true
 )
 
 // ComputePartialDecryption computes the partial decryption using the participant's private share.
@@ -49,51 +52,72 @@ func CombinePartialDecryptions(c2 *G1, partialDecryptions map[int]*G1, participa
 	// Since M = message * G, find scalar 'message' such that M = message * G.
 	// This is the discrete logarithm problem.
 
-	// Perform a parallel brute-force search.
-	type result struct {
-		messageScalar *big.Int
-		found         bool
-	}
+	if !useBabyStepGiantStep {
+		// Perform a parallel brute-force search.
+		// Each worker searches for the message scalar in a range of values.
+		// The search space is limited to discreteLogMaxMessage.
+		// The number of workers is numWorkersDiscreteLog.
+		// The first worker to find the message scalar returns it.
+		// If no worker finds the message scalar, return an error.
 
-	results := make(chan result, numWorkersDiscreteLog)
-	done := make(chan struct{})
-	defer close(done)
+		log.Print("Starting parallel brute-force search for message scalar...")
 
-	// Worker function
-	worker := func(start, end int) {
-		testPoint := &G1{}
-		for i := start; i <= end; i++ {
-			messageScalar := big.NewInt(int64(i))
-			testPoint.ScalarBaseMult(messageScalar)
-			if testPoint.Equal(m) {
-				select {
-				case results <- result{messageScalar, true}:
-				case <-done:
+		type result struct {
+			messageScalar *big.Int
+			found         bool
+		}
+
+		results := make(chan result, numWorkersDiscreteLogBruteForce)
+		done := make(chan struct{})
+		defer close(done)
+
+		// Worker function
+		worker := func(start, end uint64) {
+			testPoint := &G1{}
+			for i := start; i <= end; i++ {
+				messageScalar := big.NewInt(int64(i))
+				testPoint.ScalarBaseMult(messageScalar)
+				if testPoint.Equal(m) {
+					select {
+					case results <- result{messageScalar, true}:
+					case <-done:
+					}
+					return
 				}
-				return
+			}
+			results <- result{nil, false}
+		}
+
+		// Start workers
+		step := discreteLogMaxMessage / numWorkersDiscreteLogBruteForce
+		for i := 0; i < numWorkersDiscreteLogBruteForce; i++ {
+			start := uint64(i * step)
+			end := start + uint64(step-1)
+			if i == numWorkersDiscreteLogBruteForce-1 {
+				end = uint64(discreteLogMaxMessage)
+			}
+			go worker(start, end)
+		}
+
+		// Collect results
+		for i := 0; i < numWorkersDiscreteLogBruteForce; i++ {
+			res := <-results
+			if res.found {
+				log.Printf("Decrypted Message Found: %s", res.messageScalar.String())
+				return res.messageScalar, nil
 			}
 		}
-		results <- result{nil, false}
-	}
-
-	// Start workers
-	step := discreteLogMaxMessage / numWorkersDiscreteLog
-	for i := 0; i < numWorkersDiscreteLog; i++ {
-		start := i * step
-		end := start + step - 1
-		if i == numWorkersDiscreteLog-1 {
-			end = discreteLogMaxMessage
+	} else {
+		// Use Pollard's Kangaroo algorithm to solve the discrete logarithm problem.
+		// This is a more efficient algorithm compared to brute-force search.
+		// However it is not guaranteed to find the solution and may fail in some cases.
+		log.Print("Using Baby-Step Giant-Step algorithm to solve the discrete logarithm problem...")
+		messageScalar, err := babyStepGiantStep(m)
+		if err != nil {
+			return nil, err
 		}
-		go worker(start, end)
-	}
-
-	// Collect results
-	for i := 0; i < numWorkersDiscreteLog; i++ {
-		res := <-results
-		if res.found {
-			log.Printf("Decrypted Message Found: %s", res.messageScalar.String())
-			return res.messageScalar, nil
-		}
+		log.Printf("Decrypted Message Found: %s", messageScalar.String())
+		return messageScalar, nil
 	}
 
 	return nil, fmt.Errorf("failed to decrypt message, discrete logarithm problem unsolved")
@@ -133,4 +157,48 @@ func computeLagrangeCoefficients(participants []int) map[int]*big.Int {
 		coeffs[i] = coeff
 	}
 	return coeffs
+}
+
+// babyStepGiantStep computes the discrete logarithm using the Baby-Step Giant-Step algorithm.
+func babyStepGiantStep(m *G1) (*big.Int, error) {
+	maxMessage := discreteLogMaxMessage
+
+	mSqrt := uint64(math.Sqrt(float64(maxMessage))) + 1
+
+	// Create a map for baby steps
+	babySteps := make(map[string]uint64)
+	G := &G1{}
+	G.ScalarBaseMult(big.NewInt(1)) // G = generator point
+
+	// Precompute baby steps
+	babyStep := &G1{}
+	babyStep.SetZero()
+	for j := uint64(0); j < mSqrt; j++ {
+		key := babyStep.String()
+		babySteps[key] = j
+		babyStep.Add(babyStep, G)
+	}
+
+	// Compute the factor for giant steps: c = mSqrt * (-G)
+	c := &G1{}
+	c.ScalarBaseMult(big.NewInt(int64(mSqrt)))
+	c.Neg(c) // c = -mSqrt * G
+
+	// Initialize the giant step
+	giantStep := &G1{}
+	giantStep.inner.Set(&m.inner)
+
+	// Perform giant steps
+	for i := uint64(0); i <= mSqrt; i++ {
+		key := giantStep.String()
+		if j, found := babySteps[key]; found {
+			// x = i * mSqrt + j
+			x := new(big.Int).SetUint64(i * mSqrt)
+			x.Add(x, new(big.Int).SetUint64(j))
+			return x, nil
+		}
+		giantStep.Add(giantStep, c)
+	}
+
+	return nil, fmt.Errorf("failed to compute discrete logarithm using Baby-Step Giant-Step algorithm")
 }
