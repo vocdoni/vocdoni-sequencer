@@ -6,6 +6,11 @@ import (
 	"math/big"
 )
 
+const (
+	discreteLogMaxMessage = 1000000
+	numWorkersDiscreteLog = 8
+)
+
 // ComputePartialDecryption computes the partial decryption using the participant's private share.
 func (p *Participant) ComputePartialDecryption(c1 *G1) *G1 {
 	// Compute s_i = privateShare * C1.
@@ -44,15 +49,50 @@ func CombinePartialDecryptions(c2 *G1, partialDecryptions map[int]*G1, participa
 	// Since M = message * G, find scalar 'message' such that M = message * G.
 	// This is the discrete logarithm problem.
 
-	// For small messages, perform a brute-force search.
-	maxMessage := 1000000
-	testPoint := &G1{}
-	for i := 0; i <= maxMessage; i++ {
-		messageScalar := big.NewInt(int64(i))
-		testPoint.ScalarBaseMult(messageScalar)
-		if testPoint.Equal(m) {
-			log.Printf("Decrypted Message Found: %d", i)
-			return messageScalar, nil
+	// Perform a parallel brute-force search.
+	type result struct {
+		messageScalar *big.Int
+		found         bool
+	}
+
+	results := make(chan result, numWorkersDiscreteLog)
+	done := make(chan struct{})
+	defer close(done)
+
+	// Worker function
+	worker := func(start, end int) {
+		testPoint := &G1{}
+		for i := start; i <= end; i++ {
+			messageScalar := big.NewInt(int64(i))
+			testPoint.ScalarBaseMult(messageScalar)
+			if testPoint.Equal(m) {
+				select {
+				case results <- result{messageScalar, true}:
+				case <-done:
+				}
+				return
+			}
+		}
+		results <- result{nil, false}
+	}
+
+	// Start workers
+	step := discreteLogMaxMessage / numWorkersDiscreteLog
+	for i := 0; i < numWorkersDiscreteLog; i++ {
+		start := i * step
+		end := start + step - 1
+		if i == numWorkersDiscreteLog-1 {
+			end = discreteLogMaxMessage
+		}
+		go worker(start, end)
+	}
+
+	// Collect results
+	for i := 0; i < numWorkersDiscreteLog; i++ {
+		res := <-results
+		if res.found {
+			log.Printf("Decrypted Message Found: %s", res.messageScalar.String())
+			return res.messageScalar, nil
 		}
 	}
 

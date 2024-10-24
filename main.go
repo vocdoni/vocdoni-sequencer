@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -73,31 +74,8 @@ func main() {
 	// Simulate voting
 	votingStart := time.Now()
 
-	// Generate random votes
-	votes := make([]*big.Int, numVoters)
-	for i := 0; i < numVoters; i++ {
-		voteValue, err := rand.Int(rand.Reader, big.NewInt(int64(maxValue)))
-		if err != nil {
-			log.Fatalf("Failed to generate random vote: %v", err)
-		}
-		votes[i] = voteValue
-	}
-
-	// Encrypt votes
-	encryptedVotes := make([][2]*G1, numVoters)
-	for i, vote := range votes {
-		c1, c2, err := Encrypt(vote, participants[1].PublicKey)
-		if err != nil {
-			log.Fatalf("Encryption failed for vote %d: %v", i, err)
-		}
-		encryptedVotes[i] = [2]*G1{c1, c2}
-	}
-
-	votingDuration := time.Since(votingStart)
-	log.Printf("Voting Phase Duration: %s", votingDuration)
-
-	// Aggregation of encrypted votes
-	aggregationStart := time.Now()
+	// expectedSum is the sum of all votes (plaintext)
+	expectedSum := big.NewInt(0)
 
 	// Initialize aggC1 and aggC2 to the identity element (point at infinity)
 	aggC1 := &G1{}
@@ -106,14 +84,31 @@ func main() {
 	aggC2 := &G1{}
 	aggC2.SetZero()
 
-	// Aggregate ciphertexts
-	for _, encVote := range encryptedVotes {
-		aggC1.Add(aggC1, encVote[0])
-		aggC2.Add(aggC2, encVote[1])
+	// Generate random votes, encrypt and aggregate
+	log.Printf("Simulating %d votes...", numVoters)
+	wg := sync.WaitGroup{}
+	for i := 0; i < numVoters; i++ {
+		voteValue, err := rand.Int(rand.Reader, big.NewInt(int64(maxValue)))
+		if err != nil {
+			log.Fatalf("Failed to generate random vote: %v", err)
+		}
+		expectedSum.Add(expectedSum, voteValue)
+		wg.Add(1)
+		go func() {
+			c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
+			if err != nil {
+				log.Fatalf("Encryption failed for vote %d: %v", i, err)
+			}
+			// Aggregate ciphertexts
+			aggC1.SafeAdd(aggC1, c1)
+			aggC2.SafeAdd(aggC2, c2)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 
-	aggregationDuration := time.Since(aggregationStart)
-	log.Printf("Aggregation Phase Duration: %s", aggregationDuration)
+	votingDuration := time.Since(votingStart)
+	log.Printf("Voting Phase Duration: %s", votingDuration)
 
 	// Decryption
 	decryptionStart := time.Now()
@@ -139,12 +134,6 @@ func main() {
 	log.Printf("Decryption Phase Duration: %s", decryptionDuration)
 
 	// Verify the sum
-	// Calculate the expected sum
-	expectedSum := big.NewInt(0)
-	for _, vote := range votes {
-		expectedSum.Add(expectedSum, vote)
-	}
-
 	if decryptedSum.Cmp(expectedSum) == 0 {
 		log.Printf("Success: Decrypted sum matches the expected sum.")
 	} else {

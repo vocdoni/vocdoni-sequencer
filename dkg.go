@@ -64,7 +64,7 @@ func (p *Participant) ComputeShares() {
 		share := p.evaluatePolynomial(big.NewInt(int64(pid)))
 		p.SecretShares[pid] = share
 		// Log the computed share
-		log.Printf("Participant %d: Share for Participant %d = %s", p.ID, pid, share.String())
+		//log.Printf("Participant %d: Share for Participant %d = %s", p.ID, pid, share.String())
 	}
 }
 

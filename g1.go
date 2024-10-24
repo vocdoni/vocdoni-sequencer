@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -13,10 +14,19 @@ var Order = fr.Modulus()
 // G1 is the affine representation of a G1 group element.
 type G1 struct {
 	inner bn254.G1Affine
+	lock  sync.Mutex
 }
 
 // Add adds two G1 elements and stores the result in the receiver.
 func (g *G1) Add(a, b *G1) {
+	g.inner.Add(&a.inner, &b.inner)
+}
+
+// SafeAdd adds two G1 elements and stores the result in the receiver.
+// It is thread-safe.
+func (g *G1) SafeAdd(a, b *G1) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
 	g.inner.Add(&a.inner, &b.inner)
 }
 
