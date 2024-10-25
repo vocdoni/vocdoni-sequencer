@@ -1,19 +1,23 @@
-package main
+package bn254
 
 import (
 	"crypto/rand"
+	"log"
 	"math/big"
 )
 
 // Encrypt encrypts a message using the aggregated public key.
-func Encrypt(message *big.Int, publicKey *G1) (*G1, *G1, error) {
+func Encrypt(message *big.Int, publicKey *G1) (*G1, *G1, *big.Int, error) {
+	log.Println("pkX", publicKey.inner.X.String())
+	log.Println("pkY", publicKey.inner.Y.String())
+
 	// Ensure the message is within the field.
 	message.Mod(message, Order)
 
 	// Generate random k.
 	k, err := rand.Int(rand.Reader, Order)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Compute C1 = k * G.
@@ -38,5 +42,5 @@ func Encrypt(message *big.Int, publicKey *G1) (*G1, *G1, error) {
 	//log.Printf("Encryption: C1 = %s", c1.String())
 	//log.Printf("Encryption: C2 = %s", c2.String())
 
-	return c1, c2, nil
+	return c1, c2, k, nil
 }

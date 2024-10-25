@@ -1,4 +1,4 @@
-package main
+package bn254
 
 import (
 	"fmt"

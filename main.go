@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/vocdoni/elGamal-sandbox/bn254"
 )
 
 func main() {
@@ -18,7 +20,7 @@ func main() {
 
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
-	flag.BoolVar(&useBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
+	flag.BoolVar(&bn254.UseBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
 	flag.Parse()
 
 	// Timing the DKG phase
@@ -29,14 +31,14 @@ func main() {
 	participantIDs := []int{1, 2, 3, 4, 5}
 
 	// Initialize participants
-	participants := make(map[int]*Participant)
+	participants := make(map[int]*bn254.Participant)
 	for _, id := range participantIDs {
-		participants[id] = NewParticipant(id, threshold, participantIDs)
+		participants[id] = bn254.NewParticipant(id, threshold, participantIDs)
 		participants[id].GenerateSecretPolynomial()
 	}
 
 	// Exchange commitments and shares
-	allPublicCoeffs := make(map[int][]*G1)
+	allPublicCoeffs := make(map[int][]*bn254.G1)
 	for id, p := range participants {
 		allPublicCoeffs[id] = p.PublicCoeffs
 	}
@@ -80,10 +82,10 @@ func main() {
 	expectedSum := big.NewInt(0)
 
 	// Initialize aggC1 and aggC2 to the identity element (point at infinity)
-	aggC1 := &G1{}
+	aggC1 := &bn254.G1{}
 	aggC1.SetZero()
 
-	aggC2 := &G1{}
+	aggC2 := &bn254.G1{}
 	aggC2.SetZero()
 
 	// Generate random votes, encrypt and aggregate
@@ -110,7 +112,7 @@ func main() {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
-			c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
+			c1, c2, _, err := bn254.Encrypt(voteValue, participants[1].PublicKey)
 			if err != nil {
 				log.Fatalf("Encryption failed for vote %d: %v", i, err)
 			}
@@ -131,7 +133,7 @@ func main() {
 	decryptionStart := time.Now()
 
 	// Participants compute partial decryptions
-	partialDecryptions := make(map[int]*G1)
+	partialDecryptions := make(map[int]*bn254.G1)
 	participantSubset := []int{1, 2, 3} // Using threshold number of participants
 	for _, id := range participantSubset {
 		p := participants[id]
@@ -140,7 +142,7 @@ func main() {
 	}
 
 	// Combine partial decryptions to recover the sum of votes
-	decryptedSum, err := CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
+	decryptedSum, err := bn254.CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
 	if err != nil {
 		log.Fatalf("Decryption failed: %v", err)
 	} else {

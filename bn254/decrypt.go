@@ -1,4 +1,4 @@
-package main
+package bn254
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ const (
 )
 
 // useBabyStepGiantStep determines whether to use the Baby-Step Giant-Step algorithm for discrete logarithm.
-var useBabyStepGiantStep = true
+var UseBabyStepGiantStep = true
 
 // ComputePartialDecryption computes the partial decryption using the participant's private share.
 func (p *Participant) ComputePartialDecryption(c1 *G1) *G1 {
@@ -55,7 +55,7 @@ func CombinePartialDecryptions(c2 *G1, partialDecryptions map[int]*G1, participa
 	// Since M = message * G, find scalar 'message' such that M = message * G.
 	// This is the discrete logarithm problem.
 
-	if !useBabyStepGiantStep {
+	if !UseBabyStepGiantStep {
 		// Perform a parallel brute-force search.
 		// Each worker searches for the message scalar in a range of values.
 		// The search space is limited to discreteLogMaxMessage.
