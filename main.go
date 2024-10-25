@@ -10,18 +10,26 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/vocdoni/elGamal-sandbox/bn254"
+	"github.com/vocdoni/elGamal-sandbox/ecc"
+	"github.com/vocdoni/elGamal-sandbox/ecc/curves"
 )
 
 func main() {
 	// Parameters
 	maxValue := 5    // Number of candidates (e.g., 0 to 4)
 	numVoters := 100 // Number of voters
+	curve := ""
 
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
-	flag.BoolVar(&bn254.UseBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
+	flag.BoolVar(&useBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
+	flag.StringVar(&curve, "curve", curves.CurveTypeBN254, "Curve type: bjj_gnark or bjj_iden3 (BabyJubJub) or bn254 (BN254)")
 	flag.Parse()
+
+	curvePoint, err := curves.New(curve)
+	if err != nil {
+		log.Fatalf("Failed to create curve point: %v", err)
+	}
 
 	// Timing the DKG phase
 	dkgStart := time.Now()
@@ -31,14 +39,14 @@ func main() {
 	participantIDs := []int{1, 2, 3, 4, 5}
 
 	// Initialize participants
-	participants := make(map[int]*bn254.Participant)
+	participants := make(map[int]*Participant)
 	for _, id := range participantIDs {
-		participants[id] = bn254.NewParticipant(id, threshold, participantIDs)
+		participants[id] = NewParticipant(id, threshold, participantIDs, curvePoint)
 		participants[id].GenerateSecretPolynomial()
 	}
 
 	// Exchange commitments and shares
-	allPublicCoeffs := make(map[int][]*bn254.G1)
+	allPublicCoeffs := make(map[int][]ecc.Point)
 	for id, p := range participants {
 		allPublicCoeffs[id] = p.PublicCoeffs
 	}
@@ -82,10 +90,10 @@ func main() {
 	expectedSum := big.NewInt(0)
 
 	// Initialize aggC1 and aggC2 to the identity element (point at infinity)
-	aggC1 := &bn254.G1{}
+	aggC1 := curvePoint.New()
 	aggC1.SetZero()
 
-	aggC2 := &bn254.G1{}
+	aggC2 := curvePoint.New()
 	aggC2.SetZero()
 
 	// Generate random votes, encrypt and aggregate
@@ -112,7 +120,7 @@ func main() {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
-			c1, c2, _, err := bn254.Encrypt(voteValue, participants[1].PublicKey)
+			c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
 			if err != nil {
 				log.Fatalf("Encryption failed for vote %d: %v", i, err)
 			}
@@ -133,7 +141,7 @@ func main() {
 	decryptionStart := time.Now()
 
 	// Participants compute partial decryptions
-	partialDecryptions := make(map[int]*bn254.G1)
+	partialDecryptions := make(map[int]ecc.Point)
 	participantSubset := []int{1, 2, 3} // Using threshold number of participants
 	for _, id := range participantSubset {
 		p := participants[id]
@@ -142,7 +150,7 @@ func main() {
 	}
 
 	// Combine partial decryptions to recover the sum of votes
-	decryptedSum, err := bn254.CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
+	decryptedSum, err := CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
 	if err != nil {
 		log.Fatalf("Decryption failed: %v", err)
 	} else {
