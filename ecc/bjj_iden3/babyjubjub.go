@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	babyjubjub "github.com/iden3/go-iden3-crypto/babyjub"
-	"github.com/iden3/go-iden3-crypto/constants"
 
 	curve "github.com/vocdoni/elGamal-sandbox/ecc"
 )
@@ -22,7 +21,7 @@ func (g *BJJ) New() curve.Point {
 }
 
 func (g *BJJ) Order() *big.Int {
-	return babyjubjub.Order
+	return babyjubjub.SubOrder
 }
 
 func (g *BJJ) Add(a, b curve.Point) {
@@ -36,11 +35,11 @@ func (g *BJJ) SafeAdd(a, b curve.Point) {
 }
 
 func (g *BJJ) ScalarMult(a curve.Point, scalar *big.Int) {
-	g.inner.Mul(scalar, a.(*BJJ).inner)
+	g.inner = g.inner.Mul(scalar, a.(*BJJ).inner)
 }
 
 func (g *BJJ) ScalarBaseMult(scalar *big.Int) {
-	g.inner.Mul(scalar, babyjubjub.B8)
+	g.inner = g.inner.Mul(scalar, babyjubjub.B8)
 }
 
 func (g *BJJ) Marshal() []byte {
@@ -60,8 +59,11 @@ func (g *BJJ) Equal(a curve.Point) bool {
 }
 
 func (g *BJJ) Neg(a curve.Point) {
-	g.inner.X.Neg(g.inner.X) // Negate the x-coordinate
-	g.inner.X.Mod(g.inner.X, constants.Q)
+	proj := g.inner.Projective()
+	proj.X = proj.X.Neg(proj.X)
+	g.inner.X = g.inner.X.Set(proj.Affine().X)
+	//g.inner.X = g.inner.X.Neg(g.inner.X) // Negate the x-coordinate
+	//g.inner.X = g.inner.X.Mod(g.inner.X, constants.Q)
 }
 
 func (g *BJJ) SetZero() {
@@ -73,14 +75,14 @@ func (g *BJJ) SetZero() {
 }
 
 func (g *BJJ) Set(a curve.Point) {
-	g.inner.X.Set(a.(*BJJ).inner.X)
-	g.inner.Y.Set(a.(*BJJ).inner.Y)
+	g.inner.X = g.inner.X.Set(a.(*BJJ).inner.X)
+	g.inner.Y = g.inner.Y.Set(a.(*BJJ).inner.Y)
 }
 
 func (g *BJJ) SetGenerator() {
 	gen := babyjubjub.B8
-	g.inner.X.Set(gen.X)
-	g.inner.Y.Set(gen.Y)
+	g.inner.X = g.inner.X.Set(gen.X)
+	g.inner.Y = g.inner.Y.Set(gen.Y)
 }
 
 func (g *BJJ) String() string {
