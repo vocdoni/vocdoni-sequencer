@@ -34,7 +34,9 @@ func New() curve.Point {
 
 // New creates a new BJJ point (identity element by default).
 func (g *BJJ) New() curve.Point {
-	return &BJJ{inner: new(babyjubjub.PointAffine)}
+	p := &BJJ{inner: new(babyjubjub.PointAffine)}
+	p.SetZero()
+	return p
 }
 
 // Order returns the order of the BabyJubJub curve subgroup.

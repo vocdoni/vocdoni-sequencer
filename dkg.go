@@ -51,7 +51,8 @@ func (p *Participant) GenerateSecretPolynomial() {
 
 		// Compute commitment G1 generator * coeff.
 		commitment := p.CurvePoint.New()
-		commitment.ScalarBaseMult(coeff)
+		commitment.SetGenerator() // Set the generator
+		commitment.ScalarMult(commitment, coeff)
 		p.PublicCoeffs = append(p.PublicCoeffs, commitment)
 
 		// Log the secret coefficient and commitment
@@ -92,7 +93,7 @@ func (p *Participant) evaluatePolynomial(x *big.Int) *big.Int {
 func (p *Participant) ReceiveShare(fromID int, share *big.Int, publicCoeffs []ecc.Point) error {
 	// Verify the share using the commitments.
 	if !p.verifyShare(share, publicCoeffs) {
-		return fmt.Errorf("invalid share from participant %d", fromID)
+		return fmt.Errorf("invalid share from participant %d: %s", fromID, share.String())
 	}
 	p.ReceivedShares[fromID] = share
 	return nil
@@ -100,26 +101,31 @@ func (p *Participant) ReceiveShare(fromID int, share *big.Int, publicCoeffs []ec
 
 // verifyShare verifies a received share using the commitments.
 func (p *Participant) verifyShare(share *big.Int, publicCoeffs []ecc.Point) bool {
-	// Compute lhs = G1 * share
+	// Compute lhs = G * share
 	lhs := p.CurvePoint.New()
 	lhs.ScalarBaseMult(share)
+	log.Printf("Participant %d: LHS = %s", p.ID, lhs.String())
 
 	// Compute rhs = sum_{i} publicCoeffs[i] * x^{i}
 	rhs := p.CurvePoint.New()
 	x := big.NewInt(int64(p.ID))
 	xPower := big.NewInt(1)
-	order := p.CurvePoint.Order()
 
-	for _, coeffCommitment := range publicCoeffs {
+	for i, coeffCommitment := range publicCoeffs {
 		term := p.CurvePoint.New()
 		term.ScalarMult(coeffCommitment, xPower)
 		rhs.Add(rhs, term)
+		log.Printf("Participant %d: RHS after adding term %d = %s", p.ID, i, rhs.String())
 
 		xPower.Mul(xPower, x)
-		xPower.Mod(xPower, order)
+		// xPower.Mod(xPower, order) // Ensure this is removed
 	}
 
-	return lhs.Equal(rhs)
+	log.Printf("Participant %d: Final RHS = %s", p.ID, rhs.String())
+
+	equal := lhs.Equal(rhs)
+	log.Printf("Participant %d: Share verification result: %v", p.ID, equal)
+	return equal
 }
 
 // AggregateShares aggregates the received shares to compute the private share.
