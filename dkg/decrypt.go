@@ -10,8 +10,6 @@ import (
 )
 
 const (
-	// discreteLogMaxMessage is the maximum value for the discrete logarithm problem
-	discreteLogMaxMessage = 7000000000 * 16 // world population * 16 (maxValue)
 	// numWorkersDiscreteLogBruteForce is the number of workers for parallel brute-force search
 	numWorkersDiscreteLogBruteForce = 10
 )
@@ -30,7 +28,7 @@ func (p *Participant) ComputePartialDecryption(c1 ecc.Point) ecc.Point {
 }
 
 // CombinePartialDecryptions combines partial decryptions to recover the message.
-func CombinePartialDecryptions(c2 ecc.Point, partialDecryptions map[int]ecc.Point, participants []int) (*big.Int, error) {
+func CombinePartialDecryptions(c2 ecc.Point, partialDecryptions map[int]ecc.Point, participants []int, maxMessage uint64) (*big.Int, error) {
 	// Compute Lagrange coefficients.
 	lagrangeCoeffs := computeLagrangeCoefficients(participants, c2.Order())
 	log.Printf("Lagrange Coefficients: %v", lagrangeCoeffs)
@@ -62,12 +60,13 @@ func CombinePartialDecryptions(c2 ecc.Point, partialDecryptions map[int]ecc.Poin
 		// This is a more efficient algorithm compared to brute-force search.
 		// However it is not guaranteed to find the solution and may fail in some cases.
 		log.Print("Using Baby-Step Giant-Step algorithm to solve the discrete logarithm problem...")
-		messageScalar, err := babyStepGiantStep(m)
+		messageScalar, err := babyStepGiantStep(m, maxMessage)
 		if err != nil {
-			return nil, err
+			log.Printf("Failed to decrypt message using Baby-Step Giant-Step algorithm: %v", err)
+		} else {
+			log.Printf("Decrypted Message Found: %s", messageScalar.String())
+			return messageScalar, nil
 		}
-		log.Printf("Decrypted Message Found: %s", messageScalar.String())
-		return messageScalar, nil
 	}
 
 	// Perform a parallel brute-force search.
@@ -106,12 +105,12 @@ func CombinePartialDecryptions(c2 ecc.Point, partialDecryptions map[int]ecc.Poin
 	}
 
 	// Start workers
-	step := discreteLogMaxMessage / numWorkersDiscreteLogBruteForce
+	step := maxMessage / numWorkersDiscreteLogBruteForce
 	for i := 0; i < numWorkersDiscreteLogBruteForce; i++ {
-		start := uint64(i * step)
+		start := uint64(i) * step
 		end := start + uint64(step-1)
 		if i == numWorkersDiscreteLogBruteForce-1 {
-			end = uint64(discreteLogMaxMessage)
+			end = maxMessage
 		}
 		go worker(start, end)
 	}
@@ -164,9 +163,7 @@ func computeLagrangeCoefficients(participants []int, mod *big.Int) map[int]*big.
 }
 
 // babyStepGiantStep computes the discrete logarithm using the Baby-Step Giant-Step algorithm.
-func babyStepGiantStep(m ecc.Point) (*big.Int, error) {
-	maxMessage := discreteLogMaxMessage
-
+func babyStepGiantStep(m ecc.Point, maxMessage uint64) (*big.Int, error) {
 	mSqrt := uint64(math.Sqrt(float64(maxMessage))) + 1
 
 	// Create a map for baby steps

@@ -20,11 +20,13 @@ func main() {
 	maxValue := 5    // Number of candidates (e.g., 0 to 4)
 	numVoters := 100 // Number of voters
 	curve := ""
+	testDecryptResultsStr := ""
 
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
 	flag.BoolVar(&dkg.UseBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
 	flag.StringVar(&curve, "curve", curves.CurveTypeBN254, "Curve type: bjj_gnark or bjj_iden3 (BabyJubJub) or bn254 (BN254)")
+	flag.StringVar(&testDecryptResultsStr, "testDecryptResults", "", "Test decryption results (solve discrete logarithm problem)")
 	flag.Parse()
 
 	curvePoint, err := curves.New(curve)
@@ -90,6 +92,9 @@ func main() {
 	// expectedSum is the sum of all votes (plaintext)
 	expectedSum := big.NewInt(0)
 
+	// maxMessage is the maximum possible value of the results
+	maxMessage := uint64(maxValue*numVoters) + 1
+
 	// Initialize aggC1 and aggC2 to the identity element (point at infinity)
 	aggC1 := curvePoint.New()
 	aggC1.SetZero()
@@ -97,43 +102,64 @@ func main() {
 	aggC2 := curvePoint.New()
 	aggC2.SetZero()
 
-	// Generate random votes, encrypt and aggregate
-	log.Printf("Simulating %d votes...", numVoters)
-	var votesDone atomic.Uint32
-	go func() {
-		for {
-			time.Sleep(10 * time.Second)
-			votesDoneVal := votesDone.Load()
-			if votesDoneVal == uint32(numVoters) {
-				return
-			}
-			log.Printf("Votes done %d (%.2f%%)", votesDoneVal, float64(votesDoneVal)/float64(numVoters)*100)
+	if testDecryptResultsStr != "" {
+		var ok bool
+		expectedSum, ok = new(big.Int).SetString(testDecryptResultsStr, 10)
+		if !ok {
+			log.Fatalf("Failed to parse testDecryptResults: %s", testDecryptResultsStr)
 		}
-	}()
-	wg := sync.WaitGroup{}
-	sem := make(chan struct{}, 100)
-	for i := 0; i < numVoters; i++ {
-		voteValue, err := rand.Int(rand.Reader, big.NewInt(int64(maxValue)))
+		maxMessage = expectedSum.Uint64()
+
+		// Test decryption results
+		log.Printf("Testing decryption results for sum: %s", expectedSum.String())
+
+		c1, c2, err := Encrypt(expectedSum, participants[1].PublicKey)
 		if err != nil {
-			log.Fatalf("Failed to generate random vote: %v", err)
+			log.Fatalf("Encryption failed: %v", err)
 		}
-		expectedSum.Add(expectedSum, voteValue)
-		wg.Add(1)
-		sem <- struct{}{}
+		// Aggregate ciphertexts
+		aggC1.Add(aggC1, c1)
+		aggC2.Add(aggC2, c2)
+
+	} else {
+		// Generate random votes, encrypt and aggregate
+		log.Printf("Simulating %d votes...", numVoters)
+		var votesDone atomic.Uint32
 		go func() {
-			c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
-			if err != nil {
-				log.Fatalf("Encryption failed for vote %d: %v", i, err)
+			for {
+				time.Sleep(10 * time.Second)
+				votesDoneVal := votesDone.Load()
+				if votesDoneVal == uint32(numVoters) {
+					return
+				}
+				log.Printf("Votes done %d (%.2f%%)", votesDoneVal, float64(votesDoneVal)/float64(numVoters)*100)
 			}
-			// Aggregate ciphertexts
-			aggC1.SafeAdd(aggC1, c1)
-			aggC2.SafeAdd(aggC2, c2)
-			wg.Done()
-			votesDone.Add(1)
-			<-sem
 		}()
+		wg := sync.WaitGroup{}
+		sem := make(chan struct{}, 100)
+		for i := 0; i < numVoters; i++ {
+			voteValue, err := rand.Int(rand.Reader, big.NewInt(int64(maxValue)))
+			if err != nil {
+				log.Fatalf("Failed to generate random vote: %v", err)
+			}
+			expectedSum.Add(expectedSum, voteValue)
+			wg.Add(1)
+			sem <- struct{}{}
+			go func() {
+				c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
+				if err != nil {
+					log.Fatalf("Encryption failed for vote %d: %v", i, err)
+				}
+				// Aggregate ciphertexts
+				aggC1.SafeAdd(aggC1, c1)
+				aggC2.SafeAdd(aggC2, c2)
+				wg.Done()
+				votesDone.Add(1)
+				<-sem
+			}()
+		}
+		wg.Wait()
 	}
-	wg.Wait()
 
 	votingDuration := time.Since(votingStart)
 	log.Printf("Voting Phase Duration: %s", votingDuration)
@@ -151,7 +177,7 @@ func main() {
 	}
 
 	// Combine partial decryptions to recover the sum of votes
-	decryptedSum, err := dkg.CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
+	decryptedSum, err := dkg.CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset, maxMessage)
 	if err != nil {
 		log.Fatalf("Decryption failed: %v", err)
 	} else {
@@ -163,7 +189,7 @@ func main() {
 
 	// Verify the sum
 	if decryptedSum.Cmp(expectedSum) == 0 {
-		log.Printf("Success: Decrypted sum matches the expected sum.")
+		log.Printf("Success: Decrypted sum matches the expected sum %s", expectedSum.String())
 	} else {
 		log.Printf("Mismatch: Decrypted sum does not match the expected sum.")
 		log.Printf("Expected sum: %s", expectedSum.String())
