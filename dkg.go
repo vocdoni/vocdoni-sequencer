@@ -104,24 +104,20 @@ func (p *Participant) verifyShare(share *big.Int, publicCoeffs []ecc.Point) bool
 	// Compute lhs = G * share
 	lhs := p.CurvePoint.New()
 	lhs.ScalarBaseMult(share)
-	log.Printf("Participant %d: LHS = %s", p.ID, lhs.String())
 
 	// Compute rhs = sum_{i} publicCoeffs[i] * x^{i}
 	rhs := p.CurvePoint.New()
 	x := big.NewInt(int64(p.ID))
 	xPower := big.NewInt(1)
 
-	for i, coeffCommitment := range publicCoeffs {
+	for _, coeffCommitment := range publicCoeffs {
 		term := p.CurvePoint.New()
 		term.ScalarMult(coeffCommitment, xPower)
 		rhs.Add(rhs, term)
-		log.Printf("Participant %d: RHS after adding term %d = %s", p.ID, i, rhs.String())
 
 		xPower.Mul(xPower, x)
 		// xPower.Mod(xPower, order) // Ensure this is removed
 	}
-
-	log.Printf("Participant %d: Final RHS = %s", p.ID, rhs.String())
 
 	equal := lhs.Equal(rhs)
 	log.Printf("Participant %d: Share verification result: %v", p.ID, equal)
@@ -137,7 +133,7 @@ func (p *Participant) AggregateShares() {
 		p.PrivateShare.Mod(p.PrivateShare, order)
 	}
 	// Log the aggregated private share
-	log.Printf("Participant %d: PrivateShare = %s", p.ID, p.PrivateShare.String())
+	//log.Printf("Participant %d: PrivateShare = %s", p.ID, p.PrivateShare.String())
 }
 
 // AggregatePublicKey aggregates the public commitments to compute the public key.
