@@ -16,6 +16,11 @@ type BJJ struct {
 	lock  sync.Mutex
 }
 
+// New creates a new BJJ point (identity element by default).
+func New() curve.Point {
+	return &BJJ{inner: babyjubjub.NewPoint()}
+}
+
 func (g *BJJ) New() curve.Point {
 	return &BJJ{inner: babyjubjub.NewPoint()}
 }
@@ -86,6 +91,7 @@ func (g *BJJ) SetGenerator() {
 }
 
 func (g *BJJ) String() string {
-	bytes := g.Marshal()
-	return fmt.Sprintf("%x", bytes)
+	//bytes := g.Marshal()
+	//return fmt.Sprintf("%x", bytes)
+	return fmt.Sprintf("%s,%s", g.inner.X.String(), g.inner.Y.String())
 }
