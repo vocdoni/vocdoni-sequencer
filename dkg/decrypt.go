@@ -1,4 +1,4 @@
-package main
+package dkg
 
 import (
 	"fmt"
@@ -16,8 +16,8 @@ const (
 	numWorkersDiscreteLogBruteForce = 10
 )
 
-// useBabyStepGiantStep determines whether to use the Baby-Step Giant-Step algorithm for discrete logarithm.
-var useBabyStepGiantStep = true
+// UseBabyStepGiantStep determines whether to use the Baby-Step Giant-Step algorithm for discrete logarithm.
+var UseBabyStepGiantStep = true
 
 // ComputePartialDecryption computes the partial decryption using the participant's private share.
 func (p *Participant) ComputePartialDecryption(c1 ecc.Point) ecc.Point {
@@ -57,7 +57,7 @@ func CombinePartialDecryptions(c2 ecc.Point, partialDecryptions map[int]ecc.Poin
 	// Since M = message * G, find scalar 'message' such that M = message * G.
 	// This is the discrete logarithm problem.
 
-	if useBabyStepGiantStep {
+	if UseBabyStepGiantStep {
 		// Use Pollard's Kangaroo algorithm to solve the discrete logarithm problem.
 		// This is a more efficient algorithm compared to brute-force search.
 		// However it is not guaranteed to find the solution and may fail in some cases.

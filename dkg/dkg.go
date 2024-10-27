@@ -1,4 +1,4 @@
-package main
+package dkg
 
 import (
 	"crypto/rand"

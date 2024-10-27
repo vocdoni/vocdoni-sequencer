@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vocdoni/elGamal-sandbox/dkg"
 	"github.com/vocdoni/elGamal-sandbox/ecc"
 	"github.com/vocdoni/elGamal-sandbox/ecc/curves"
 )
@@ -22,7 +23,7 @@ func main() {
 
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
-	flag.BoolVar(&useBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
+	flag.BoolVar(&dkg.UseBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
 	flag.StringVar(&curve, "curve", curves.CurveTypeBN254, "Curve type: bjj_gnark or bjj_iden3 (BabyJubJub) or bn254 (BN254)")
 	flag.Parse()
 
@@ -39,9 +40,9 @@ func main() {
 	participantIDs := []int{1, 2, 3, 4, 5}
 
 	// Initialize participants
-	participants := make(map[int]*Participant)
+	participants := make(map[int]*dkg.Participant)
 	for _, id := range participantIDs {
-		participants[id] = NewParticipant(id, threshold, participantIDs, curvePoint)
+		participants[id] = dkg.NewParticipant(id, threshold, participantIDs, curvePoint)
 		participants[id].GenerateSecretPolynomial()
 	}
 
@@ -150,7 +151,7 @@ func main() {
 	}
 
 	// Combine partial decryptions to recover the sum of votes
-	decryptedSum, err := CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
+	decryptedSum, err := dkg.CombinePartialDecryptions(aggC2, partialDecryptions, participantSubset)
 	if err != nil {
 		log.Fatalf("Decryption failed: %v", err)
 	} else {

@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	CurveTypeBabyJubJub      = "bjj_gnark" // Default bjj curve type
 	CurveTypeBabyJubJubGnark = "bjj_gnark"
 	CurveTypeBabyJubJubIden3 = "bjj_iden3"
 	CurveTypeBN254           = "bn254"
