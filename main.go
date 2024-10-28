@@ -13,6 +13,7 @@ import (
 	"github.com/vocdoni/elGamal-sandbox/dkg"
 	"github.com/vocdoni/elGamal-sandbox/ecc"
 	"github.com/vocdoni/elGamal-sandbox/ecc/curves"
+	"github.com/vocdoni/elGamal-sandbox/encrypt"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 	flag.IntVar(&maxValue, "maxValue", 5, "Number of candidates (e.g., 0 to 4)")
 	flag.IntVar(&numVoters, "numVoters", 100, "Number of voters")
 	flag.BoolVar(&dkg.UseBabyStepGiantStep, "useBabyStepGiantStep", true, "Use Baby-step Giant-step algorithm for discrete logarithm")
-	flag.StringVar(&curve, "curve", curves.CurveTypeBN254, "Curve type: bjj_gnark or bjj_iden3 (BabyJubJub) or bn254 (BN254)")
+	flag.StringVar(&curve, "curve", curves.CurveTypeBabyJubJubIden3, "Curve type: bjj_gnark or bjj_iden3 (BabyJubJub) or bn254 (BN254)")
 	flag.StringVar(&testDecryptResultsStr, "testDecryptResults", "", "Test decryption results (solve discrete logarithm problem)")
 	flag.Parse()
 
@@ -85,6 +86,8 @@ func main() {
 
 	dkgDuration := time.Since(dkgStart)
 	log.Printf("DKG Phase Duration: %s", dkgDuration)
+	xPub, yPub := participants[1].PublicKey.Point()
+	log.Println("Public key: ", xPub, yPub)
 
 	// Simulate voting
 	votingStart := time.Now()
@@ -113,7 +116,7 @@ func main() {
 		// Test decryption results
 		log.Printf("Testing decryption results for sum: %s", expectedSum.String())
 
-		c1, c2, err := Encrypt(expectedSum, participants[1].PublicKey)
+		c1, c2, _, err := encrypt.Encrypt(expectedSum, participants[1].PublicKey)
 		if err != nil {
 			log.Fatalf("Encryption failed: %v", err)
 		}
@@ -146,7 +149,7 @@ func main() {
 			wg.Add(1)
 			sem <- struct{}{}
 			go func() {
-				c1, c2, err := Encrypt(voteValue, participants[1].PublicKey)
+				c1, c2, _, err := encrypt.Encrypt(voteValue, participants[1].PublicKey)
 				if err != nil {
 					log.Fatalf("Encryption failed for vote %d: %v", i, err)
 				}

@@ -95,3 +95,14 @@ func (g *BJJ) String() string {
 	//return fmt.Sprintf("%x", bytes)
 	return fmt.Sprintf("%s,%s", g.inner.X.String(), g.inner.Y.String())
 }
+
+func (g *BJJ) Point() (*big.Int, *big.Int) {
+	return g.inner.X, g.inner.Y
+}
+
+func (g *BJJ) SetPoint(x, y *big.Int) curve.Point {
+	g = &BJJ{inner: babyjubjub.NewPoint()}
+	g.inner.X = g.inner.X.Set(x)
+	g.inner.Y = g.inner.Y.Set(y)
+	return g
+}

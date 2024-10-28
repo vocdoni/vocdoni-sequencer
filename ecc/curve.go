@@ -60,4 +60,10 @@ type Point interface {
 	// String returns the hexadecimal string representation of the elliptic curve element.
 	// Useful for debugging or displaying the group element in a human-readable form.
 	String() string
+
+	// Point returns the X and Y coordinates of the elliptic curve element.
+	Point() (*big.Int, *big.Int)
+
+	// SetPoint sets the X and Y coordinates of the elliptic curve element.
+	SetPoint(x, y *big.Int) Point
 }

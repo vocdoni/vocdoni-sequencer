@@ -1,4 +1,4 @@
-package main
+package encrypt
 
 import (
 	"crypto/rand"
@@ -8,7 +8,7 @@ import (
 )
 
 // Encrypt encrypts a message using the aggregated public key.
-func Encrypt(message *big.Int, publicKey ecc.Point) (ecc.Point, ecc.Point, error) {
+func Encrypt(message *big.Int, publicKey ecc.Point) (ecc.Point, ecc.Point, *big.Int, error) {
 	order := publicKey.Order()
 	// Ensure the message is within the field.
 	message.Mod(message, order)
@@ -16,7 +16,7 @@ func Encrypt(message *big.Int, publicKey ecc.Point) (ecc.Point, ecc.Point, error
 	// Generate random k.
 	k, err := rand.Int(rand.Reader, order)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Compute C1 = k * G.
@@ -35,5 +35,5 @@ func Encrypt(message *big.Int, publicKey ecc.Point) (ecc.Point, ecc.Point, error
 	c2 := publicKey.New()
 	c2.Add(m, s)
 
-	return c1, c2, nil
+	return c1, c2, k, nil
 }

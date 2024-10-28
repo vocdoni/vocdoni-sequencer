@@ -109,6 +109,25 @@ func (p *BJJ) Unmarshal(buf []byte) error {
 	return p.inner.Unmarshal(buf)
 }
 
+func (p *BJJ) Point() (*big.Int, *big.Int) {
+	xTE, yTE := p.toTwistedEdwards()
+	return xTE, yTE
+}
+
+func (p *BJJ) SetPoint(x, y *big.Int) curve.Point {
+	twPoint := babyjubjub.PointAffine{X: fr.Element{}, Y: fr.Element{}}
+	twPoint.X.SetBigInt(x)
+	twPoint.Y.SetBigInt(y)
+	tw := BJJ{inner: &twPoint}
+
+	// Convert TE x to RTE x' by multiplying by -f
+	xRTE, yRTE := tw.fromTwistedEdwards()
+	p = &BJJ{inner: new(babyjubjub.PointAffine)}
+	p.inner.X.SetBigInt(xRTE)
+	p.inner.Y.SetBigInt(yRTE)
+	return p
+}
+
 // Convert RTE x' to TE x by dividing by -f
 // see https://github.com/bellesmarta/baby_jubjub
 // Gnark uses the reduced twisted Edwards formula while iden3 uses the standard twisted Edwards formula.
@@ -128,6 +147,32 @@ func (g *BJJ) toTwistedEdwards() (*big.Int, *big.Int) {
 	// Step 4: Multiply g.inner.X by negFInv to get xTE
 	var xTE fr.Element
 	xTE.Mul(&g.inner.X, &negFInv) // xTE = g.inner.X * negFInv mod p
+
+	// Step 5: Convert xTE and g.inner.Y to *big.Int
+	xTEBigInt := new(big.Int)
+	yTEBigInt := new(big.Int)
+	xTE.BigInt(xTEBigInt)
+	g.inner.Y.BigInt(yTEBigInt)
+
+	return xTEBigInt, yTEBigInt
+}
+
+func (g *BJJ) fromTwistedEdwards() (*big.Int, *big.Int) {
+	// Step 1: Convert scalingFactor to fr.Element (mod p)
+	var f fr.Element
+	f.SetBigInt(scalingFactor) // f = scalingFactor mod p
+
+	// Step 2: Compute negF = -f mod p
+	var negF fr.Element
+	negF.Neg(&f) // negF = -f mod p
+
+	// Step 3: Compute the inverse of negF in the field
+	var negFInv fr.Element
+	negFInv.Inverse(&negF) // negFInv = (-f)^{-1} mod p
+
+	// Step 4: Multiply g.inner.X by negF to get xTE
+	var xTE fr.Element
+	xTE.Mul(&g.inner.X, &f) // xTE = g.inner.X * f mod p
 
 	// Step 5: Convert xTE and g.inner.Y to *big.Int
 	xTEBigInt := new(big.Int)

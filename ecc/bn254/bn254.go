@@ -90,3 +90,14 @@ func (g *G1) String() string {
 	bytes := g.Marshal()
 	return fmt.Sprintf("%x", bytes)
 }
+
+func (g *G1) Point() (*big.Int, *big.Int) {
+	return g.inner.X.BigInt(new(big.Int)), g.inner.Y.BigInt(new(big.Int))
+}
+
+func (g *G1) SetPoint(x, y *big.Int) curve.Point {
+	g = &G1{inner: new(bn254.G1Affine)}
+	g.inner.X.SetBigInt(x)
+	g.inner.Y.SetBigInt(y)
+	return g
+}
