@@ -116,7 +116,7 @@ func main() {
 		// Test decryption results
 		log.Printf("Testing decryption results for sum: %s", expectedSum.String())
 
-		c1, c2, _, err := encrypt.Encrypt(expectedSum, participants[1].PublicKey)
+		c1, c2, _, err := encrypt.Encrypt(participants[1].PublicKey, expectedSum)
 		if err != nil {
 			log.Fatalf("Encryption failed: %v", err)
 		}
@@ -149,7 +149,7 @@ func main() {
 			wg.Add(1)
 			sem <- struct{}{}
 			go func() {
-				c1, c2, _, err := encrypt.Encrypt(voteValue, participants[1].PublicKey)
+				c1, c2, _, err := encrypt.Encrypt(participants[1].PublicKey, voteValue)
 				if err != nil {
 					log.Fatalf("Encryption failed for vote %d: %v", i, err)
 				}

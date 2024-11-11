@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	babyjubjub "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	curve "github.com/vocdoni/elGamal-sandbox/ecc"
+	"github.com/vocdoni/elGamal-sandbox/ecc/format"
 )
 
 var Params babyjubjub.CurveParams
@@ -93,10 +93,11 @@ func (g *BJJ) SetGenerator() {
 	g.inner.Set(&Params.Base)
 }
 
-// String returns a string representation of the point in Twisted Edwards coordinates.
+// String returns a string representation of the point in Twisted Edwards
+// coordinates.
 func (g *BJJ) String() string {
-	xTE, yTE := g.toTwistedEdwards()
-	return fmt.Sprintf("%s,%s", xTE.String(), yTE.String())
+	x, y := g.Point()
+	return fmt.Sprintf("%s,%s", x.String(), y.String())
 }
 
 // Marshal serializes the elliptic curve element into a byte slice.
@@ -109,76 +110,22 @@ func (p *BJJ) Unmarshal(buf []byte) error {
 	return p.inner.Unmarshal(buf)
 }
 
+// Point returns the X and Y coordinates of the elliptic curve element in
+// Twisted Edwards coordinates.
 func (p *BJJ) Point() (*big.Int, *big.Int) {
-	xTE, yTE := p.toTwistedEdwards()
-	return xTE, yTE
+	x, y := new(big.Int), new(big.Int)
+	p.inner.X.BigInt(x)
+	p.inner.Y.BigInt(y)
+	return format.FromRTEtoTE(x, y)
 }
 
+// SetPoint sets the elliptic curve element from the X and Y coordinates in
+// Twisted Edwards coordinates.
 func (p *BJJ) SetPoint(x, y *big.Int) curve.Point {
-	twPoint := babyjubjub.PointAffine{X: fr.Element{}, Y: fr.Element{}}
-	twPoint.X.SetBigInt(x)
-	twPoint.Y.SetBigInt(y)
-	tw := BJJ{inner: &twPoint}
-
-	// Convert TE x to RTE x' by multiplying by -f
-	xRTE, yRTE := tw.fromTwistedEdwards()
+	// Convert TE x to RTE x'
+	xRTE, yRTE := format.FromTEtoRTE(x, y)
 	p = &BJJ{inner: new(babyjubjub.PointAffine)}
 	p.inner.X.SetBigInt(xRTE)
 	p.inner.Y.SetBigInt(yRTE)
 	return p
-}
-
-// Convert RTE x' to TE x by dividing by -f
-// see https://github.com/bellesmarta/baby_jubjub
-// Gnark uses the reduced twisted Edwards formula while iden3 uses the standard twisted Edwards formula.
-func (g *BJJ) toTwistedEdwards() (*big.Int, *big.Int) {
-	// Step 1: Convert scalingFactor to fr.Element (mod p)
-	var f fr.Element
-	f.SetBigInt(scalingFactor) // f = scalingFactor mod p
-
-	// Step 2: Compute negF = -f mod p
-	var negF fr.Element
-	negF.Neg(&f) // negF = -f mod p
-
-	// Step 3: Compute the inverse of negF in the field
-	var negFInv fr.Element
-	negFInv.Inverse(&negF) // negFInv = (-f)^{-1} mod p
-
-	// Step 4: Multiply g.inner.X by negFInv to get xTE
-	var xTE fr.Element
-	xTE.Mul(&g.inner.X, &negFInv) // xTE = g.inner.X * negFInv mod p
-
-	// Step 5: Convert xTE and g.inner.Y to *big.Int
-	xTEBigInt := new(big.Int)
-	yTEBigInt := new(big.Int)
-	xTE.BigInt(xTEBigInt)
-	g.inner.Y.BigInt(yTEBigInt)
-
-	return xTEBigInt, yTEBigInt
-}
-
-func (g *BJJ) fromTwistedEdwards() (*big.Int, *big.Int) {
-	// Step 1: Convert scalingFactor to fr.Element (mod p)
-	var f fr.Element
-	f.SetBigInt(scalingFactor) // f = scalingFactor mod p
-
-	// Step 2: Compute negF = -f mod p
-	var negF fr.Element
-	negF.Neg(&f) // negF = -f mod p
-
-	// Step 3: Compute the inverse of negF in the field
-	var negFInv fr.Element
-	negFInv.Inverse(&negF) // negFInv = (-f)^{-1} mod p
-
-	// Step 4: Multiply g.inner.X by negF to get xTE
-	var xTE fr.Element
-	xTE.Mul(&g.inner.X, &f) // xTE = g.inner.X * f mod p
-
-	// Step 5: Convert xTE and g.inner.Y to *big.Int
-	xTEBigInt := new(big.Int)
-	yTEBigInt := new(big.Int)
-	xTE.BigInt(xTEBigInt)
-	g.inner.Y.BigInt(yTEBigInt)
-
-	return xTEBigInt, yTEBigInt
 }
