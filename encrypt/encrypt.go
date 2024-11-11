@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vocdoni/elGamal-sandbox/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
 )
 
 // RandK function generates a random k value for encryption.

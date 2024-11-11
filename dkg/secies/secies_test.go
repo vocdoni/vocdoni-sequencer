@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vocdoni/elGamal-sandbox/ecc/curves"
+	"github.com/vocdoni/vocdoni-z-sandbox/ecc/curves"
 )
 
 func TestKeyGeneration(t *testing.T) {

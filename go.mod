@@ -1,4 +1,4 @@
-module github.com/vocdoni/elGamal-sandbox
+module github.com/vocdoni/vocdoni-z-sandbox
 
 go 1.23.2
 

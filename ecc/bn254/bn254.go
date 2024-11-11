@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"sync"
 
-	curve "github.com/vocdoni/elGamal-sandbox/ecc"
+	curve "github.com/vocdoni/vocdoni-z-sandbox/ecc"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"

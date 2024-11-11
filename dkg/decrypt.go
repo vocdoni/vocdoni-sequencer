@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/vocdoni/elGamal-sandbox/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
 )
 
 const (
