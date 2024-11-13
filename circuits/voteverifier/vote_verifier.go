@@ -22,6 +22,7 @@ import (
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
 	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
@@ -30,34 +31,28 @@ import (
 )
 
 type VerifyVoteCircuit struct {
-	ProcessID       frontend.Variable          `gnark:",public"`
-	ProcessMetadata circuits.ProcessMetadata   `gnark:",public"`
-	EncryptedBallot [8][2][2]frontend.Variable `gnark:",public"`
-	Weight          frontend.Variable          `gnark:",public"`
-	EncryptionKey   [2]frontend.Variable       `gnark:",public"`
-	Nullifier       frontend.Variable          `gnark:",public"`
-	Commitment      frontend.Variable          `gnark:",public"`
-	CensusRoot      frontend.Variable          `gnark:",public"`
-	BallotProof     circuits.CircomProof
-	PublicKey       ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
-	Signature       ecdsa.Signature[emulated.Secp256k1Fr]
-	CensusProof     circuits.CensusProof
+	InputsHash  frontend.Variable `gnark:",public"`
+	Address     frontend.Variable `gnark:",public"`
+	BallotProof circuits.CircomProof
+	PublicKey   ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
+	Signature   ecdsa.Signature[emulated.Secp256k1Fr]
+	CensusProof circuits.CensusProof
 }
 
 func (c *VerifyVoteCircuit) Define(api frontend.API) error {
-	// verify the ballot proof
-	verifier, err := stdgroth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
-	if err != nil {
-		return fmt.Errorf("new verifier: %w", err)
-	}
-	if err := verifier.AssertProof(c.BallotProof.VerifyingKey, c.BallotProof.Proof,
-		c.BallotProof.PublicInputs, stdgroth16.WithCompleteArithmetic()); err != nil {
-		return fmt.Errorf("error verifying ballot proof: %w", err)
-	}
+	// check the signature of the inputs hash
+	msg := emulated.ValueOf[emulated.Secp256k1Fr](c.InputsHash)
+	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &msg, &c.Signature)
 	// verify the census proof
 	if err := arbo.CheckProof(api, c.CensusProof.Key, c.CensusProof.Value,
 		c.CensusProof.Root, c.CensusProof.Siblings[:]); err != nil {
 		return fmt.Errorf("error verifying census proof: %w", err)
 	}
-	return nil
+	// verify the ballot proof
+	verifier, err := stdgroth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
+	if err != nil {
+		return fmt.Errorf("new verifier: %w", err)
+	}
+	return verifier.AssertProof(c.BallotProof.VerifyingKey, c.BallotProof.Proof,
+		c.BallotProof.PublicInputs, stdgroth16.WithCompleteArithmetic())
 }
