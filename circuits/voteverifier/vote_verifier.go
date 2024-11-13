@@ -18,9 +18,14 @@
 package verifyvote
 
 import (
+	"fmt"
+
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
+	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/vocdoni/gnark-crypto-primitives/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
@@ -37,4 +42,22 @@ type VerifyVoteCircuit struct {
 	PublicKey       ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
 	Signature       ecdsa.Signature[emulated.Secp256k1Fr]
 	CensusProof     circuits.CensusProof
+}
+
+func (c *VerifyVoteCircuit) Define(api frontend.API) error {
+	// verify the ballot proof
+	verifier, err := stdgroth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
+	if err != nil {
+		return fmt.Errorf("new verifier: %w", err)
+	}
+	if err := verifier.AssertProof(c.BallotProof.VerifyingKey, c.BallotProof.Proof,
+		c.BallotProof.PublicInputs, stdgroth16.WithCompleteArithmetic()); err != nil {
+		return fmt.Errorf("error verifying ballot proof: %w", err)
+	}
+	// verify the census proof
+	if err := arbo.CheckProof(api, c.CensusProof.Key, c.CensusProof.Value,
+		c.CensusProof.Root, c.CensusProof.Siblings[:]); err != nil {
+		return fmt.Errorf("error verifying census proof: %w", err)
+	}
+	return nil
 }
