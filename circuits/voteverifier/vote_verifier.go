@@ -19,48 +19,22 @@ package verifyvote
 
 import (
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
-
-type ProcessMetadata struct {
-	MaxCount        frontend.Variable
-	ForceUniqueness frontend.Variable
-	MaxValue        frontend.Variable
-	MinValue        frontend.Variable
-	MaxTotalCost    frontend.Variable
-	MinTotalCost    frontend.Variable
-	CostExp         frontend.Variable
-	CostFromWeight  frontend.Variable
-}
-
-type CircomProof struct {
-	Proof        stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
-	VerifyingKey stdgroth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]
-	PublicInputs stdgroth16.Witness[sw_bn254.ScalarField] `gnark:",public"`
-}
-
-type CensusProof struct {
-	Root     frontend.Variable
-	Key      frontend.Variable
-	Value    frontend.Variable
-	Siblings [160]frontend.Variable
-}
 
 type VerifyVoteCircuit struct {
 	ProcessID       frontend.Variable          `gnark:",public"`
-	ProcessMetadata ProcessMetadata            `gnark:",public"`
+	ProcessMetadata circuits.ProcessMetadata   `gnark:",public"`
 	EncryptedBallot [8][2][2]frontend.Variable `gnark:",public"`
 	Weight          frontend.Variable          `gnark:",public"`
 	EncryptionKey   [2]frontend.Variable       `gnark:",public"`
 	Nullifier       frontend.Variable          `gnark:",public"`
 	Commitment      frontend.Variable          `gnark:",public"`
 	CensusRoot      frontend.Variable          `gnark:",public"`
-	Proof           CircomProof
+	BallotProof     circuits.CircomProof
 	PublicKey       ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
 	Signature       ecdsa.Signature[emulated.Secp256k1Fr]
-	CensusProof     CensusProof
+	CensusProof     circuits.CensusProof
 }
-
