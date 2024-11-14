@@ -1,27 +1,23 @@
 package verifyvote
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/profile"
 	"github.com/consensys/gnark/std/math/emulated"
 	gecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/consensys/gnark/test"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"go.vocdoni.io/dvote/crypto/ethereum"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/pebbledb"
 	"go.vocdoni.io/dvote/tree/arbo"
@@ -72,52 +68,56 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		t.Fatal("invalid public inputs")
 	}
 	inputsHash, _ := new(big.Int).SetString(rawInputs[0], 10)
+	fmt.Println("raw inputs hash", inputsHash)
 	// generate ecdsa key pair (privKey and publicKey)
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privKey, err := ecdsa.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicKey := &privKey.PublicKey
-	// derive address from public key
-	pubKeyBytes := append(publicKey.X.Bytes(), publicKey.Y.Bytes()...)
-	hAddress := crypto.Keccak256(pubKeyBytes)
-	address := hAddress[len(hAddress)-20:]
 	// compute the signature of an arbitrary message
-	rSign, sSign, err := ecdsa.Sign(rand.Reader, privKey, inputsHash.Bytes())
+	sigBin, err := privKey.Sign(inputsHash.Bytes(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if flag, err := privKey.PublicKey.Verify(sigBin, inputsHash.Bytes(), nil); !flag || err != nil {
+		t.Fatal("invalid signature")
+	}
+	var sig ecdsa.Signature
+	sig.SetBytes(sigBin)
+	r, s := new(big.Int), new(big.Int)
+	r.SetBytes(sig.R[:32])
+	s.SetBytes(sig.S[:32])
 	// generate a census merkle tree with some random addresses
-	censusProof, err := generateCensusProof(10, address, big.NewInt(10).Bytes())
+	address := ethereum.AddrFromBytes(util.RandomBytes(20))
+	censusProof, err := generateCensusProof(10, address.Bytes(), big.NewInt(10).Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
 	// init inputs
 	witness := VerifyVoteCircuit{
-		InputsHash: inputsHash,
-		Address:    new(big.Int).SetBytes(address),
+		InputsHash: emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
+		Address:    address.Big(),
 		BallotProof: circuits.CircomProof{
 			Proof:        proof.Proof,
-			VerifyingKey: proof.Vk,
+			Vk:           proof.Vk,
 			PublicInputs: proof.PublicInputs,
 		},
 		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
-			X: emulated.ValueOf[emulated.Secp256k1Fp](publicKey.X),
-			Y: emulated.ValueOf[emulated.Secp256k1Fp](publicKey.Y),
+			X: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.X),
+			Y: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.Y),
 		},
 		Signature: gecdsa.Signature[emulated.Secp256k1Fr]{
-			R: emulated.ValueOf[emulated.Secp256k1Fr](rSign),
-			S: emulated.ValueOf[emulated.Secp256k1Fr](sSign),
+			R: emulated.ValueOf[emulated.Secp256k1Fr](r),
+			S: emulated.ValueOf[emulated.Secp256k1Fr](s),
 		},
 		CensusProof: censusProof,
 	}
 
-	p := profile.Start()
-	now := time.Now()
-	_, _ = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &VerifyVoteCircuit{})
-	fmt.Println("elapsed", time.Since(now))
-	p.Stop()
-	fmt.Println("constrains", p.NbConstraints())
+	// bWitness, err := json.MarshalIndent(witness, "  ", "  ")
+	// if err == nil {
+	// 	fmt.Println("witness")
+	// 	fmt.Println(string(bWitness))
+	// }
 
 	assert := test.NewAssert(t)
 	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))

@@ -3,7 +3,7 @@ package circuits
 import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/consensys/gnark/std/recursion/groth16"
 )
 
 // ProcessMetadata contains the metadata of a process, including the maximum
@@ -26,9 +26,9 @@ type ProcessMetadata struct {
 // the required public inputs to verify the proof to verify the proof with
 // gnark.
 type CircomProof struct {
-	Proof        stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
-	VerifyingKey stdgroth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]
-	PublicInputs stdgroth16.Witness[sw_bn254.ScalarField] `gnark:",public"`
+	Proof        groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	Vk           groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]
+	PublicInputs groth16.Witness[sw_bn254.ScalarField]
 }
 
 // CensusProof contains the proof that a user is part of a census merkle tree.

@@ -31,19 +31,19 @@ import (
 )
 
 type VerifyVoteCircuit struct {
-	InputsHash  frontend.Variable `gnark:",public"`
-	Address     frontend.Variable `gnark:",public"`
-	BallotProof circuits.CircomProof
-	PublicKey   ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
+	Address     frontend.Variable                      `gnark:",public"`
+	InputsHash  emulated.Element[emulated.Secp256k1Fr] `gnark:",public"`
 	Signature   ecdsa.Signature[emulated.Secp256k1Fr]
+	PublicKey   ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
+	BallotProof circuits.CircomProof
 	CensusProof circuits.CensusProof
 }
 
 func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	// check the signature of the inputs hash
-	msg := emulated.ValueOf[emulated.Secp256k1Fr](c.InputsHash)
-	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &msg, &c.Signature)
+	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.InputsHash, &c.Signature)
 	// verify the census proof
+	api.Println(c.CensusProof.Key, c.CensusProof.Value, c.CensusProof.Root)
 	if err := arbo.CheckProof(api, c.CensusProof.Key, c.CensusProof.Value,
 		c.CensusProof.Root, c.CensusProof.Siblings[:]); err != nil {
 		return fmt.Errorf("error verifying census proof: %w", err)
@@ -53,6 +53,6 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	if err != nil {
 		return fmt.Errorf("new verifier: %w", err)
 	}
-	return verifier.AssertProof(c.BallotProof.VerifyingKey, c.BallotProof.Proof,
+	return verifier.AssertProof(c.BallotProof.Vk, c.BallotProof.Proof,
 		c.BallotProof.PublicInputs, stdgroth16.WithCompleteArithmetic())
 }
