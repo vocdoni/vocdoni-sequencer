@@ -15,6 +15,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	gecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/consensys/gnark/test"
+	arbotree "github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"go.vocdoni.io/dvote/crypto/ethereum"
@@ -68,7 +69,6 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		t.Fatal("invalid public inputs")
 	}
 	inputsHash, _ := new(big.Int).SetString(rawInputs[0], 10)
-	fmt.Println("raw inputs hash", inputsHash)
 	// generate ecdsa key pair (privKey and publicKey)
 	privKey, err := ecdsa.GenerateKey(rand.Reader)
 	if err != nil {
@@ -95,13 +95,15 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	}
 	// init inputs
 	witness := VerifyVoteCircuit{
-		InputsHash: emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
-		Address:    address.Big(),
-		BallotProof: circuits.CircomProof{
-			Proof:        proof.Proof,
-			Vk:           proof.Vk,
-			PublicInputs: proof.PublicInputs,
-		},
+		CensusRoot:            censusProof.Root,
+		CensusProofKey:        censusProof.Key,
+		CensusProofValue:      censusProof.Value,
+		CensusProofSiblings:   censusProof.Siblings,
+		CircomProof:           proof.Proof,
+		CircomVerificationKey: proof.Vk,
+		CircomPublicInputs:    proof.PublicInputs,
+		InputsHash:            emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
+		Address:               address.Big(),
 		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
 			X: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.X),
 			Y: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.Y),
@@ -110,7 +112,6 @@ func TestVerifyVoteCircuit(t *testing.T) {
 			R: emulated.ValueOf[emulated.Secp256k1Fr](r),
 			S: emulated.ValueOf[emulated.Secp256k1Fr](s),
 		},
-		CensusProof: censusProof,
 	}
 
 	// bWitness, err := json.MarshalIndent(witness, "  ", "  ")
@@ -120,7 +121,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// }
 
 	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
+	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
 }
 
 func generateCensusProof(n int, k, v []byte) (circuits.CensusProof, error) {
@@ -132,10 +133,10 @@ func generateCensusProof(n int, k, v []byte) (circuits.CensusProof, error) {
 	if err != nil {
 		return circuits.CensusProof{}, err
 	}
-	tree, err := arbo.NewTree(arbo.Config{
+	tree, err := arbotree.NewTree(arbotree.Config{
 		Database:     database,
 		MaxLevels:    160,
-		HashFunction: arbo.HashFunctionPoseidon,
+		HashFunction: arbotree.HashFunctionMiMC_BLS12_377,
 	})
 	if err != nil {
 		return circuits.CensusProof{}, err
