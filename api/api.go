@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/vocdoni/saas-backend/db"
 	"go.vocdoni.io/dvote/apiclient"
 	"go.vocdoni.io/dvote/log"
 )
@@ -16,13 +15,11 @@ import (
 type APIConfig struct {
 	Host   string
 	Port   int
-	DB     *db.MongoStorage
 	Client *apiclient.HTTPclient
 }
 
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
-	db     *db.MongoStorage
 	host   string
 	port   int
 	router *chi.Mux
@@ -35,7 +32,6 @@ func New(conf *APIConfig) *API {
 		return nil
 	}
 	return &API{
-		db:     conf.DB,
 		host:   conf.Host,
 		port:   conf.Port,
 		client: conf.Client,
