@@ -7,9 +7,9 @@ require (
 	github.com/consensys/gnark-crypto v0.14.0
 	github.com/frankban/quicktest v1.14.6
 	github.com/iden3/go-iden3-crypto v0.0.17
+	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
 	github.com/vocdoni/circom2gnark v1.0.0
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241111131242-32c548f4fe4c
-	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241120174836-ec1005610bdf
 )
 
 require (
@@ -58,9 +58,8 @@ require (
 	github.com/ronanh/intcomp v1.1.0 // indirect
 	github.com/rs/zerolog v1.33.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
-	github.com/vocdoni/arbo v0.0.0-20241114123238-8b237b4e83fa // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.vocdoni.io/proto v1.15.10-0.20240903073233-86144b1e2165 // indirect
+	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/sync v0.8.0 // indirect

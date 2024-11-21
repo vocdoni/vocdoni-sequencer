@@ -1,187 +1,125 @@
 package verifyvote
 
 import (
-	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"github.com/consensys/gnark/profile"
 	"github.com/consensys/gnark/std/math/emulated"
 	gecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/consensys/gnark/test"
+	qt "github.com/frankban/quicktest"
 	arbotree "github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"go.vocdoni.io/dvote/crypto/ethereum"
-	"go.vocdoni.io/dvote/db"
-	"go.vocdoni.io/dvote/db/pebbledb"
-	"go.vocdoni.io/dvote/tree/arbo"
-	"go.vocdoni.io/dvote/util"
+	internaltest "github.com/vocdoni/gnark-crypto-primitives/test"
+)
+
+var (
+	proofFile      = "../assets/circom/proofs/1_proof.json"
+	pubSignalsFile = "../assets/circom/proofs/1_pub_signals.json"
+	vKeyFile       = "../assets/circom/verification_key.json"
 )
 
 func TestVerifyVoteCircuit(t *testing.T) {
-	var (
-		proofFile      = "../assets/circom/proofs/1_proof.json"
-		pubSignalsFile = "../assets/circom/proofs/1_pub_signals.json"
-		vKeyFile       = "../assets/circom/verification_key.json"
-	)
+	c := qt.New(t)
+	// compile circuit
+	p := profile.Start()
+	now := time.Now()
+	_, _ = frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &VerifyVoteCircuit{})
+	fmt.Println("compilation tooks", time.Since(now))
+	p.Stop()
+	fmt.Println("constrains", p.NbConstraints())
+	// parse input files
+	proof, inputsHash, err := parseCircomInputs(vKeyFile, proofFile, pubSignalsFile)
+	c.Assert(err, qt.IsNil)
+	// generate account and sign the inputs hash
+	testSign, err := internaltest.GenerateAccountAndSign(inputsHash.Bytes())
+	c.Assert(err, qt.IsNil)
+	// generate a test census proof
+	testCensus, err := internaltest.GenerateCensusProofForTest(internaltest.CensusTestConfig{
+		Dir:           "../assets/census",
+		ValidSiblings: 10,
+		TotalSiblings: 160,
+		KeyLen:        20,
+		Hash:          arbotree.HashFunctionMiMC_BLS12_377,
+		BaseFiled:     arbotree.BLS12377BaseField,
+	}, testSign.Address.Bytes(), new(big.Int).SetInt64(10).Bytes())
+	c.Assert(err, qt.IsNil)
+	// transform siblings to gnark frontend.Variable
+	fSiblings := [160]frontend.Variable{}
+	for i, s := range testCensus.Siblings {
+		fSiblings[i] = frontend.Variable(s)
+	}
+	// init inputs
+	witness := VerifyVoteCircuit{
+		Address:               testSign.Address,
+		InputsHash:            emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
+		CensusRoot:            testCensus.Root,
+		CensusProofKey:        testCensus.Key,
+		CensusProofValue:      testCensus.Value,
+		CensusProofSiblings:   fSiblings,
+		CircomProof:           proof.Proof,
+		CircomVerificationKey: proof.Vk,
+		CircomPublicInputs:    proof.PublicInputs,
+		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
+			X: emulated.ValueOf[emulated.Secp256k1Fp](testSign.PublicKey.X),
+			Y: emulated.ValueOf[emulated.Secp256k1Fp](testSign.PublicKey.Y),
+		},
+		Signature: gecdsa.Signature[emulated.Secp256k1Fr]{
+			R: emulated.ValueOf[emulated.Secp256k1Fr](testSign.R),
+			S: emulated.ValueOf[emulated.Secp256k1Fr](testSign.S),
+		},
+	}
+	// generate proof
+	assert := test.NewAssert(t)
+	now = time.Now()
+	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
+	fmt.Println("proving tooks", time.Since(now))
+}
+
+func parseCircomInputs(vKeyFile, proofFile, pubSignalsFile string) (*parser.GnarkRecursionProof, *big.Int, error) {
 	// load data from assets
 	proofData, err := os.ReadFile(proofFile)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	pubSignalsData, err := os.ReadFile(pubSignalsFile)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	vKeyData, err := os.ReadFile(vKeyFile)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	// transform to gnark format
 	gnarkProofData, err := parser.UnmarshalCircomProofJSON(proofData)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	gnarkPubSignalsData, err := parser.UnmarshalCircomPublicSignalsJSON(pubSignalsData)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vKeyData)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	proof, _, err := parser.ConvertCircomToGnarkRecursion(gnarkProofData, gnarkVKeyData, gnarkPubSignalsData)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	// decode pub input to get the hash to sign
-	rawInputs := []string{}
-	if err := json.Unmarshal(pubSignalsData, &rawInputs); err != nil {
-		t.Fatal(err)
-	} else if len(rawInputs) != 1 {
-		t.Fatal("invalid public inputs")
+	inputsHash, ok := new(big.Int).SetString(gnarkPubSignalsData[0], 10)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to decode inputs hash")
 	}
-	inputsHash, _ := new(big.Int).SetString(rawInputs[0], 10)
-	// generate ecdsa key pair (privKey and publicKey)
-	privKey, err := ecdsa.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// compute the signature of an arbitrary message
-	sigBin, err := privKey.Sign(inputsHash.Bytes(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if flag, err := privKey.PublicKey.Verify(sigBin, inputsHash.Bytes(), nil); !flag || err != nil {
-		t.Fatal("invalid signature")
-	}
-	var sig ecdsa.Signature
-	sig.SetBytes(sigBin)
-	r, s := new(big.Int), new(big.Int)
-	r.SetBytes(sig.R[:32])
-	s.SetBytes(sig.S[:32])
-	// generate a census merkle tree with some random addresses
-	address := ethereum.AddrFromBytes(util.RandomBytes(20))
-	censusProof, err := generateCensusProof(10, address.Bytes(), big.NewInt(10).Bytes())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// init inputs
-	witness := VerifyVoteCircuit{
-		CensusRoot:            censusProof.Root,
-		CensusProofKey:        censusProof.Key,
-		CensusProofValue:      censusProof.Value,
-		CensusProofSiblings:   censusProof.Siblings,
-		CircomProof:           proof.Proof,
-		CircomVerificationKey: proof.Vk,
-		CircomPublicInputs:    proof.PublicInputs,
-		InputsHash:            emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
-		Address:               address.Big(),
-		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
-			X: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.X),
-			Y: emulated.ValueOf[emulated.Secp256k1Fp](privKey.PublicKey.A.Y),
-		},
-		Signature: gecdsa.Signature[emulated.Secp256k1Fr]{
-			R: emulated.ValueOf[emulated.Secp256k1Fr](r),
-			S: emulated.ValueOf[emulated.Secp256k1Fr](s),
-		},
-	}
-
-	// bWitness, err := json.MarshalIndent(witness, "  ", "  ")
-	// if err == nil {
-	// 	fmt.Println("witness")
-	// 	fmt.Println(string(bWitness))
-	// }
-
-	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
-}
-
-func generateCensusProof(n int, k, v []byte) (circuits.CensusProof, error) {
-	dir := os.TempDir()
-	defer func() {
-		_ = os.RemoveAll(dir)
-	}()
-	database, err := pebbledb.New(db.Options{Path: dir})
-	if err != nil {
-		return circuits.CensusProof{}, err
-	}
-	tree, err := arbotree.NewTree(arbotree.Config{
-		Database:     database,
-		MaxLevels:    160,
-		HashFunction: arbotree.HashFunctionMiMC_BLS12_377,
-	})
-	if err != nil {
-		return circuits.CensusProof{}, err
-	}
-	k = util.BigToFF(new(big.Int).SetBytes(k)).Bytes()
-	// add the first key-value pair
-	if err = tree.Add(k, v); err != nil {
-		return circuits.CensusProof{}, err
-	}
-	// add random addresses
-	for i := 1; i < n; i++ {
-		rk := util.BigToFF(new(big.Int).SetBytes(util.RandomBytes(20))).Bytes()
-		rv := new(big.Int).SetBytes(util.RandomBytes(8)).Bytes()
-		if err = tree.Add(rk, rv); err != nil {
-			return circuits.CensusProof{}, err
-		}
-	}
-	// generate the proof
-	_, _, siblings, exist, err := tree.GenProof(k)
-	if err != nil {
-		return circuits.CensusProof{}, err
-	}
-	if !exist {
-		return circuits.CensusProof{}, fmt.Errorf("error building the merkle tree: key not found")
-	}
-	unpackedSiblings, err := arbo.UnpackSiblings(arbo.HashFunctionPoseidon, siblings)
-	if err != nil {
-		return circuits.CensusProof{}, err
-	}
-	paddedSiblings := [160]frontend.Variable{}
-	for i := 0; i < 160; i++ {
-		if i < len(unpackedSiblings) {
-			paddedSiblings[i] = arbo.BytesLEToBigInt(unpackedSiblings[i])
-		} else {
-			paddedSiblings[i] = big.NewInt(0)
-		}
-	}
-	root, err := tree.Root()
-	if err != nil {
-		return circuits.CensusProof{}, err
-	}
-	return circuits.CensusProof{
-		Root:     arbo.BytesLEToBigInt(root),
-		Key:      arbo.BytesLEToBigInt(k),
-		Value:    new(big.Int).SetBytes(v),
-		Siblings: paddedSiblings,
-	}, nil
+	return proof, inputsHash, nil
 }

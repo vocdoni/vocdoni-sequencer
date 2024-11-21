@@ -23,10 +23,11 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
+	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/vocdoni/gnark-crypto-primitives/address"
 	"github.com/vocdoni/gnark-crypto-primitives/arbo"
 )
 
@@ -44,19 +45,35 @@ type VerifyVoteCircuit struct {
 	CircomPublicInputs    groth16.Witness[sw_bn254.ScalarField]
 }
 
+func hashFn(api frontend.API, data ...frontend.Variable) (frontend.Variable, error) {
+	h, err := mimc.NewMiMC(api)
+	if err != nil {
+		return 0, err
+	}
+	h.Write(data...)
+	return h.Sum(), nil
+}
+
 func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	// check the signature of the inputs hash
 	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.InputsHash, &c.Signature)
+	// derive the address from the public key and check it matches the provided
+	// address
+	derivedAddr, err := address.DeriveAddress(api, c.PublicKey)
+	if err != nil {
+		return fmt.Errorf("derive address: %w", err)
+	}
 	// verify the census proof
-	if err := arbo.CheckProof(api, c.CensusProofKey, c.CensusProofValue,
+	if err := arbo.CheckInclusionProof(api, hashFn, c.CensusProofKey, c.CensusProofValue,
 		c.CensusRoot, c.CensusProofSiblings[:]); err != nil {
 		return fmt.Errorf("error verifying census proof: %w", err)
 	}
+	api.AssertIsEqual(c.Address, derivedAddr)
 	// verify the ballot proof
-	verifier, err := stdgroth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
+	verifier, err := groth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
 	if err != nil {
 		return fmt.Errorf("new verifier: %w", err)
 	}
 	return verifier.AssertProof(c.CircomVerificationKey, c.CircomProof,
-		c.CircomPublicInputs, stdgroth16.WithCompleteArithmetic())
+		c.CircomPublicInputs, groth16.WithCompleteArithmetic())
 }
