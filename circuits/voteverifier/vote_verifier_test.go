@@ -1,4 +1,4 @@
-package verifyvote
+package voteverifier
 
 import (
 	"fmt"
@@ -30,16 +30,21 @@ var (
 
 func TestVerifyVoteCircuit(t *testing.T) {
 	c := qt.New(t)
+	// parse input files
+	proof, placeHolders, inputsHash, err := parseCircomInputs(vKeyFile, proofFile, pubSignalsFile)
+	c.Assert(err, qt.IsNil)
+	placeholder := VerifyVoteCircuit{
+		CircomProof:            placeHolders.Proof,
+		CircomPublicInputsHash: placeHolders.Witness,
+		CircomVerificationKey:  placeHolders.Vk,
+	}
 	// compile circuit
 	p := profile.Start()
 	now := time.Now()
-	_, _ = frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &VerifyVoteCircuit{})
+	_, _ = frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &placeholder)
 	fmt.Println("compilation tooks", time.Since(now))
 	p.Stop()
 	fmt.Println("constrains", p.NbConstraints())
-	// parse input files
-	proof, inputsHash, err := parseCircomInputs(vKeyFile, proofFile, pubSignalsFile)
-	c.Assert(err, qt.IsNil)
 	// generate account and sign the inputs hash
 	testSign, err := internaltest.GenerateAccountAndSign(inputsHash.Bytes())
 	c.Assert(err, qt.IsNil)
@@ -60,15 +65,12 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	}
 	// init inputs
 	witness := VerifyVoteCircuit{
-		Address:               testSign.Address,
-		InputsHash:            emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
-		CensusRoot:            testCensus.Root,
-		CensusProofKey:        testCensus.Key,
-		CensusProofValue:      testCensus.Value,
-		CensusProofSiblings:   fSiblings,
-		CircomProof:           proof.Proof,
-		CircomVerificationKey: proof.Vk,
-		CircomPublicInputs:    proof.PublicInputs,
+		Address:                testSign.Address,
+		InputsHash:             emulated.ValueOf[emulated.Secp256k1Fr](ecdsa.HashToInt(inputsHash.Bytes())),
+		CensusRoot:             testCensus.Root,
+		CensusSiblings:         fSiblings,
+		CircomProof:            proof.Proof,
+		CircomPublicInputsHash: proof.PublicInputs,
 		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
 			X: emulated.ValueOf[emulated.Secp256k1Fp](testSign.PublicKey.X),
 			Y: emulated.ValueOf[emulated.Secp256k1Fp](testSign.PublicKey.Y),
@@ -81,45 +83,45 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// generate proof
 	assert := test.NewAssert(t)
 	now = time.Now()
-	assert.SolvingSucceeded(&VerifyVoteCircuit{}, &witness, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
+	assert.SolvingSucceeded(&placeholder, &witness, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
 	fmt.Println("proving tooks", time.Since(now))
 }
 
-func parseCircomInputs(vKeyFile, proofFile, pubSignalsFile string) (*parser.GnarkRecursionProof, *big.Int, error) {
+func parseCircomInputs(vKeyFile, proofFile, pubSignalsFile string) (*parser.GnarkRecursionProof, *parser.GnarkRecursionPlaceholders, *big.Int, error) {
 	// load data from assets
 	proofData, err := os.ReadFile(proofFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	pubSignalsData, err := os.ReadFile(pubSignalsFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	vKeyData, err := os.ReadFile(vKeyFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// transform to gnark format
 	gnarkProofData, err := parser.UnmarshalCircomProofJSON(proofData)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	gnarkPubSignalsData, err := parser.UnmarshalCircomPublicSignalsJSON(pubSignalsData)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vKeyData)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	proof, _, err := parser.ConvertCircomToGnarkRecursion(gnarkProofData, gnarkVKeyData, gnarkPubSignalsData)
+	proof, placeHolders, err := parser.ConvertCircomToGnarkRecursion(gnarkProofData, gnarkVKeyData, gnarkPubSignalsData, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// decode pub input to get the hash to sign
 	inputsHash, ok := new(big.Int).SetString(gnarkPubSignalsData[0], 10)
 	if !ok {
-		return nil, nil, fmt.Errorf("failed to decode inputs hash")
+		return nil, nil, nil, fmt.Errorf("failed to decode inputs hash")
 	}
-	return proof, inputsHash, nil
+	return proof, placeHolders, inputsHash, nil
 }

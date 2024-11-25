@@ -3,13 +3,16 @@ module github.com/vocdoni/vocdoni-z-sandbox
 go 1.23.2
 
 require (
-	github.com/consensys/gnark v0.11.0
-	github.com/consensys/gnark-crypto v0.14.0
+	github.com/consensys/gnark v0.11.1-0.20241116155937-7512178ac1fc
+	github.com/consensys/gnark-crypto v0.14.1-0.20241010154951-6638408a49f3
 	github.com/frankban/quicktest v1.14.6
 	github.com/iden3/go-iden3-crypto v0.0.17
+	github.com/iden3/go-rapidsnark/prover v0.0.9
+	github.com/iden3/go-rapidsnark/witness v0.0.3
 	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
-	github.com/vocdoni/circom2gnark v1.0.0
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241120174836-ec1005610bdf
+	github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241122111737-a3ed35efbae1
+	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 
 require (
@@ -38,6 +41,7 @@ require (
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20241101162523-b92577c0c142 // indirect
 	github.com/holiman/uint256 v1.3.1 // indirect
+	github.com/iden3/go-rapidsnark/types v0.0.2 // indirect
 	github.com/ingonyama-zk/icicle v1.1.0 // indirect
 	github.com/ingonyama-zk/iciclegnark v0.1.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -58,8 +62,8 @@ require (
 	github.com/ronanh/intcomp v1.1.0 // indirect
 	github.com/rs/zerolog v1.33.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
+	github.com/wasmerio/wasmer-go v1.0.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/sync v0.8.0 // indirect
