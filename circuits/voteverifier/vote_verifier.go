@@ -67,22 +67,22 @@ type VerifyVoteCircuit struct {
 	// The following variables are priv-public inputs, so should be hashed
 	// and compared with the InputsHash or CircomPublicInputsHash. All the
 	// variables should be hashed in the same order as they are defined here.
-	MaxCount         frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	ForceUniqueness  frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	MaxValue         frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	MinValue         frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	MaxTotalCost     frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	MinTotalCost     frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	CostExp          frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	CostFromWeight   frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	Address          frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	UserWeight       frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	EncryptionPubKey [2]frontend.Variable         // Part of CircomPublicInputsHash & InputsHash
-	Nullifier        frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	Commitment       frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	ProcessId        frontend.Variable            // Part of CircomPublicInputsHash & InputsHash
-	EncryptedBallot  [160][2][2]frontend.Variable // Part of CircomPublicInputsHash & InputsHash
-	CensusRoot       frontend.Variable            // Part of InputsHash
+	MaxCount         frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	ForceUniqueness  frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	MaxValue         frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	MinValue         frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	MaxTotalCost     frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	MinTotalCost     frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	CostExp          frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	CostFromWeight   frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	Address          frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	UserWeight       frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	EncryptionPubKey [2]frontend.Variable       // Part of CircomPublicInputsHash & InputsHash
+	Nullifier        frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	Commitment       frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	ProcessId        frontend.Variable          // Part of CircomPublicInputsHash & InputsHash
+	EncryptedBallot  [8][2][2]frontend.Variable // Part of CircomPublicInputsHash & InputsHash
+	CensusRoot       frontend.Variable          // Part of InputsHash
 	CensusSiblings   [160]frontend.Variable
 	// The following variables are private inputs and they are used to verify
 	// the user identity ownership
@@ -101,12 +101,11 @@ type VerifyVoteCircuit struct {
 // variable to a binary representation, instantiates a desired field, and
 // converts the binary representation to the field element.
 func varToFieldElem[FP emulated.FieldParams](api frontend.API, v frontend.Variable) (*emulated.Element[FP], error) {
-	bs := bits.ToBinary(api, v, bits.WithNbDigits(api.Compiler().Field().BitLen()))
 	field, err := emulated.NewField[FP](api)
 	if err != nil {
 		return nil, err
 	}
-	return field.FromBits(bs...), nil
+	return field.FromBits(bits.ToBinary(api, v)...), nil
 }
 
 // assertEqualToElement asserts that the variable provided is equal to the

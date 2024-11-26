@@ -27,12 +27,16 @@ import (
 	"go.vocdoni.io/dvote/util"
 )
 
+const (
+	n_fields = 8
+	n_levels = 160
+)
+
 var (
 	ballotProofWasm = "../assets/circom/circuit/ballot_proof.wasm"
 	ballotProofPKey = "../assets/circom/circuit/ballot_proof_pkey.zkey"
 	ballotProofVKey = "../assets/circom/circuit/ballot_proof_vkey.json"
 
-	n_fields        = 8
 	maxCount        = 5
 	forceUniqueness = 0
 	maxValue        = 16
@@ -115,7 +119,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	circomProof, pubSignals, err := CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
 	c.Assert(err, qt.IsNil)
 	// transform cipherfields to gnark frontend.Variable
-	fBallots := [160][2][2]frontend.Variable{}
+	fBallots := [n_fields][2][2]frontend.Variable{}
 	for i, c := range cipherfields {
 		fBallots[i] = [2][2]frontend.Variable{
 			{
@@ -132,14 +136,14 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	testCensus, err := internaltest.GenerateCensusProofForTest(internaltest.CensusTestConfig{
 		Dir:           "../assets/census",
 		ValidSiblings: 10,
-		TotalSiblings: 160,
+		TotalSiblings: n_levels,
 		KeyLen:        20,
 		Hash:          arbotree.HashFunctionMiMC_BLS12_377,
 		BaseFiled:     arbotree.BLS12377BaseField,
 	}, address.Bytes(), new(big.Int).SetInt64(int64(weight)).Bytes())
 	c.Assert(err, qt.IsNil)
 	// transform siblings to gnark frontend.Variable
-	fSiblings := [160]frontend.Variable{}
+	fSiblings := [n_levels]frontend.Variable{}
 	for i, s := range testCensus.Siblings {
 		fSiblings[i] = frontend.Variable(s)
 	}
