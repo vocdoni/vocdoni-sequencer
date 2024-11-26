@@ -5,6 +5,7 @@ go 1.23.2
 require (
 	github.com/consensys/gnark v0.11.1-0.20241116155937-7512178ac1fc
 	github.com/consensys/gnark-crypto v0.14.1-0.20241010154951-6638408a49f3
+	github.com/ethereum/go-ethereum v1.14.11
 	github.com/frankban/quicktest v1.14.6
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/iden3/go-rapidsnark/prover v0.0.9
@@ -32,7 +33,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dchest/blake512 v1.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
-	github.com/ethereum/go-ethereum v1.14.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/glendc/go-external-ip v0.1.0 // indirect

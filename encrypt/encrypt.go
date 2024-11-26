@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
 )
 
 // RandK function generates a random k value for encryption.
 func RandK() (*big.Int, error) {
-	kBytes := make([]byte, 32)
+	kBytes := make([]byte, 20)
 	_, err := rand.Read(kBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random k: %v", err)
 	}
 	k := new(big.Int).SetBytes(kBytes)
-	return k, nil
+	return arbo.BigToFF(arbo.BN254BaseField, k), nil
 }
 
 // Encrypt function encrypts a message using the public key provided as
