@@ -51,7 +51,6 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
-	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/emulated/emparams"
 	"github.com/consensys/gnark/std/recursion/groth16"
@@ -95,32 +94,17 @@ type VerifyVoteCircuit struct {
 	CircomVerificationKey  groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
 }
 
-// varToFieldElem converts a frontend variable to a field element of the field
-// defined. It returns an error if the conversion fails and the field element
-// if it succeeds. To convert the variable to the field element, it converts the
-// variable to a binary representation, instantiates a desired field, and
-// converts the binary representation to the field element.
-func varToFieldElem[FP emulated.FieldParams](api frontend.API, v frontend.Variable) (*emulated.Element[FP], error) {
-	field, err := emulated.NewField[FP](api)
-	if err != nil {
-		return nil, err
-	}
-	return field.FromBits(bits.ToBinary(api, v)...), nil
-}
-
 // assertEqualToElement asserts that the variable provided is equal to the
 // element provided. It converts the variable to a field of the element and
 // compares the limbs of both elements. It returns an error if the conversion
 // fails or the elements are not equal.
-func assertEqualToElement[FP emulated.FieldParams](api frontend.API, a frontend.Variable, b emulated.Element[FP]) error {
-	aElem, err := varToFieldElem[FP](api, a)
+func assertEqualToElement[Scalar emulated.FieldParams](api frontend.API, a frontend.Variable, b emulated.Element[Scalar]) error {
+	field, err := emulated.NewField[Scalar](api)
 	if err != nil {
 		return err
 	}
-	api.AssertIsEqual(len(aElem.Limbs), len(b.Limbs))
-	for i, v := range aElem.Limbs {
-		api.AssertIsEqual(v, b.Limbs[i])
-	}
+	emulatedA := emulated.ValueOf[Scalar](a)
+	field.AssertIsEqual(&emulatedA, &b)
 	return nil
 }
 
@@ -213,11 +197,8 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	inputsHash := circomHash.Sum()
 	api.AssertIsEqual(c.InputsHash, inputsHash)
 	// check the signature of the circom inputs hash
-	msg, err := varToFieldElem[emparams.Secp256k1Fr](api, circomInputsHash)
-	if err != nil {
-		return err
-	}
-	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), msg, &c.Signature)
+	msg := emulated.ValueOf[emparams.Secp256k1Fr](circomInputsHash)
+	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &msg, &c.Signature)
 	// derive the address from the public key and check it matches the provided
 	// address
 	derivedAddr, censusAddress, err := address.DeriveAddress(api, c.PublicKey)

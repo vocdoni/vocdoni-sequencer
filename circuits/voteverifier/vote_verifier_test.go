@@ -164,10 +164,10 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// SERVER SIDE GNARK CIRCUIT
 
 	// print constrains
-	// c.Assert(printConstrains(&placeholder), qt.IsNil)
+	c.Assert(printConstrains(&placeholder), qt.IsNil)
 	// init inputs
 	witness := VerifyVoteCircuit{
-		InputsHash: inputsHash.String(),
+		InputsHash: inputsHash,
 		// circom inputs
 		MaxCount:         maxCount,
 		ForceUniqueness:  forceUniqueness,
