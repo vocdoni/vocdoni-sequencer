@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr/mimc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/profile"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/consensys/gnark/test"
@@ -24,6 +26,7 @@ import (
 	"github.com/vocdoni/circom2gnark/parser"
 	internaltest "github.com/vocdoni/gnark-crypto-primitives/test"
 	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
+
 	"go.vocdoni.io/dvote/util"
 )
 
@@ -90,7 +93,6 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	// sign the inputs hash
 	rSign, sSign, err := SignECDSA(privKey, circomInputsHash.Bytes())
-	c.Assert(err, qt.IsNil)
 	// init circom inputs
 	circomInputs := map[string]any{
 		"fields":           BigIntArrayToStringArray(fields, n_fields),
@@ -119,16 +121,16 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	circomProof, pubSignals, err := CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
 	c.Assert(err, qt.IsNil)
 	// transform cipherfields to gnark frontend.Variable
-	fBallots := [n_fields][2][2]frontend.Variable{}
+	fBallots := [n_fields][2][2]emulated.Element[sw_bn254.ScalarField]{}
 	for i, c := range cipherfields {
-		fBallots[i] = [2][2]frontend.Variable{
+		fBallots[i] = [2][2]emulated.Element[sw_bn254.ScalarField]{
 			{
-				frontend.Variable(c[0][0]),
-				frontend.Variable(c[0][1]),
+				emulated.ValueOf[sw_bn254.ScalarField](c[0][0]),
+				emulated.ValueOf[sw_bn254.ScalarField](c[0][1]),
 			},
 			{
-				frontend.Variable(c[1][0]),
-				frontend.Variable(c[1][1]),
+				emulated.ValueOf[sw_bn254.ScalarField](c[1][0]),
+				emulated.ValueOf[sw_bn254.ScalarField](c[1][1]),
 			},
 		}
 	}
@@ -150,8 +152,13 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// init the vote gnark inputs to hash them (circom + census root)
 	bigGnarkInputs := append(bigCircomInputs, testCensus.Root)
 	// hash the inputs
-	inputsHash, err := mimc7.Hash(bigGnarkInputs, nil)
-	c.Assert(err, qt.IsNil)
+	hFn := mimc.NewMiMC()
+	for _, i := range bigGnarkInputs {
+		hFn.Write(i.Bytes())
+	}
+	// inputsHash, err := mimc7.Hash(bigGnarkInputs, nil)
+	// c.Assert(err, qt.IsNil)
+	inputsHash := new(big.Int).SetBytes(hFn.Sum(nil))
 	// parse input files
 	proof, placeHolders, _, err := parseCircomInputs(ballotProofVKey, circomProof, pubSignals)
 	c.Assert(err, qt.IsNil)
@@ -169,21 +176,24 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	witness := VerifyVoteCircuit{
 		InputsHash: inputsHash,
 		// circom inputs
-		MaxCount:         maxCount,
-		ForceUniqueness:  forceUniqueness,
-		MaxValue:         maxValue,
-		MinValue:         minValue,
-		MaxTotalCost:     int(math.Pow(float64(maxValue), float64(costExp))) * maxCount,
-		MinTotalCost:     maxCount,
-		CostExp:          costExp,
-		CostFromWeight:   costFromWeight,
-		Address:          address.Big(),
-		UserWeight:       weight,
-		EncryptionPubKey: [2]frontend.Variable{encryptionKeyX, encryptionKeyY},
-		Nullifier:        nullifier,
-		Commitment:       commitment,
-		ProcessId:        util.BigToFF(new(big.Int).SetBytes(processID)),
-		EncryptedBallot:  fBallots,
+		MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](maxCount),
+		ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](forceUniqueness),
+		MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](maxValue),
+		MinValue:        emulated.ValueOf[sw_bn254.ScalarField](minValue),
+		MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(maxValue), float64(costExp))) * maxCount),
+		MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](maxCount),
+		CostExp:         emulated.ValueOf[sw_bn254.ScalarField](costExp),
+		CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](costFromWeight),
+		Address:         emulated.ValueOf[sw_bn254.ScalarField](address.Big()),
+		UserWeight:      emulated.ValueOf[sw_bn254.ScalarField](weight),
+		EncryptionPubKey: [2]emulated.Element[sw_bn254.ScalarField]{
+			emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyX),
+			emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyY),
+		},
+		Nullifier:       emulated.ValueOf[sw_bn254.ScalarField](nullifier),
+		Commitment:      emulated.ValueOf[sw_bn254.ScalarField](commitment),
+		ProcessId:       emulated.ValueOf[sw_bn254.ScalarField](util.BigToFF(new(big.Int).SetBytes(processID))),
+		EncryptedBallot: fBallots,
 		// census proof
 		CensusRoot:     testCensus.Root,
 		CensusSiblings: fSiblings,

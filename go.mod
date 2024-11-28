@@ -3,8 +3,8 @@ module github.com/vocdoni/vocdoni-z-sandbox
 go 1.23.2
 
 require (
-	github.com/consensys/gnark v0.11.1-0.20241116155937-7512178ac1fc
-	github.com/consensys/gnark-crypto v0.14.1-0.20241010154951-6638408a49f3
+	github.com/consensys/gnark v0.11.1-0.20241127143824-76731ffa53aa
+	github.com/consensys/gnark-crypto v0.14.1-0.20241122181107-03e007d865c0
 	github.com/ethereum/go-ethereum v1.14.11
 	github.com/frankban/quicktest v1.14.6
 	github.com/iden3/go-iden3-crypto v0.0.17
@@ -12,7 +12,7 @@ require (
 	github.com/iden3/go-rapidsnark/witness v0.0.3
 	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241122111737-a3ed35efbae1
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241128161944-73919ddf1c68
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 

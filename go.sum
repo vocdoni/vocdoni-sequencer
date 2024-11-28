@@ -32,8 +32,12 @@ github.com/consensys/bavard v0.1.22 h1:Uw2CGvbXSZWhqK59X0VG/zOjpTFuOMcPLStrp1ihI
 github.com/consensys/bavard v0.1.22/go.mod h1:k/zVjHHC4B+PQy1Pg7fgvG3ALicQw540Crag8qx+dZs=
 github.com/consensys/gnark v0.11.1-0.20241116155937-7512178ac1fc h1:xhaOYjxdOQOKV4i/zayxKrB2iNy51Ci6OMj2fXfWnHo=
 github.com/consensys/gnark v0.11.1-0.20241116155937-7512178ac1fc/go.mod h1:vZ6aEzYJxYE/REvbfFEFHm2+x7ig0zdGrlMRsUeAJHA=
+github.com/consensys/gnark v0.11.1-0.20241127143824-76731ffa53aa h1:JzIbfXOuLRJAxJpSjKGH0KNHm2UpgA8zV2jsTkFvjyY=
+github.com/consensys/gnark v0.11.1-0.20241127143824-76731ffa53aa/go.mod h1:PfVLGXNgibhHFYQuhY//GxFrhtWORyEGpUZprRWZHCA=
 github.com/consensys/gnark-crypto v0.14.1-0.20241010154951-6638408a49f3 h1:jVatckGR1s3OHs4QnGsppX+w2P3eedlWxi7ZFq56rjA=
 github.com/consensys/gnark-crypto v0.14.1-0.20241010154951-6638408a49f3/go.mod h1:F/hJyWBcTr1sWeifAKfEN3aVb3G4U5zheEC8IbWQun4=
+github.com/consensys/gnark-crypto v0.14.1-0.20241122181107-03e007d865c0 h1:uFZaZWG0FOoiFN3fAQzH2JXDuybdNwiJzBujy81YtU4=
+github.com/consensys/gnark-crypto v0.14.1-0.20241122181107-03e007d865c0/go.mod h1:F/hJyWBcTr1sWeifAKfEN3aVb3G4U5zheEC8IbWQun4=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -153,6 +157,8 @@ github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f h1:iy2/GnPg
 github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f/go.mod h1:A1WU0hL7rO9oZlvp82you2uCc4T3/ySi1UNW6N6hBJs=
 github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241122111737-a3ed35efbae1 h1:YBbAp9gMd3EugQBTQAmENkEzwgOgVZICkM2kuFjMNf4=
 github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241122111737-a3ed35efbae1/go.mod h1:SUX2CyNDyq8uLPkqlizmYa8kDBpSsgCrIgcL+JdgfEI=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241128161944-73919ddf1c68 h1:v28DlIhv1ntcMMWI+NbcnHqdCQ8bfCR0+D+7tyZFJ+Q=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241128161944-73919ddf1c68/go.mod h1:SUX2CyNDyq8uLPkqlizmYa8kDBpSsgCrIgcL+JdgfEI=
 github.com/wasmerio/wasmer-go v1.0.4 h1:MnqHoOGfiQ8MMq2RF6wyCeebKOe84G88h5yv+vmxJgs=
 github.com/wasmerio/wasmer-go v1.0.4/go.mod h1:0gzVdSfg6pysA6QVp6iVRPTagC6Wq9pOE8J86WKb2Fk=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
