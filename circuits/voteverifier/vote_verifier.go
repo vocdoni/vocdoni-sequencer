@@ -39,16 +39,23 @@
 //   - EncryptedBallot: The encrypted votes in the package.
 //   - CensusRoot: The root of the census tree.
 //   - CensusSiblings: The siblings of the address in the census tree.
+//   - Msg: The hash of the public inputs of the ballot proof but as scalar
+//     element of the Secp256k1 curve.
 //   - PublicKey: The public key of the voter.
 //   - Signature: The signature of the inputs hash.
 //   - CircomProof: The proof of the ballot proof.
 //   - CircomPublicInputsHash: The hash of the public inputs of the ballot proof.
 //   - CircomVerificationKey: The verification key of the ballot proof (fixed).
+//
+// Note: The inputs of the circom circuit should be provided as elements of
+// the bn254 scalar field, and the inputs of the gnark circuit should be
+// provided as elements of the current compiler field (BLS12377 expected).
 package voteverifier
 
 import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
@@ -82,6 +89,7 @@ type VerifyVoteCircuit struct {
 	CensusSiblings   [160]frontend.Variable
 	// The following variables are private inputs and they are used to verify
 	// the user identity ownership
+	Msg       emulated.Element[emulated.Secp256k1Fr]
 	PublicKey ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
 	Signature ecdsa.Signature[emulated.Secp256k1Fr]
 	// The following variables are private inputs and they are used to verify
@@ -151,40 +159,45 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	if err := c.checkCircomProof(api); err != nil {
 		return err
 	}
-	_, err := packScalarToVar(api, &c.CircomPublicInputsHash.Public[0])
+	// convert the circom public inputs hash from element of bn254 scalar field
+	// to the current compiler field as a variable
+	circomInputsHash, err := packScalarToVar(api, &c.CircomPublicInputsHash.Public[0])
 	if err != nil {
 		return err
 	}
-	// // hash the circom inputs with the census root to be compared with the
-	// // inputs hash provided by the user
-	// inputsHash, err := censusHashFn(api, append(cInputs, c.CensusRoot)...)
-	// if err != nil {
-	// 	return err
-	// }
-	// // convert the inputs hash to the scalar field of the bn254 curve to be
-	// // compared with the inputs hash provided by the user
-	// api.AssertIsEqual(c.InputsHash, inputsHash)
-	// check the signature of the circom inputs hash
-	// msg := emulated.ValueOf[emparams.Secp256k1Fr](circomInputsHash)
-	// c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &msg, &c.Signature)
+	// hash the circom inputs with the census root to be compared with the
+	// inputs hash provided by the user
+	inputsHash, err := nativeMiMCHashFn(api, []frontend.Variable{circomInputsHash, c.CensusRoot}...)
+	if err != nil {
+		return err
+	}
+	api.AssertIsEqual(c.InputsHash, inputsHash)
+	// check the signature of the circom inputs hash provided as Secp256k1
+	// emulated element
+	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
 	// derive the address from the public key and check it matches the provided
 	// address
 	derivedAddr, censusAddress, err := address.DeriveAddress(api, c.PublicKey)
 	if err != nil {
 		return err
 	}
+	// convert the derived address from the scalar field of the bn254 curve to
+	// the current compiler field as a variable to compare it with the address
+	// derived from the public key and to be used in the census proof
 	address, err := packScalarToVar(api, &c.Address)
 	if err != nil {
 		return err
 	}
 	api.AssertIsEqual(address, derivedAddr)
+	// convert the user weight from the scalar field of the bn254 curve to the
+	// current compiler field as a variable to be used in the census proof
 	userWeight, err := packScalarToVar(api, &c.UserWeight)
 	if err != nil {
 		return err
 	}
 	// verify the census proof using the derived address and the user weight
 	// provided as leaf key-value, adn the root and siblings provided
-	if err := arbo.CheckInclusionProof(api, censusHashFn, censusAddress,
+	if err := arbo.CheckInclusionProof(api, nativeMiMCHashFn, censusAddress,
 		userWeight, c.CensusRoot, c.CensusSiblings[:]); err != nil {
 		return err
 	}

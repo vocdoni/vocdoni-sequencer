@@ -91,8 +91,12 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	bigCircomInputs = append(bigCircomInputs, plainCipherfields...)
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	c.Assert(err, qt.IsNil)
-	// sign the inputs hash
-	rSign, sSign, err := SignECDSA(privKey, circomInputsHash.Bytes())
+	// transform the inputs hash to the field of the curve used by the circuit,
+	// if it is not done, the circuit will transform it during witness
+	// calculation and the hash will be different
+	blsCircomInputsHash := arbotree.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
+	// sign the inputs hash with the private key
+	rSign, sSign, err := SignECDSA(privKey, blsCircomInputsHash.Bytes())
 	// init circom inputs
 	circomInputs := map[string]any{
 		"fields":           BigIntArrayToStringArray(fields, n_fields),
@@ -149,15 +153,10 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	for i, s := range testCensus.Siblings {
 		fSiblings[i] = frontend.Variable(s)
 	}
-	// init the vote gnark inputs to hash them (circom + census root)
-	bigGnarkInputs := append(bigCircomInputs, testCensus.Root)
-	// hash the inputs
+	// hash the inputs of gnark circuit (circom inputs hash + census root)
 	hFn := mimc.NewMiMC()
-	for _, i := range bigGnarkInputs {
-		hFn.Write(i.Bytes())
-	}
-	// inputsHash, err := mimc7.Hash(bigGnarkInputs, nil)
-	// c.Assert(err, qt.IsNil)
+	hFn.Write(blsCircomInputsHash.Bytes())
+	hFn.Write(testCensus.Root.Bytes())
 	inputsHash := new(big.Int).SetBytes(hFn.Sum(nil))
 	// parse input files
 	proof, placeHolders, _, err := parseCircomInputs(ballotProofVKey, circomProof, pubSignals)
@@ -198,6 +197,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		CensusRoot:     testCensus.Root,
 		CensusSiblings: fSiblings,
 		// signature
+		Msg: emulated.ValueOf[emulated.Secp256k1Fr](blsCircomInputsHash),
 		PublicKey: gecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]{
 			X: emulated.ValueOf[emulated.Secp256k1Fp](pubKey.X),
 			Y: emulated.ValueOf[emulated.Secp256k1Fp](pubKey.Y),
