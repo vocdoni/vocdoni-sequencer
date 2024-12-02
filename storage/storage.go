@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
@@ -43,8 +44,12 @@ const (
 // Storage is the interface that wraps the basic methods to interact with the
 // storage.
 type Storage struct {
-	db    db.Database
-	votes []*Vote
+	db db.Database
+	// queue in-memory buckets
+	votes    map[string]*Vote
+	votesMtx sync.RWMutex
+	// queue channels
+	VotesCh chan *Vote
 }
 
 // New creates a new Storage instance.
@@ -57,42 +62,89 @@ func (s *Storage) Close() {
 	s.db.Close()
 }
 
+// setArtifact helper function stores any kind of artifact in the storage. It
+// receives the prefix of the key, the key itself and the artifact to store. If
+// the key is not provided, it generates it by hashing the artifact itself. It
+// returns the final key of the artifact and an error if there is any.
+func (s *Storage) setArtifact(prefix []byte, skey string, artifact any) (string, error) {
+	// encode the artifact
+	data, err := json.Marshal(artifact)
+	if err != nil {
+		return "", err
+	}
+	var key []byte
+	// if the string key is provided, decode it
+	if skey != "" {
+		key, err = hex.DecodeString(string(skey))
+		if err != nil {
+			return "", err
+		}
+	}
+	// if no key is provided, generate it hashing the data
+	noKey := len(key) == 0
+	if noKey {
+		hash := sha256.Sum256(data)
+		key = hash[:maxKeySize]
+	}
+	// instance a write transaction with the prefix provided
+	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), prefix)
+	// store the artifact in the database with the key generated
+	if err := wTx.Set(key, data); err != nil {
+		return "", err
+	}
+	// commit the transaction
+	if err := wTx.Commit(); err != nil {
+		return "", err
+	}
+	// if no key was provided, return the key generated
+	if noKey {
+		return hex.EncodeToString(key), nil
+	}
+	// otherwise, return the key provided
+	return skey, nil
+}
+
+func (s *Storage) getArtifact(prefix []byte, key string, artifact any) error {
+	rTx := prefixeddb.NewPrefixedReader(s.db, prefix)
+	bkey, err := hex.DecodeString(key)
+	if err != nil {
+		return err
+	}
+	data, err := rTx.Get(bkey)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, artifact); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetMetadata retrieves the metadata from the storage. It returns an error if
 // the metadata is not found or if there is an error while retrieving it. If
 // the metadata is found, it returns the metadata unmarshalled.
 func (s *Storage) GetMetadata(key string) (*Metadata, error) {
-	rTx := prefixeddb.NewPrefixedReader(s.db, metadataPrefix)
-	bkey, err := hex.DecodeString(key)
-	if err != nil {
-		return nil, err
-	}
-	data, err := rTx.Get(bkey)
-	if err != nil {
-		return nil, err
-	}
 	metadata := &Metadata{}
-	if err := json.Unmarshal(data, metadata); err != nil {
+	if err := s.getArtifact(metadataPrefix, key, metadata); err != nil {
 		return nil, err
 	}
 	return metadata, nil
 }
 
-// SetMetadata stores the metadata in the storage. It returns the key of the
-// metadata and an error if there is an error while storing it. The key is
-// the first 12 characters of the sha256 hash of the metadata itself.
+// SetMetadata stores the metadata in the storage. It returns the generated key
+// of the metadata and an error if there is any.
 func (s *Storage) SetMetadata(metadata *Metadata) (string, error) {
-	data, err := json.Marshal(metadata)
-	if err != nil {
-		return "", err
+	return s.setArtifact(metadataPrefix, "", metadata)
+}
+
+func (s *Storage) PushVote(v *Vote) error {
+	if _, err := s.setArtifact(votePrefix, v.Nullifier, v); err != nil {
+		return err
 	}
-	hash := sha256.Sum256(data)
-	key := hash[:maxKeySize]
-	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), metadataPrefix)
-	if err := wTx.Set(key, data); err != nil {
-		return "", err
-	}
-	if err := wTx.Commit(); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(key), nil
+	s.votesMtx.Lock()
+	s.votes[v.Nullifier] = v
+	s.votesMtx.Unlock()
+
+	s.VotesCh <- v
+	return nil
 }

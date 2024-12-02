@@ -10,8 +10,7 @@ import (
 func TestMetadata(t *testing.T) {
 	c := qt.New(t)
 
-	sdb := metadb.NewTest(t)
-	stg := New(sdb)
+	stg := New(metadb.NewTest(t))
 
 	metadata := &Metadata{
 		Title: MultilingualString{
