@@ -3,7 +3,6 @@ package voteverifier
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
@@ -14,8 +13,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr/mimc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/profile"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gecdsa "github.com/consensys/gnark/std/signature/ecdsa"
@@ -169,8 +166,6 @@ func TestVerifyVoteCircuit(t *testing.T) {
 
 	// SERVER SIDE GNARK CIRCUIT
 
-	// print constrains
-	c.Assert(printConstrains(&placeholder), qt.IsNil)
 	// init inputs
 	witness := VerifyVoteCircuit{
 		InputsHash: inputsHash,
@@ -217,21 +212,6 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		test.WithCurves(ecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
 	fmt.Println("proving tooks", time.Since(now))
-}
-
-func printConstrains(placeholder frontend.Circuit) error {
-	// compile circuit
-	p := profile.Start()
-	now := time.Now()
-	_, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, placeholder)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	fmt.Println("compilation tooks", time.Since(now))
-	p.Stop()
-	fmt.Println("constrains", p.NbConstraints())
-	return nil
 }
 
 func parseCircomInputs(vKeyFile string, rawProof, rawPubSignals string) (*parser.GnarkRecursionProof, *parser.GnarkRecursionPlaceholders, *big.Int, error) {

@@ -56,12 +56,14 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
+	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/std/signature/ecdsa"
-	"github.com/vocdoni/gnark-crypto-primitives/address"
-	"github.com/vocdoni/gnark-crypto-primitives/arbo"
 	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
+	address "github.com/vocdoni/gnark-crypto-primitives/emulated/ecdsa"
+	"github.com/vocdoni/gnark-crypto-primitives/tree/arbo"
+	"github.com/vocdoni/gnark-crypto-primitives/utils"
 )
 
 type VerifyVoteCircuit struct {
@@ -97,6 +99,18 @@ type VerifyVoteCircuit struct {
 	CircomProof            groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
 	CircomPublicInputsHash groth16.Witness[sw_bn254.ScalarField]
 	CircomVerificationKey  groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
+}
+
+// nativeMiMCHashFn is a hash function that hashes the data provided using the
+// mimc hash function and the current compiler field. It is used to hash the
+// leaves of the census tree during the proof verification.
+func nativeMiMCHashFn(api frontend.API, data ...frontend.Variable) (frontend.Variable, error) {
+	h, err := mimc.NewMiMC(api)
+	if err != nil {
+		return 0, err
+	}
+	h.Write(data...)
+	return h.Sum(), nil
 }
 
 // circomInputs returns the circom public-private inputs that are used to hash
@@ -161,7 +175,7 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	}
 	// convert the circom public inputs hash from element of bn254 scalar field
 	// to the current compiler field as a variable
-	circomInputsHash, err := packScalarToVar(api, &c.CircomPublicInputsHash.Public[0])
+	circomInputsHash, err := utils.PackScalarToVar(api, &c.CircomPublicInputsHash.Public[0])
 	if err != nil {
 		return err
 	}
@@ -184,14 +198,14 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 	// convert the derived address from the scalar field of the bn254 curve to
 	// the current compiler field as a variable to compare it with the address
 	// derived from the public key and to be used in the census proof
-	address, err := packScalarToVar(api, &c.Address)
+	address, err := utils.PackScalarToVar(api, &c.Address)
 	if err != nil {
 		return err
 	}
 	api.AssertIsEqual(address, derivedAddr)
 	// convert the user weight from the scalar field of the bn254 curve to the
 	// current compiler field as a variable to be used in the census proof
-	userWeight, err := packScalarToVar(api, &c.UserWeight)
+	userWeight, err := utils.PackScalarToVar(api, &c.UserWeight)
 	if err != nil {
 		return err
 	}

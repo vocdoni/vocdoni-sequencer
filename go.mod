@@ -14,7 +14,7 @@ require (
 	github.com/iden3/go-rapidsnark/witness v0.0.6
 	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241128161944-73919ddf1c68
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241202120611-440afa35dda9
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 
