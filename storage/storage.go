@@ -20,9 +20,25 @@ import (
 	"encoding/json"
 
 	"go.vocdoni.io/dvote/db"
+	"go.vocdoni.io/dvote/db/prefixeddb"
 )
 
-const maxKeySize = 12
+var (
+	// Prefixes for the keys in the database.
+	metadataPrefix = []byte("m/")
+	censusPrefix   = []byte("c/")
+	processPrefix  = []byte("p/")
+	votePrefix     = []byte("v/")
+	authPrefix     = []byte("au/")
+	aggrPrefix     = []byte("ag/")
+)
+
+const (
+	// maxKeySize is the maximum size of the key in bytes. It is used to
+	// generate the key of the artifacts stored in the database by truncating
+	// the hash of the artifact itself.
+	maxKeySize = 12
+)
 
 // Storage is the interface that wraps the basic methods to interact with the
 // storage.
@@ -36,8 +52,21 @@ func New(db db.Database) *Storage {
 	return &Storage{db: db}
 }
 
+// Close closes the storage.
+func (s *Storage) Close() {
+	s.db.Close()
+}
+
+// GetMetadata retrieves the metadata from the storage. It returns an error if
+// the metadata is not found or if there is an error while retrieving it. If
+// the metadata is found, it returns the metadata unmarshalled.
 func (s *Storage) GetMetadata(key string) (*Metadata, error) {
-	data, err := s.db.Get(metadataKey(key))
+	rTx := prefixeddb.NewPrefixedReader(s.db, metadataPrefix)
+	bkey, err := hex.DecodeString(key)
+	if err != nil {
+		return nil, err
+	}
+	data, err := rTx.Get(bkey)
 	if err != nil {
 		return nil, err
 	}
@@ -48,19 +77,22 @@ func (s *Storage) GetMetadata(key string) (*Metadata, error) {
 	return metadata, nil
 }
 
+// SetMetadata stores the metadata in the storage. It returns the key of the
+// metadata and an error if there is an error while storing it. The key is
+// the first 12 characters of the sha256 hash of the metadata itself.
 func (s *Storage) SetMetadata(metadata *Metadata) (string, error) {
 	data, err := json.Marshal(metadata)
 	if err != nil {
 		return "", err
 	}
 	hash := sha256.Sum256(data)
-	key := hex.EncodeToString(hash[:maxKeySize])
-	wTx := s.db.WriteTx()
-	if err := wTx.Set(metadataKey(key), data); err != nil {
+	key := hash[:maxKeySize]
+	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), metadataPrefix)
+	if err := wTx.Set(key, data); err != nil {
 		return "", err
 	}
 	if err := wTx.Commit(); err != nil {
 		return "", err
 	}
-	return key, nil
+	return hex.EncodeToString(key), nil
 }
