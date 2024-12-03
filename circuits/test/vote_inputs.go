@@ -1,4 +1,4 @@
-package voteverifier
+package test
 
 import (
 	"crypto/ecdsa"
@@ -20,6 +20,8 @@ import (
 	"go.vocdoni.io/dvote/util"
 )
 
+// GenerateECDSAaccount generates a new ECDSA account and returns the private
+// key, public key and address.
 func GenerateECDSAaccount() (*ecdsa.PrivateKey, ecdsa.PublicKey, common.Address, error) {
 	// generate ecdsa keys and address (privKey and publicKey)
 	privKey, err := crypto.GenerateKey()
@@ -29,6 +31,8 @@ func GenerateECDSAaccount() (*ecdsa.PrivateKey, ecdsa.PublicKey, common.Address,
 	return privKey, privKey.PublicKey, crypto.PubkeyToAddress(privKey.PublicKey), nil
 }
 
+// SignECDSA signs the data with the private key provided and returns the R and
+// S values of the signature.
 func SignECDSA(privKey *ecdsa.PrivateKey, data []byte) (*big.Int, *big.Int, error) {
 	sigBin, err := crypto.Sign(data, privKey)
 	if err != nil {
@@ -50,6 +54,9 @@ func SignECDSA(privKey *ecdsa.PrivateKey, data []byte) (*big.Int, *big.Int, erro
 	return r, s, nil
 }
 
+// GenerateEncryptionTestKey generates a new encryption key for testing
+// purposes. It uses the Iden3 implementation of the BabyJubJub curve to
+// simplify the process.
 func GenerateEncryptionTestKey() ecc.Point {
 	privkey := babyjub.NewRandPrivKey()
 
@@ -57,6 +64,8 @@ func GenerateEncryptionTestKey() ecc.Point {
 	return new(bjj.BJJ).SetPoint(x, y)
 }
 
+// GenerateBallotFields generates a list of n random fields between min and max
+// values. If unique is true, the fields will be unique.
 func GenerateBallotFields(n, max, min int, unique bool) []*big.Int {
 	fields := []*big.Int{}
 	stored := map[string]bool{}
@@ -80,6 +89,11 @@ func GenerateBallotFields(n, max, min int, unique bool) []*big.Int {
 	return fields
 }
 
+// CipherBallotFields encrypts the fields provided using the public key and
+// random k value provided. Each encrypted field includes two points (c1 and c2)
+// that represent the encrypted field. The function also returns a list of the
+// plain cipher fields (x and y values of c1 and c2) that simplify the process
+// of hashing the inputs for the circuit.
 func CipherBallotFields(fields []*big.Int, n int, pk ecc.Point, k *big.Int) ([][][]string, []*big.Int) {
 	cipherfields := make([][][]string, n)
 	plainCipherfields := []*big.Int{}
@@ -107,6 +121,11 @@ func CipherBallotFields(fields []*big.Int, n int, pk ecc.Point, k *big.Int) ([][
 	return cipherfields, plainCipherfields
 }
 
+// MockedCommitmentAndNullifier generates a commitment and nullifier for the
+// given address, processID and secret values. It uses the Poseidon hash
+// function over BabyJubJub curve to generate the commitment and nullifier.
+// The commitment is generated using the address, processID and secret value,
+// while the nullifier is generated using the commitment and secret value.
 func MockedCommitmentAndNullifier(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
 		util.BigToFF(new(big.Int).SetBytes(address)),
@@ -126,6 +145,8 @@ func MockedCommitmentAndNullifier(address, processID, secret []byte) (*big.Int, 
 	return commitment, nullifier, nil
 }
 
+// BigIntArrayToStringArray pads the big.Int array to n elements, if needed,
+// with zeros.
 func BigIntArrayToN(arr []*big.Int, n int) []*big.Int {
 	bigArr := make([]*big.Int, n)
 	for i := 0; i < n; i++ {
@@ -138,6 +159,7 @@ func BigIntArrayToN(arr []*big.Int, n int) []*big.Int {
 	return bigArr
 }
 
+// BigIntArrayToStringArray converts the big.Int array to a string array.
 func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 	strArr := []string{}
 	for _, b := range BigIntArrayToN(arr, n) {
@@ -146,6 +168,10 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 	return strArr
 }
 
+// CompileAndGenerateProof compiles a circom circuit, generates the witness and
+// generates the proof using the inputs provided. It returns the proof and the
+// public signals of the proof. It uses Rapidsnark and Groth16 prover to
+// generate the proof.
 func CompileAndGenerateProof(inputs []byte, wasmFile, zkeyFile string) (string, string, error) {
 	finalInputs, err := witness.ParseInputs(inputs)
 	if err != nil {

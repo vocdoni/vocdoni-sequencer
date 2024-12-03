@@ -21,7 +21,8 @@ import (
 	"github.com/iden3/go-iden3-crypto/mimc7"
 	arbotree "github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
-	internaltest "github.com/vocdoni/gnark-crypto-primitives/test"
+	ptest "github.com/vocdoni/gnark-crypto-primitives/test"
+	ztest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test"
 	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
 
 	"go.vocdoni.io/dvote/util"
@@ -44,7 +45,7 @@ var (
 	costExp         = 2
 	costFromWeight  = 0
 	weight          = 10
-	fields          = GenerateBallotFields(maxCount, maxValue, minValue, forceUniqueness > 0)
+	fields          = ztest.GenerateBallotFields(maxCount, maxValue, minValue, forceUniqueness > 0)
 )
 
 func TestVerifyVoteCircuit(t *testing.T) {
@@ -53,19 +54,19 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// CLIENT SIDE CIRCOM CIRCUIT
 
 	// generate encryption key and user nonce k
-	encryptionKey := GenerateEncryptionTestKey()
+	encryptionKey := ztest.GenerateEncryptionTestKey()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	k, err := encrypt.RandK()
 	c.Assert(err, qt.IsNil)
 	// encrypt the ballots
-	cipherfields, plainCipherfields := CipherBallotFields(fields, n_fields, encryptionKey, k)
+	cipherfields, plainCipherfields := ztest.CipherBallotFields(fields, n_fields, encryptionKey, k)
 	// generate voter account
-	privKey, pubKey, address, err := GenerateECDSAaccount()
+	privKey, pubKey, address, err := ztest.GenerateECDSAaccount()
 	c.Assert(err, qt.IsNil)
 	// generate the commitment
 	processID := util.RandomBytes(20)
 	secret := util.RandomBytes(16)
-	commitment, nullifier, err := MockedCommitmentAndNullifier(address.Bytes(), processID, secret)
+	commitment, nullifier, err := ztest.MockedCommitmentAndNullifier(address.Bytes(), processID, secret)
 	c.Assert(err, qt.IsNil)
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
@@ -77,9 +78,9 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		big.NewInt(int64(maxCount)),
 		big.NewInt(int64(costExp)),
 		big.NewInt(int64(costFromWeight)),
-		util.BigToFF(new(big.Int).SetBytes(address.Bytes())),
+		arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(address.Bytes())),
 		big.NewInt(int64(weight)),
-		util.BigToFF(new(big.Int).SetBytes(processID)),
+		arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(processID)),
 		encryptionKeyX,
 		encryptionKeyY,
 		nullifier,
@@ -93,10 +94,10 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// calculation and the hash will be different
 	blsCircomInputsHash := arbotree.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
 	// sign the inputs hash with the private key
-	rSign, sSign, err := SignECDSA(privKey, blsCircomInputsHash.Bytes())
+	rSign, sSign, err := ztest.SignECDSA(privKey, blsCircomInputsHash.Bytes())
 	// init circom inputs
 	circomInputs := map[string]any{
-		"fields":           BigIntArrayToStringArray(fields, n_fields),
+		"fields":           ztest.BigIntArrayToStringArray(fields, n_fields),
 		"max_count":        fmt.Sprint(maxCount),
 		"force_uniqueness": fmt.Sprint(forceUniqueness),
 		"max_value":        fmt.Sprint(maxValue),
@@ -105,21 +106,21 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		"min_total_cost":   fmt.Sprint(maxCount),
 		"cost_exp":         fmt.Sprint(costExp),
 		"cost_from_weight": fmt.Sprint(costFromWeight),
-		"address":          util.BigToFF(new(big.Int).SetBytes(address.Bytes())).String(),
+		"address":          arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(address.Bytes())).String(),
 		"weight":           fmt.Sprint(weight),
-		"process_id":       util.BigToFF(new(big.Int).SetBytes(processID)).String(),
+		"process_id":       arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(processID)).String(),
 		"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
 		"k":                k.String(),
 		"cipherfields":     cipherfields,
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           util.BigToFF(new(big.Int).SetBytes(secret)).String(),
+		"secret":           arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)
 	c.Assert(err, qt.IsNil)
 	// create the proof
-	circomProof, pubSignals, err := CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
+	circomProof, pubSignals, err := ztest.CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
 	c.Assert(err, qt.IsNil)
 	// transform cipherfields to gnark frontend.Variable
 	fBallots := [n_fields][2][2]emulated.Element[sw_bn254.ScalarField]{}
@@ -136,7 +137,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		}
 	}
 	// generate a test census proof
-	testCensus, err := internaltest.GenerateCensusProofForTest(internaltest.CensusTestConfig{
+	testCensus, err := ptest.GenerateCensusProofForTest(ptest.CensusTestConfig{
 		Dir:           "../assets/census",
 		ValidSiblings: 10,
 		TotalSiblings: n_levels,
@@ -186,7 +187,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		},
 		Nullifier:       emulated.ValueOf[sw_bn254.ScalarField](nullifier),
 		Commitment:      emulated.ValueOf[sw_bn254.ScalarField](commitment),
-		ProcessId:       emulated.ValueOf[sw_bn254.ScalarField](util.BigToFF(new(big.Int).SetBytes(processID))),
+		ProcessId:       emulated.ValueOf[sw_bn254.ScalarField](arbotree.BigToFF(arbotree.BN254BaseField, new(big.Int).SetBytes(processID))),
 		EncryptedBallot: fBallots,
 		// census proof
 		CensusRoot:     testCensus.Root,
