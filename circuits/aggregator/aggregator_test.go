@@ -158,6 +158,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		// create the proof
 		circomProof, err := ztest.Circom2GnarkProof(bCircomInputs)
 		c.Assert(err, qt.IsNil)
+		c.Logf("circom proof %d generated", i)
 		// transform cipherfields to gnark frontend.Variable
 		emulatedBallots := [ztest.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
 		for i, c := range cipherfields {
@@ -233,11 +234,17 @@ func TestAggregatorCircuit(t *testing.T) {
 		// generate the proof
 		proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil)
+		c.Logf("proof %d generated", i)
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		c.Assert(err, qt.IsNil)
 		// convert the public inputs to the circuit public inputs type
-		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](fullWitness)
+		publicWitness, err := fullWitness.Public()
+		c.Assert(err, qt.IsNil)
+		err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+		c.Assert(err, qt.IsNil)
+		c.Logf("proof %d verified", i)
+		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
 		c.Assert(err, qt.IsNil)
 	}
 	c.Assert(totalPlainCipherfields, qt.HasLen, nVoters*nFields*4)
@@ -277,6 +284,8 @@ func TestAggregatorCircuit(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	finalPlaceholder := AggregatorCircuit{
 		VerifyVerificationKey: finalVk,
+		VerifyPublicInputs:    [nVoters]stdgroth16.Witness[sw_bls12377.ScalarField]{},
+		VerifyProofs:          [nVoters]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 	}
 	for i := 0; i < nVoters; i++ {
 		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
@@ -316,6 +325,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	assert := test.NewAssert(t)
 	now := time.Now()
 	assert.SolvingSucceeded(&finalPlaceholder, &finalWitness,
-		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16))
+		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
+		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	fmt.Println("proving tooks", time.Since(now))
 }
