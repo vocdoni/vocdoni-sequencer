@@ -71,11 +71,9 @@ func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
 	inputs = append(inputs, c.Commitments[:]...)
 	inputs = append(inputs, c.Addresses[:]...)
 	// include flattened EncryptedBallots
-	for _, ballots := range c.EncryptedBallots {
-		for _, ballot := range ballots {
-			for _, point := range ballot {
-				inputs = append(inputs, point[:]...)
-			}
+	for _, voterBallots := range c.EncryptedBallots {
+		for _, ballot := range voterBallots {
+			inputs = append(inputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
 		}
 	}
 	// hash the inputs

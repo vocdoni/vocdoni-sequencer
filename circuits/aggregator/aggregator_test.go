@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
-	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr/mimc"
-	cmimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
+	bls12377mimc "github.com/consensys/gnark-crypto/ecc/bls12-377/fr/mimc"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
+	bw6761mimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
@@ -45,7 +45,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	ballotVerifierPlaceholder, err := ztest.Circom2GnarkPlaceholder()
 	c.Assert(err, qt.IsNil)
 
-	// compile vote verifier circuit
+	// // compile vote verifier circuit
 	voteVerifierPlaceholder := &voteverifier.VerifyVoteCircuit{
 		CircomProof:            ballotVerifierPlaceholder.Proof,
 		CircomPublicInputsHash: ballotVerifierPlaceholder.Witness,
@@ -184,13 +184,13 @@ func TestAggregatorCircuit(t *testing.T) {
 			fSiblings[i] = frontend.Variable(s)
 		}
 		// hash the inputs of gnark circuit (circom inputs hash + census root)
-		hFn := mimc.NewMiMC()
-		hFn.Write(blsCircomInputsHash.Bytes())
-		hFn.Write(testCensus.Root.Bytes())
-		inputsHash := new(big.Int).SetBytes(hFn.Sum(nil))
+		verifyHashFn := bls12377mimc.NewMiMC()
+		verifyHashFn.Write(blsCircomInputsHash.Bytes())
+		verifyHashFn.Write(testCensus.Root.Bytes())
+		verifyInputsHash := new(big.Int).SetBytes(verifyHashFn.Sum(nil))
 		// init inputs
 		witness := &voteverifier.VerifyVoteCircuit{
-			InputsHash: inputsHash,
+			InputsHash: verifyInputsHash,
 			// circom inputs
 			MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ztest.MaxCount),
 			ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ztest.ForceUniqueness),
@@ -227,51 +227,63 @@ func TestAggregatorCircuit(t *testing.T) {
 			CircomProof:            circomProof.Proof,
 			CircomPublicInputsHash: circomProof.PublicInputs,
 		}
+		// parse the witness to the circuit
 		fullWitness, err := frontend.NewWitness(witness, ecc.BLS12_377.ScalarField())
 		c.Assert(err, qt.IsNil)
+		// generate the proof
 		proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil)
+		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		c.Assert(err, qt.IsNil)
+		// convert the public inputs to the circuit public inputs type
 		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](fullWitness)
 		c.Assert(err, qt.IsNil)
 	}
+	c.Assert(totalPlainCipherfields, qt.HasLen, nVoters*nFields*4)
 	// compute public inputs hash
-	inputs := []emulated.Element[sw_bls12377.ScalarField]{
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.MaxCount),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.ForceUniqueness),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.MaxValue),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.MinValue),
-		emulated.ValueOf[sw_bls12377.ScalarField](int(math.Pow(float64(ztest.MaxValue), float64(ztest.CostExp))) * ztest.MaxCount),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.MaxCount),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.CostExp),
-		emulated.ValueOf[sw_bls12377.ScalarField](ztest.CostFromWeight),
-		emulated.ValueOf[sw_bls12377.ScalarField](encryptionKeyX),
-		emulated.ValueOf[sw_bls12377.ScalarField](encryptionKeyY),
-		emulated.ValueOf[sw_bls12377.ScalarField](new(big.Int).SetBytes(processID)),
-		emulated.ValueOf[sw_bls12377.ScalarField](testCensus.Root),
+	inputs := []*big.Int{
+		big.NewInt(int64(ztest.MaxCount)),
+		big.NewInt(int64(ztest.ForceUniqueness)),
+		big.NewInt(int64(ztest.MaxValue)),
+		big.NewInt(int64(ztest.MinValue)),
+		big.NewInt(int64(math.Pow(float64(ztest.MaxValue), float64(ztest.CostExp))) * int64(ztest.MaxCount)),
+		big.NewInt(int64(ztest.MaxCount)),
+		big.NewInt(int64(ztest.CostExp)),
+		big.NewInt(int64(ztest.CostFromWeight)),
+		encryptionKeyX,
+		encryptionKeyY,
+		new(big.Int).SetBytes(processID),
+		testCensus.Root,
 	}
-	for _, nullifier := range nullifiers {
-		inputs = append(inputs, emulated.ValueOf[sw_bls12377.ScalarField](nullifier))
-	}
-	for _, commitment := range commitments {
-		inputs = append(inputs, emulated.ValueOf[sw_bls12377.ScalarField](commitment))
-	}
+	// append voters inputs (nullifiers, commitments, addresses, encrypted ballots)
+	inputs = append(inputs, nullifiers[:]...)
+	inputs = append(inputs, commitments[:]...)
 	for _, address := range addresses {
-		inputs = append(inputs, emulated.ValueOf[sw_bls12377.ScalarField](new(big.Int).SetBytes(address)))
+		inputs = append(inputs, new(big.Int).SetBytes(address))
 	}
-	for _, coord := range totalPlainCipherfields {
-		inputs = append(inputs, emulated.ValueOf[sw_bls12377.ScalarField](coord))
+	inputs = append(inputs, totalPlainCipherfields...)
+	// hash the inputs to generate the inputs hash
+	var buf [fr_bw6761.Bytes]byte
+	aggregatorHashFn := bw6761mimc.NewMiMC()
+	for _, input := range inputs {
+		input.FillBytes(buf[:])
+		_, err := aggregatorHashFn.Write(buf[:])
+		c.Assert(err, qt.IsNil)
 	}
-	publicHash, err := ComputePublicInputsHashFromBLS12377ToBW6761(inputs)
-	c.Assert(err, qt.IsNil)
-
+	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
+	// generate circuit placeholder stuff
 	finalVk, err := stdgroth16.ValueOfVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	c.Assert(err, qt.IsNil)
-	finalPlaceholder := &AggregatorCircuit{
+	finalPlaceholder := AggregatorCircuit{
 		VerifyVerificationKey: finalVk,
 	}
-	finalWitness := &AggregatorCircuit{
+	for i := 0; i < nVoters; i++ {
+		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
+		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
+	}
+	// init fixed witness stuff
+	finalWitness := AggregatorCircuit{
 		InputsHash:         publicHash,
 		MaxCount:           ztest.MaxCount,
 		ForceUniqueness:    ztest.ForceUniqueness,
@@ -287,18 +299,15 @@ func TestAggregatorCircuit(t *testing.T) {
 		VerifyProofs:       proofs,
 		VerifyPublicInputs: pubInputs,
 	}
+	// set voters witness stuff
 	for i := 0; i < nVoters; i++ {
-		// placeholder stuff
-		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
-		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
-		// witness stuff
 		finalWitness.Nullifiers[i] = nullifiers[i]
 		finalWitness.Commitments[i] = commitments[i]
 		finalWitness.Addresses[i] = new(big.Int).SetBytes(addresses[i])
 		for j := 0; j < nFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {
-					finalWitness.EncryptedBallots[i][j][n][m] = encryptedBallots[i][j][n][m]
+					finalWitness.EncryptedBallots[i][j][n][m], _ = new(big.Int).SetString(encryptedBallots[i][j][n][m], 10)
 				}
 			}
 		}
@@ -306,50 +315,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	// generate proof
 	assert := test.NewAssert(t)
 	now := time.Now()
-	assert.SolvingSucceeded(finalPlaceholder, finalWitness,
-		test.WithCurves(ecc.BW6_761),
-		test.WithBackends(backend.GROTH16))
+	assert.SolvingSucceeded(&finalPlaceholder, &finalWitness,
+		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16))
 	fmt.Println("proving tooks", time.Since(now))
-}
-
-func ComputePublicInputsHashFromBLS12377ToBW6761(publicInputs []emulated.Element[sw_bls12377.ScalarField]) (*big.Int, error) {
-	h := cmimc.NewMiMC()
-	var buf [fr_bls12377.Bytes]byte
-	for _, input := range publicInputs {
-		// Hash each limb of the emulated element
-		for _, limb := range input.Limbs {
-			limbValue, err := getBigIntFromVariable(limb)
-			if err != nil {
-				return nil, err
-			}
-			limbValue.FillBytes(buf[:])
-			h.Write(buf[:])
-		}
-	}
-	digest := h.Sum(nil)
-	publicHash := new(big.Int).SetBytes(digest)
-
-	return publicHash, nil
-}
-
-func getBigIntFromVariable(v frontend.Variable) (*big.Int, error) {
-	switch val := v.(type) {
-	case *big.Int:
-		return val, nil
-	case big.Int:
-		return &val, nil
-	case uint64:
-		return new(big.Int).SetUint64(val), nil
-	case int:
-		return big.NewInt(int64(val)), nil
-	case string:
-		bi := new(big.Int)
-		_, ok := bi.SetString(val, 10)
-		if !ok {
-			return nil, fmt.Errorf("invalid string for big.Int: %s", val)
-		}
-		return bi, nil
-	default:
-		return nil, fmt.Errorf("unsupported variable type %T", val)
-	}
 }
