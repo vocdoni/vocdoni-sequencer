@@ -158,7 +158,6 @@ func TestAggregatorCircuit(t *testing.T) {
 		// create the proof
 		circomProof, err := ztest.Circom2GnarkProof(bCircomInputs)
 		c.Assert(err, qt.IsNil)
-		c.Logf("circom proof %d generated", i)
 		// transform cipherfields to gnark frontend.Variable
 		emulatedBallots := [ztest.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
 		for i, c := range cipherfields {
@@ -234,7 +233,6 @@ func TestAggregatorCircuit(t *testing.T) {
 		// generate the proof
 		proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil)
-		c.Logf("proof %d generated", i)
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		c.Assert(err, qt.IsNil)
@@ -243,7 +241,6 @@ func TestAggregatorCircuit(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil)
-		c.Logf("proof %d verified", i)
 		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
 		c.Assert(err, qt.IsNil)
 	}
@@ -280,7 +277,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	}
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	// generate circuit placeholder stuff
-	finalVk, err := stdgroth16.ValueOfVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	finalVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	c.Assert(err, qt.IsNil)
 	finalPlaceholder := AggregatorCircuit{
 		VerifyVerificationKey: finalVk,
