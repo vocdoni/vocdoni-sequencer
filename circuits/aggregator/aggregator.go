@@ -29,34 +29,37 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/mimc"
+	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
 )
 
-const nVoters = 1
+const MaxVotes = 10
 
 type AggregatorCircuit struct {
-	InputsHash frontend.Variable `gnark:",public"`
+	InputsHash    frontend.Variable `gnark:",public"`
+	ValidVotes    frontend.Variable `gnark:",public"`
+	ValidVotesBin frontend.Variable `gnark:",public"`
 	// The following variables are priv-public inputs, so should be hashed and
 	// compared with the InputsHash. All the variables should be hashed in the
 	// same order as they are defined here.
-	MaxCount         frontend.Variable                   // Part of InputsHash
-	ForceUniqueness  frontend.Variable                   // Part of InputsHash
-	MaxValue         frontend.Variable                   // Part of InputsHash
-	MinValue         frontend.Variable                   // Part of InputsHash
-	MaxTotalCost     frontend.Variable                   // Part of InputsHash
-	MinTotalCost     frontend.Variable                   // Part of InputsHash
-	CostExp          frontend.Variable                   // Part of InputsHash
-	CostFromWeight   frontend.Variable                   // Part of InputsHash
-	EncryptionPubKey [2]frontend.Variable                // Part of InputsHash
-	ProcessId        frontend.Variable                   // Part of InputsHash
-	CensusRoot       frontend.Variable                   // Part of InputsHash
-	Nullifiers       [nVoters]frontend.Variable          // Part of InputsHash
-	Commitments      [nVoters]frontend.Variable          // Part of InputsHash
-	Addresses        [nVoters]frontend.Variable          // Part of InputsHash
-	EncryptedBallots [nVoters][8][2][2]frontend.Variable // Part of InputsHash
+	MaxCount         frontend.Variable                    // Part of InputsHash
+	ForceUniqueness  frontend.Variable                    // Part of InputsHash
+	MaxValue         frontend.Variable                    // Part of InputsHash
+	MinValue         frontend.Variable                    // Part of InputsHash
+	MaxTotalCost     frontend.Variable                    // Part of InputsHash
+	MinTotalCost     frontend.Variable                    // Part of InputsHash
+	CostExp          frontend.Variable                    // Part of InputsHash
+	CostFromWeight   frontend.Variable                    // Part of InputsHash
+	EncryptionPubKey [2]frontend.Variable                 // Part of InputsHash
+	ProcessId        frontend.Variable                    // Part of InputsHash
+	CensusRoot       frontend.Variable                    // Part of InputsHash
+	Nullifiers       [MaxVotes]frontend.Variable          // Part of InputsHash
+	Commitments      [MaxVotes]frontend.Variable          // Part of InputsHash
+	Addresses        [MaxVotes]frontend.Variable          // Part of InputsHash
+	EncryptedBallots [MaxVotes][8][2][2]frontend.Variable // Part of InputsHash
 	// VerifyCircuit proofs
-	VerifyProofs          [nVoters]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	VerifyPublicInputs    [nVoters]groth16.Witness[sw_bls12377.ScalarField]
+	VerifyProofs          [MaxVotes]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
+	VerifyPublicInputs    [MaxVotes]groth16.Witness[sw_bls12377.ScalarField]
 	VerifyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
@@ -99,10 +102,15 @@ func (c *AggregatorCircuit) Define(api frontend.API) error {
 	}
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
+	totalValidVotes := frontend.Variable(0)
+	validProofs := bits.ToBinary(api, c.ValidVotesBin)
 	for i := 0; i < len(c.VerifyProofs); i++ {
+		numErr := 1
 		if err := verifier.AssertProof(c.VerifyVerificationKey, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			return err
+			numErr = 0
 		}
+		totalValidVotes = api.Add(totalValidVotes, api.Mul(numErr, validProofs[i]))
 	}
+	api.AssertIsEqual(totalValidVotes, c.ValidVotes)
 	return nil
 }
