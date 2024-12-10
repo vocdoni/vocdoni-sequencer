@@ -82,14 +82,19 @@ func TestAggregatorCircuit(t *testing.T) {
 	)
 	// generate users accounts and census
 	privKeys, pubKeys, weights := []*ecdsa.PrivateKey{}, []ecdsa.PublicKey{}, [][]byte{}
-	for i := 0; i < nVoters; i++ {
-		// generate voter account
-		privKey, pubKey, address, err := ztest.GenerateECDSAaccount()
-		c.Assert(err, qt.IsNil)
-		privKeys = append(privKeys, privKey)
-		pubKeys = append(pubKeys, pubKey)
-		weights = append(weights, new(big.Int).SetInt64(ztest.Weight).Bytes())
-		addresses[i] = address.Bytes()
+	for i := 0; i < MaxVotes; i++ {
+		if i < nVoters {
+			// generate voter account
+			privKey, pubKey, address, err := ztest.GenerateECDSAaccount()
+			c.Assert(err, qt.IsNil)
+			privKeys = append(privKeys, privKey)
+			pubKeys = append(pubKeys, pubKey)
+			weights = append(weights, new(big.Int).SetInt64(ztest.Weight).Bytes())
+			addresses[i] = address.Bytes()
+		} else {
+			weights = append(weights, big.NewInt(0).Bytes())
+			addresses[i] = big.NewInt(0).Bytes()
+		}
 	}
 	// generate a test census proof
 	testCensus, err := ptest.GenerateCensusProofForTest(ptest.CensusTestConfig{
@@ -185,9 +190,17 @@ func TestAggregatorCircuit(t *testing.T) {
 		// transform the inputs hash to the field of the curve used by the circuit,
 		// if it is not done, the circuit will transform it during witness
 		// calculation and the hash will be different
+		// the resulting hash should have 32 bytes so if it does'nt, fill with 0s
 		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
+		if b := blsCircomInputsHash.Bytes(); len(b) < 32 {
+			for len(b) < 32 {
+				b = append(b, 0)
+			}
+			blsCircomInputsHash.SetBytes(b)
+		}
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ztest.SignECDSA(privKeys[i], blsCircomInputsHash.Bytes())
+		c.Assert(err, qt.IsNil)
 		// transform siblings to gnark frontend.Variable
 		fSiblings := [ztest.NLevels]frontend.Variable{}
 		for i, s := range testCensus.Proofs[0].Siblings {
@@ -271,19 +284,18 @@ func TestAggregatorCircuit(t *testing.T) {
 		testCensus.Root,
 	}
 	// append voters inputs (nullifiers, commitments, addresses, encrypted ballots)
-	inputs = append(inputs, nullifiers[:]...)
-	inputs = append(inputs, commitments[:]...)
+	inputs = append(inputs, fillToN(nullifiers[:], MaxVotes)...)
+	inputs = append(inputs, fillToN(commitments[:], MaxVotes)...)
+	bigAddresses := []*big.Int{}
 	for _, address := range addresses {
-		inputs = append(inputs, new(big.Int).SetBytes(address))
+		bigAddresses = append(bigAddresses, new(big.Int).SetBytes(address))
 	}
-	inputs = append(inputs, totalPlainCipherfields...)
+	inputs = append(inputs, fillToN(bigAddresses, MaxVotes)...)
+	inputs = append(inputs, fillToN(totalPlainCipherfields, MaxVotes*nFields*4)...)
 	// hash the inputs to generate the inputs hash
 	var buf [fr_bw6761.Bytes]byte
 	aggregatorHashFn := bw6761mimc.NewMiMC()
 	for _, input := range inputs {
-		if input == nil {
-			input = big.NewInt(0)
-		}
 		input.FillBytes(buf[:])
 		_, err := aggregatorHashFn.Write(buf[:])
 		c.Assert(err, qt.IsNil)
@@ -300,10 +312,6 @@ func TestAggregatorCircuit(t *testing.T) {
 	for i := 0; i < MaxVotes; i++ {
 		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
 		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
-		if i >= nVoters {
-			proofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
-			pubInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
-		}
 	}
 	// init fixed witness stuff
 	finalWitness := AggregatorCircuit{
@@ -337,6 +345,9 @@ func TestAggregatorCircuit(t *testing.T) {
 			}
 		}
 	}
+	// fill empty voters
+	finalWitness, finalPlaceholder.DummyVerificationKey, err = fillWithNEmptyWitness(finalWitness)
+	c.Assert(err, qt.IsNil)
 	// generate proof
 	assert := test.NewAssert(t)
 	now := time.Now()
@@ -344,4 +355,67 @@ func TestAggregatorCircuit(t *testing.T) {
 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	fmt.Println("proving tooks", time.Since(now))
+}
+
+func fillToN(inputs []*big.Int, n int) []*big.Int {
+	for i := 0; i < n; i++ {
+		if i >= len(inputs) {
+			inputs = append(inputs, big.NewInt(0))
+		} else if inputs[i] == nil {
+			inputs[i] = big.NewInt(0)
+		}
+	}
+	return inputs
+}
+
+func fillWithNEmptyWitness(w AggregatorCircuit) (AggregatorCircuit, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
+	nilVk := stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
+	var emptyEncryptedBallots [nFields][2][2]frontend.Variable
+	for i := 0; i < nFields; i++ {
+		emptyEncryptedBallots[i] = [2][2]frontend.Variable{
+			{frontend.Variable(0), frontend.Variable(0)},
+			{frontend.Variable(0), frontend.Variable(0)},
+		}
+	}
+	fullWitness, err := frontend.NewWitness(DummyWitness(), ecc.BLS12_377.ScalarField())
+	if err != nil {
+		return w, nilVk, err
+	}
+	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &DummyCircuit{})
+	if err != nil {
+		return w, nilVk, err
+	}
+	pk, vk, err := groth16.Setup(ccs)
+	if err != nil {
+		return w, nilVk, err
+	}
+	proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	if err != nil {
+		return w, nilVk, err
+	}
+	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+	if err != nil {
+		return w, nilVk, err
+	}
+	publicWitness, err := fullWitness.Public()
+	if err != nil {
+		return w, nilVk, err
+	}
+	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
+	if err != nil {
+		return w, nilVk, err
+	}
+	dummyVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	if err != nil {
+		return w, nilVk, err
+	}
+	for i := nVoters; i < MaxVotes; i++ {
+		w.Nullifiers[i] = big.NewInt(0)
+		w.Commitments[i] = big.NewInt(0)
+		w.Addresses[i] = big.NewInt(0)
+		w.EncryptedBallots[i] = emptyEncryptedBallots
+		w.VerifyProofs[i] = dummyProof
+		w.VerifyPublicInputs[i] = dummyWitness
+	}
+	return w, dummyVk, nil
 }

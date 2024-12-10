@@ -71,9 +71,17 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// transform the inputs hash to the field of the curve used by the circuit,
 	// if it is not done, the circuit will transform it during witness
 	// calculation and the hash will be different
+	// the resulting hash should have 32 bytes so if it does'nt, fill with 0s
 	blsCircomInputsHash := arbotree.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
+	if b := blsCircomInputsHash.Bytes(); len(b) < 32 {
+		for len(b) < 32 {
+			b = append(b, 0)
+		}
+		blsCircomInputsHash.SetBytes(b)
+	}
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ztest.SignECDSA(privKey, blsCircomInputsHash.Bytes())
+	c.Assert(err, qt.IsNil)
 	// init circom inputs
 	circomInputs := map[string]any{
 		"fields":           ztest.BigIntArrayToStringArray(fields, ztest.NFields),
