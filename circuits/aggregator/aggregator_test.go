@@ -34,22 +34,9 @@ import (
 )
 
 const (
-	nVoters = 1
-	nFields = 8
+	nVotes  = 1
 	nLevels = 160
 )
-
-func NBits(bits int) *big.Int {
-	if bits <= 0 {
-		return big.NewInt(0) // No valid number if bits <= 0
-	}
-	// Compute (1 << bits) - 1
-	maxNum := big.NewInt(1)
-	maxNum.Lsh(maxNum, uint(bits))    // Left shift by 'bits'
-	maxNum.Sub(maxNum, big.NewInt(1)) // Subtract 1 to get all bits set to 1
-
-	return maxNum
-}
 
 func TestAggregatorCircuit(t *testing.T) {
 	c := qt.New(t)
@@ -65,6 +52,8 @@ func TestAggregatorCircuit(t *testing.T) {
 	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, voteVerifierPlaceholder)
 	c.Assert(err, qt.IsNil)
 	pk, vk, err := groth16.Setup(ccs)
+	c.Assert(err, qt.IsNil)
+	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	c.Assert(err, qt.IsNil)
 	// common process id
 	processID := util.RandomBytes(20)
@@ -83,7 +72,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	// generate users accounts and census
 	privKeys, pubKeys, weights := []*ecdsa.PrivateKey{}, []ecdsa.PublicKey{}, [][]byte{}
 	for i := 0; i < MaxVotes; i++ {
-		if i < nVoters {
+		if i < nVotes {
 			// generate voter account
 			privKey, pubKey, address, err := ztest.GenerateECDSAaccount()
 			c.Assert(err, qt.IsNil)
@@ -104,18 +93,18 @@ func TestAggregatorCircuit(t *testing.T) {
 		KeyLen:        20,
 		Hash:          arbo.HashFunctionMiMC_BLS12_377,
 		BaseFiled:     arbo.BLS12377BaseField,
-	}, addresses[:nVoters], weights[:nVoters])
+	}, addresses[:nVotes], weights[:nVotes])
 	c.Assert(err, qt.IsNil)
 	// generate voters inputs values and proofs
 	totalPlainCipherfields := []*big.Int{}
-	for i := 0; i < nVoters; i++ {
+	for i := 0; i < nVotes; i++ {
 		// generate random ballot fields values
 		fields := ztest.GenerateBallotFields(ztest.MaxCount, ztest.MaxValue, ztest.MinValue, ztest.ForceUniqueness > 0)
 		// generate voter nonce k
 		k, err := encrypt.RandK()
 		c.Assert(err, qt.IsNil)
 		// encrypt the ballots fields
-		cipherfields, plainCipherfields := ztest.CipherBallotFields(fields, ztest.NFields, encryptionKey, k)
+		cipherfields, plainCipherfields := ztest.CipherBallotFields(fields, MaxFields, encryptionKey, k)
 		encryptedBallots[i] = cipherfields
 		totalPlainCipherfields = append(totalPlainCipherfields, plainCipherfields...)
 		// generate user commitment and nullifier
@@ -148,7 +137,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		// init circom inputs
 		circomInputs := map[string]any{
-			"fields":           ztest.BigIntArrayToStringArray(fields, ztest.NFields),
+			"fields":           ztest.BigIntArrayToStringArray(fields, MaxFields),
 			"max_count":        fmt.Sprint(ztest.MaxCount),
 			"force_uniqueness": fmt.Sprint(ztest.ForceUniqueness),
 			"max_value":        fmt.Sprint(ztest.MaxValue),
@@ -174,7 +163,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		circomProof, err := ztest.Circom2GnarkProof(bCircomInputs)
 		c.Assert(err, qt.IsNil)
 		// transform cipherfields to gnark frontend.Variable
-		emulatedBallots := [ztest.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
+		emulatedBallots := [MaxFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
 		for i, c := range cipherfields {
 			emulatedBallots[i] = [2][2]emulated.Element[sw_bn254.ScalarField]{
 				{
@@ -267,7 +256,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
 		c.Assert(err, qt.IsNil)
 	}
-	c.Assert(totalPlainCipherfields, qt.HasLen, nVoters*nFields*4)
+	c.Assert(totalPlainCipherfields, qt.HasLen, nVotes*MaxFields*4)
 	// compute public inputs hash
 	inputs := []*big.Int{
 		big.NewInt(int64(ztest.MaxCount)),
@@ -291,7 +280,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		bigAddresses = append(bigAddresses, new(big.Int).SetBytes(address))
 	}
 	inputs = append(inputs, fillToN(bigAddresses, MaxVotes)...)
-	inputs = append(inputs, fillToN(totalPlainCipherfields, MaxVotes*nFields*4)...)
+	inputs = append(inputs, fillToN(totalPlainCipherfields, MaxVotes*MaxFields*4)...)
 	// hash the inputs to generate the inputs hash
 	var buf [fr_bw6761.Bytes]byte
 	aggregatorHashFn := bw6761mimc.NewMiMC()
@@ -301,23 +290,11 @@ func TestAggregatorCircuit(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 	}
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
-	// generate circuit placeholder stuff
-	finalVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
-	c.Assert(err, qt.IsNil)
-	finalPlaceholder := AggregatorCircuit{
-		VerifyVerificationKey: finalVk,
-		VerifyPublicInputs:    [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		VerifyProofs:          [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
-	}
-	for i := 0; i < MaxVotes; i++ {
-		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
-		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
-	}
 	// init fixed witness stuff
 	finalWitness := AggregatorCircuit{
 		InputsHash:         publicHash,
-		ValidVotes:         nVoters,
-		ValidVotesBin:      NBits(nVoters),
+		ValidVotes:         nVotes,
+		ValidVotesBin:      NBits(nVotes),
 		MaxCount:           ztest.MaxCount,
 		ForceUniqueness:    ztest.ForceUniqueness,
 		MaxValue:           ztest.MaxValue,
@@ -333,11 +310,11 @@ func TestAggregatorCircuit(t *testing.T) {
 		VerifyPublicInputs: pubInputs,
 	}
 	// set voters witness stuff
-	for i := 0; i < nVoters; i++ {
+	for i := 0; i < nVotes; i++ {
 		finalWitness.Nullifiers[i] = nullifiers[i]
 		finalWitness.Commitments[i] = commitments[i]
 		finalWitness.Addresses[i] = new(big.Int).SetBytes(addresses[i])
-		for j := 0; j < nFields; j++ {
+		for j := 0; j < MaxFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {
 					finalWitness.EncryptedBallots[i][j][n][m], _ = new(big.Int).SetString(encryptedBallots[i][j][n][m], 10)
@@ -345,9 +322,27 @@ func TestAggregatorCircuit(t *testing.T) {
 			}
 		}
 	}
-	// fill empty voters
-	finalWitness, finalPlaceholder.DummyVerificationKey, err = fillWithNEmptyWitness(finalWitness)
+	// fill empty votes
+	finalWitness, dummyCCS, dummyVk, err := fillWithDummyValues(finalWitness, nVotes)
 	c.Assert(err, qt.IsNil)
+	// generate circuit placeholder stuff
+	finalPlaceholder := AggregatorCircuit{
+		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
+		VerifyPublicInputs: [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
+		VerificationKey: VerfiyingAndDummyKey{
+			Vk:    fixedVk,
+			Dummy: dummyVk,
+		},
+	}
+	for i := 0; i < MaxVotes; i++ {
+		if i < nVotes {
+			finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
+			finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
+		} else {
+			finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
+			finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
+		}
+	}
 	// generate proof
 	assert := test.NewAssert(t)
 	now := time.Now()
@@ -355,67 +350,4 @@ func TestAggregatorCircuit(t *testing.T) {
 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	fmt.Println("proving tooks", time.Since(now))
-}
-
-func fillToN(inputs []*big.Int, n int) []*big.Int {
-	for i := 0; i < n; i++ {
-		if i >= len(inputs) {
-			inputs = append(inputs, big.NewInt(0))
-		} else if inputs[i] == nil {
-			inputs[i] = big.NewInt(0)
-		}
-	}
-	return inputs
-}
-
-func fillWithNEmptyWitness(w AggregatorCircuit) (AggregatorCircuit, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
-	nilVk := stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
-	var emptyEncryptedBallots [nFields][2][2]frontend.Variable
-	for i := 0; i < nFields; i++ {
-		emptyEncryptedBallots[i] = [2][2]frontend.Variable{
-			{frontend.Variable(0), frontend.Variable(0)},
-			{frontend.Variable(0), frontend.Variable(0)},
-		}
-	}
-	fullWitness, err := frontend.NewWitness(DummyWitness(), ecc.BLS12_377.ScalarField())
-	if err != nil {
-		return w, nilVk, err
-	}
-	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &DummyCircuit{})
-	if err != nil {
-		return w, nilVk, err
-	}
-	pk, vk, err := groth16.Setup(ccs)
-	if err != nil {
-		return w, nilVk, err
-	}
-	proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
-	if err != nil {
-		return w, nilVk, err
-	}
-	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
-	if err != nil {
-		return w, nilVk, err
-	}
-	publicWitness, err := fullWitness.Public()
-	if err != nil {
-		return w, nilVk, err
-	}
-	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
-	if err != nil {
-		return w, nilVk, err
-	}
-	dummyVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
-	if err != nil {
-		return w, nilVk, err
-	}
-	for i := nVoters; i < MaxVotes; i++ {
-		w.Nullifiers[i] = big.NewInt(0)
-		w.Commitments[i] = big.NewInt(0)
-		w.Addresses[i] = big.NewInt(0)
-		w.EncryptedBallots[i] = emptyEncryptedBallots
-		w.VerifyProofs[i] = dummyProof
-		w.VerifyPublicInputs[i] = dummyWitness
-	}
-	return w, dummyVk, nil
 }
