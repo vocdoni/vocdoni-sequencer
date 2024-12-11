@@ -23,7 +23,7 @@ import (
 	"github.com/vocdoni/circom2gnark/parser"
 	ptest "github.com/vocdoni/gnark-crypto-primitives/test"
 	ztest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test"
-	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
+	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 
 	"go.vocdoni.io/dvote/util"
 )

@@ -7,7 +7,7 @@ import (
 
 	babyjubjub "github.com/iden3/go-iden3-crypto/babyjub"
 
-	curve "github.com/vocdoni/vocdoni-z-sandbox/ecc"
+	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 )
 
 // BJJ is the affine representation of the BabyJubJub group element.

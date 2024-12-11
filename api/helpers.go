@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"go.vocdoni.io/dvote/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 )
 
 // httpWriteJSON helper function allows to write a JSON response.

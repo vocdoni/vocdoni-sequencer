@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.vocdoni.io/dvote/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 )
 
 // Error is used by handler functions to wrap errors, assigning a unique error code

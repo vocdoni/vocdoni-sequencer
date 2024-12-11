@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	babyjubjub "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
-	curve "github.com/vocdoni/vocdoni-z-sandbox/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc/format"
+	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 )
 
 var Params babyjubjub.CurveParams

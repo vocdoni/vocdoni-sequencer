@@ -3,10 +3,10 @@ package curves
 import (
 	"fmt"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
-	bjj_gnark "github.com/vocdoni/vocdoni-z-sandbox/ecc/bjj_gnark"
-	bjj_iden3 "github.com/vocdoni/vocdoni-z-sandbox/ecc/bjj_iden3"
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc/bn254"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjj_gnark "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
+	bjj_iden3 "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_iden3"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 )
 
 const (

@@ -8,14 +8,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"go.vocdoni.io/dvote/apiclient"
-	"go.vocdoni.io/dvote/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 )
 
 type APIConfig struct {
-	Host   string
-	Port   int
-	Client *apiclient.HTTPclient
+	Host string
+	Port int
 }
 
 // API type represents the API HTTP server with JWT authentication capabilities.
@@ -23,7 +21,6 @@ type API struct {
 	host   string
 	port   int
 	router *chi.Mux
-	client *apiclient.HTTPclient
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
@@ -32,9 +29,8 @@ func New(conf *APIConfig) *API {
 		return nil
 	}
 	return &API{
-		host:   conf.Host,
-		port:   conf.Port,
-		client: conf.Client,
+		host: conf.Host,
+		port: conf.Port,
 	}
 }
 

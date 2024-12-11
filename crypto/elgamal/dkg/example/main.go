@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/dkg"
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc/curves"
-	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
+	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal/dkg"
 )
 
 func main() {

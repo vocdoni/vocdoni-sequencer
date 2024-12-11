@@ -6,8 +6,8 @@ import (
 
 	qt "github.com/frankban/quicktest"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
-	bjjIden3 "github.com/vocdoni/vocdoni-z-sandbox/ecc/bjj_iden3"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjjIden3 "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_iden3"
 )
 
 // Helper function to generate a non-base point
