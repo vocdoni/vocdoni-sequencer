@@ -55,8 +55,8 @@ func (p *Participant) GenerateSecretPolynomial() {
 		p.PublicCoeffs = append(p.PublicCoeffs, commitment)
 
 		// Log the secret coefficient and commitment
-		//log.Printf("Participant %d: SecretCoeff[%d] = %s", p.ID, i, coeff.String())
-		//log.Printf("Participant %d: PublicCoeff[%d] = %s", p.ID, i, commitment.String())
+		// log.Printf("Participant %d: SecretCoeff[%d] = %s", p.ID, i, coeff.String())
+		// log.Printf("Participant %d: PublicCoeff[%d] = %s", p.ID, i, commitment.String())
 	}
 }
 

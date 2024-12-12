@@ -67,8 +67,8 @@ func (g *BJJ) Neg(a curve.Point) {
 	proj := g.inner.Projective()
 	proj.X = proj.X.Neg(proj.X)
 	g.inner.X = g.inner.X.Set(proj.Affine().X)
-	//g.inner.X = g.inner.X.Neg(g.inner.X) // Negate the x-coordinate
-	//g.inner.X = g.inner.X.Mod(g.inner.X, constants.Q)
+	// g.inner.X = g.inner.X.Neg(g.inner.X) // Negate the x-coordinate
+	// g.inner.X = g.inner.X.Mod(g.inner.X, constants.Q)
 }
 
 func (g *BJJ) SetZero() {
@@ -91,8 +91,8 @@ func (g *BJJ) SetGenerator() {
 }
 
 func (g *BJJ) String() string {
-	//bytes := g.Marshal()
-	//return fmt.Sprintf("%x", bytes)
+	// bytes := g.Marshal()
+	// return fmt.Sprintf("%x", bytes)
 	return fmt.Sprintf("%s,%s", g.inner.X.String(), g.inner.Y.String())
 }
 

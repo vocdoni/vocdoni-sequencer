@@ -184,7 +184,6 @@ func TestDecryptionWithMalformedCiphertext(t *testing.T) {
 	if recoveredMessage.Cmp(message) == 0 {
 		t.Fatal("Decryption should have failed with corrupted RBytes, but it succeeded")
 	}
-
 }
 
 func TestEncryptDecryptWithMaxMessage(t *testing.T) {
