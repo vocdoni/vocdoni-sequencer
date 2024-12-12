@@ -14,8 +14,11 @@ type Process struct {
 // ProcessResponse represents the response of a voting process
 type ProcessResponse struct {
 	ProcessID        types.HexBytes  `json:"processId"`
-	EncryptionPubKey [2]types.BigInt `json:"encryptionPubKey"`
-	StateRoot        types.HexBytes  `json:"stateRoot"`
+	EncryptionPubKey [2]types.BigInt `json:"encryptionPubKey,omitempty"`
+	StateRoot        types.HexBytes  `json:"stateRoot,omitempty"`
+	ChainID          uint32          `json:"chainId,omitempty"`
+	Nonce            uint64          `json:"nonce,omitempty"`
+	Address          string          `json:"address,omitempty"`
 }
 
 // BallotMode is the struct to define the rules of a ballot

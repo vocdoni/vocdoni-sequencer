@@ -26,7 +26,8 @@ type API struct {
 	storage *stg.Storage
 }
 
-// New creates a new API HTTP server. It does not start the server. Use Start() for that.
+// New creates a new API instance with the given configuration.
+// It also initializes the storage and starts the HTTP server.
 func New(conf *APIConfig) (*API, error) {
 	if conf == nil {
 		return nil, fmt.Errorf("missing API configuration")
@@ -38,21 +39,36 @@ func New(conf *APIConfig) (*API, error) {
 	a := &API{
 		storage: storage,
 	}
+	// Initialize router
+	a.initRouter()
 	go func() {
-		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", conf.Host, conf.Port), a.initRouter()); err != nil {
+		log.Infow("Starting API server", "host", conf.Host, "port", conf.Port)
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", conf.Host, conf.Port), a.router); err != nil {
 			log.Fatalf("failed to start the API server: %v", err)
 		}
 	}()
 	return a, nil
 }
 
-// registerHandlers registers all the API handlers.
-func (a *API) registerHandlers() {
-	a.router.Post(newProcessEndpoint, a.newProcess)
+// Router returns the chi router for testing purposes
+func (a *API) Router() *chi.Mux {
+	return a.router
 }
 
-// router creates the router with all the routes and middleware.
-func (a *API) initRouter() http.Handler {
+// registerHandlers registers all the API handlers.
+func (a *API) registerHandlers() {
+	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")
+	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
+		httpWriteOK(w)
+	})
+	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "POST")
+	a.router.Post(ProcessEndpoint, a.newProcess)
+	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
+	a.router.Get(ProcessEndpoint, a.process)
+}
+
+// initRouter creates the router with all the routes and middleware.
+func (a *API) initRouter() {
 	// Create the router with a basic middleware stack
 	a.router = chi.NewRouter()
 	a.router.Use(cors.New(cors.Options{
@@ -67,12 +83,7 @@ func (a *API) initRouter() http.Handler {
 	a.router.Use(middleware.Throttle(100))
 	a.router.Use(middleware.ThrottleBacklog(5000, 40000, 60*time.Second))
 	a.router.Use(middleware.Timeout(45 * time.Second))
-	// Routes
-	a.router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		httpWriteOK(w)
-	})
+
 	// Register the API handlers
 	a.registerHandlers()
-	// Return the router
-	return a.router
 }
