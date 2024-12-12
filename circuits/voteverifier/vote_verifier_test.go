@@ -95,6 +95,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	blsCircomInputsHash := arbotree.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ztest.SignECDSA(privKey, blsCircomInputsHash.Bytes())
+	c.Assert(err, qt.IsNil)
 	// init circom inputs
 	circomInputs := map[string]any{
 		"fields":           ztest.BigIntArrayToStringArray(fields, n_fields),
