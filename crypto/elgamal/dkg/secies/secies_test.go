@@ -9,10 +9,7 @@ import (
 )
 
 func TestKeyGeneration(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	se, err := New(nil, curvePoint, nil)
 	if err != nil {
@@ -34,11 +31,7 @@ func TestKeyGeneration(t *testing.T) {
 }
 
 func TestEncryptionDecryption(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
-
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
 	if err != nil {
@@ -86,10 +79,7 @@ func TestEncryptionDecryption(t *testing.T) {
 }
 
 func TestDecryptionWithWrongPrivateKey(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -131,10 +121,7 @@ func TestDecryptionWithWrongPrivateKey(t *testing.T) {
 }
 
 func TestDecryptionWithMalformedCiphertext(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -187,10 +174,7 @@ func TestDecryptionWithMalformedCiphertext(t *testing.T) {
 }
 
 func TestEncryptDecryptWithMaxMessage(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -227,10 +211,7 @@ func TestEncryptDecryptWithMaxMessage(t *testing.T) {
 }
 
 func TestEncryptDecryptRandomMessages(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -275,10 +256,7 @@ func TestEncryptDecryptRandomMessages(t *testing.T) {
 }
 
 func TestEncryptWithNilPrivateKey(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Create a recipient with nil private key (should generate keys)
 	se, err := New(nil, curvePoint, nil)
@@ -292,10 +270,7 @@ func TestEncryptWithNilPrivateKey(t *testing.T) {
 }
 
 func TestPublicKeyMarshaling(t *testing.T) {
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJub)
-	if err != nil {
-		t.Fatalf("Failed to create curve point: %v", err)
-	}
+	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
 
 	// Generate keys
 	se, err := New(nil, curvePoint, nil)

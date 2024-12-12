@@ -23,8 +23,7 @@ func TestDKG(t *testing.T) {
 	c := qt.New(t)
 
 	// Initialize curve
-	curvePoint, err := curves.New(curves.CurveTypeBabyJubJubIden3)
-	c.Assert(err, qt.IsNil)
+	curvePoint := curves.New(curves.CurveTypeBabyJubJubIden3)
 
 	// Initialize participants
 	participantIDs := []int{1, 2, 3, 4, 5}

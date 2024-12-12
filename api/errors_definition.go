@@ -25,7 +25,10 @@ import (
 // Do note that HTTPstatus 204 No Content implies the response body will be empty,
 // so the Code and Message will actually be discarded, never sent to the client
 var (
-	ErrResourceNotFound           = Error{Code: 40001, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("resource not found")}
+	ErrResourceNotFound = Error{Code: 40001, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("resource not found")}
+	ErrMalformedBody    = Error{Code: 40004, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("malformed JSON body")}
+	ErrInvalidSignature = Error{Code: 40005, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid signature")}
+
 	ErrMarshalingServerJSONFailed = Error{Code: 50001, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("marshaling (server-side) JSON failed")}
 	ErrGenericInternalServerError = Error{Code: 50002, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("internal server error")}
 )

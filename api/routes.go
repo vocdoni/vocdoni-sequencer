@@ -23,4 +23,7 @@ const (
 	checkNullifierEndpoint = "/elections/{electionID}/nullifier"
 	// voteEndpoint is the api endpoint to vote in an election
 	votesEndpoint = "/votes"
+
+	// processEndpoint is the api endpoint to create a new voting process
+	newProcessEndpoint = "/process"
 )

@@ -9,8 +9,7 @@ import (
 )
 
 func TestGenerateKey(t *testing.T) {
-	curve, err := curves.New(curves.CurveTypeBN254)
-	qt.Assert(t, err, qt.IsNil)
+	curve := curves.New(curves.CurveTypeBN254)
 
 	publicKey, privateKey, err := GenerateKey(curve)
 	qt.Assert(t, err, qt.IsNil)
@@ -25,8 +24,7 @@ func TestGenerateKey(t *testing.T) {
 }
 
 func TestEncryptDecrypt(t *testing.T) {
-	curve, err := curves.New(curves.CurveTypeBN254)
-	qt.Assert(t, err, qt.IsNil)
+	curve := curves.New(curves.CurveTypeBN254)
 
 	publicKey, privateKey, err := GenerateKey(curve)
 	qt.Assert(t, err, qt.IsNil)
@@ -53,8 +51,7 @@ func TestEncryptDecrypt(t *testing.T) {
 
 func TestCheckK(t *testing.T) {
 	// Setup a curve point
-	curve, err := curves.New(curves.CurveTypeBN254)
-	qt.Assert(t, err, qt.IsNil)
+	curve := curves.New(curves.CurveTypeBN254)
 
 	// Generate a key pair
 	pubKey, privKey, err := GenerateKey(curve)

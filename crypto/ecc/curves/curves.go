@@ -18,15 +18,16 @@ const (
 
 // New creates a new instance of a Curve implementation based on the provided type string.
 // The supported types are defined as constants in this package.
-func New(curveType string) (ecc.Point, error) {
+// If the type is not supported, it will panic.
+func New(curveType string) ecc.Point {
 	switch curveType {
 	case CurveTypeBabyJubJubGnark:
-		return &bjj_gnark.BJJ{}, nil
+		return &bjj_gnark.BJJ{}
 	case CurveTypeBN254:
-		return &bn254.G1{}, nil
+		return &bn254.G1{}
 	case CurveTypeBabyJubJubIden3:
-		return &bjj_iden3.BJJ{}, nil
+		return &bjj_iden3.BJJ{}
 	default:
-		return nil, fmt.Errorf("unsupported curve type: %s", curveType)
+		panic(fmt.Sprintf("unsupported curve type: %s", curveType))
 	}
 }
