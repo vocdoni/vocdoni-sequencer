@@ -1,23 +1,6 @@
 # Threshold ElGamal Encryption with Distributed Key Generation over bn254
 
-This repository provides a Go implementation of threshold ElGamal encryption with a Distributed Key Generation (DKG) protocol using the BN254 elliptic curve. The implementation simulates a secure voting system where multiple participants collaboratively generate a public key and can decrypt messages only when a threshold number of them cooperate.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Distributed Key Generation (DKG)](#distributed-key-generation-dkg)
-- [ElGamal Encryption Scheme](#elgamal-encryption-scheme)
-- [Elliptic Curve: BN254](#elliptic-curve-bn254)
-- [Reference Implementation](#reference-implementation)
-- [Acknowledgments](#acknowledgments)
-
-## Overview
-
-The code demonstrates how to:
-
-- Perform a Distributed Key Generation (DKG) among multiple participants to generate a shared public key without a trusted dealer.
-- Use threshold ElGamal encryption to encrypt messages such that decryption requires cooperation from a subset of participants.
-- Simulate a secure voting system where votes are encrypted, aggregated, and decrypted securely.
+This repository provides a Go implementation of threshold ElGamal encryption with a Distributed Key Generation (DKG) protocol using elliptic curve. 
 
 ## Distributed Key Generation (DKG)
 
@@ -115,20 +98,6 @@ To decrypt the ciphertext `(C1, C2)`:
 
 - **Discrete Logarithm**: Recovering `m` requires solving a discrete logarithm problem, which is feasible for small message spaces but becomes impractical for large messages.
 - **Pairings for Large Messages**: To handle larger messages, cryptographic pairings or alternative schemes are necessary.
-
-## Elliptic Curve: BN254
-
-### Overview
-
-The implementation uses the BN254 elliptic curve, also known as Barreto-Naehrig curve with embedding degree 12 and a 254-bit prime field.
-
-### Characteristics
-
-- **Security Level**: Provides approximately 128-bit security.
-- **Efficiency**: Optimized for pairing operations, making it suitable for cryptographic protocols requiring pairings.
-- **Equation**: The BN254 curve is defined over a finite field $F_p$ with the equation:
-  $y^2 = x^3 + b$
-  where $b$ is a constant in $F_p$.
 
 ## Reference Implementation
 

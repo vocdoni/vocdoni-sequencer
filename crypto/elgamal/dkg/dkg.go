@@ -3,7 +3,6 @@ package dkg
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
@@ -67,8 +66,6 @@ func (p *Participant) ComputeShares() {
 		// Evaluate the polynomial at x = pid.
 		share := p.evaluatePolynomial(big.NewInt(int64(pid)))
 		p.SecretShares[pid] = share
-		// Log the computed share
-		//log.Printf("Participant %d: Share for Participant %d = %s", p.ID, pid, share.String())
 	}
 }
 
@@ -130,8 +127,6 @@ func (p *Participant) AggregateShares() {
 		p.PrivateShare.Add(p.PrivateShare, share)
 		p.PrivateShare.Mod(p.PrivateShare, order)
 	}
-	// Log the aggregated private share
-	log.Printf("Participant %d: PrivateShare = %s", p.ID, p.PrivateShare.String())
 }
 
 // AggregatePublicKey aggregates the public commitments to compute the public key.
@@ -141,6 +136,4 @@ func (p *Participant) AggregatePublicKey(allPublicCoeffs map[int][]ecc.Point) {
 		pk.Add(pk, coeffs[0]) // Only the constant term is needed
 	}
 	p.PublicKey = pk
-	// Log the aggregated public key
-	log.Printf("Participant %d: PublicKey = %s", p.ID, p.PublicKey.String())
 }
