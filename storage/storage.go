@@ -13,9 +13,7 @@ const (
 	keyPrefix = "k"
 )
 
-var (
-	ErrNotFound = fmt.Errorf("key not found in storage")
-)
+var ErrNotFound = fmt.Errorf("key not found in storage")
 
 // Storage is a wrapper around a database that stores different types of data.
 type Storage struct {
