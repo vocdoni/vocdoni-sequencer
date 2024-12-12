@@ -1,5 +1,4 @@
-// Package ethereum provides cryptographic operations used in go-dvote related
-// to ethereum.
+// Package ethereum provides cryptographic operations for Ethereum.
 package ethereum
 
 import (
@@ -12,8 +11,8 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"go.vocdoni.io/dvote/types"
-	"go.vocdoni.io/dvote/util"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
+	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
 const (

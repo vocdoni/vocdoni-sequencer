@@ -17,7 +17,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
-	"go.vocdoni.io/dvote/util"
+	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
 // GenerateECDSAaccount generates a new ECDSA account and returns the private

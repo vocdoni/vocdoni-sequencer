@@ -3,6 +3,7 @@ module github.com/vocdoni/vocdoni-z-sandbox
 go 1.23.2
 
 require (
+	github.com/cockroachdb/pebble v1.1.2
 	github.com/consensys/gnark v0.11.1-0.20241210204654-a1e66c1d6b4d
 	github.com/consensys/gnark-crypto v0.14.1-0.20241122181107-03e007d865c0
 	github.com/ethereum/go-ethereum v1.14.12
@@ -17,7 +18,6 @@ require (
 	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f
 	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241202120611-440afa35dda9
-	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 
 require (
@@ -29,7 +29,6 @@ require (
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
-	github.com/cockroachdb/pebble v1.1.2 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/bavard v0.1.24 // indirect
@@ -69,6 +68,7 @@ require (
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/sync v0.8.0 // indirect

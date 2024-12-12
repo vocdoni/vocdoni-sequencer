@@ -13,7 +13,7 @@ import (
 )
 
 // newProcess creates a new voting process
-// POST /process with ProcessID, censusRoot, metadata_id, and ballot rules
+// POST /process
 func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	p := &Process{}
 	if err := json.NewDecoder(r.Body).Decode(p); err != nil {
@@ -35,7 +35,8 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 		ChainID: p.ChainID,
 	}
 
-	publicKey, _, err := elgamal.GenerateKey(curves.New(curves.CurveTypeBN254))
+	// Generate the elgamal key
+	publicKey, privateKey, err := elgamal.GenerateKey(curves.New(curves.CurveTypeBN254))
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not generate elgamal key: %v", err).Write(w)
 		return
@@ -47,6 +48,12 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 		ProcessID:        pid.Marshal(),
 		EncryptionPubKey: [2]types.BigInt{types.BigInt(*x), types.BigInt(*y)},
 		StateRoot:        types.HexBytes{}, // TO-DO
+	}
+
+	// Store the encryption keys
+	if err := a.storage.StoreEncryptionKeys(pid, publicKey, privateKey); err != nil {
+		ErrGenericInternalServerError.Withf("could not store encryption keys: %v", err).Write(w)
+		return
 	}
 
 	// Write the response

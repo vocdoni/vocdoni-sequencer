@@ -25,7 +25,7 @@ import (
 	ztest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test"
 	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 
-	"go.vocdoni.io/dvote/util"
+	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
 const (
