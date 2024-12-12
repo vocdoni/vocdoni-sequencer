@@ -8,11 +8,10 @@ import (
 
 type DummyCircuit struct {
 	A frontend.Variable `gnark:",public"`
-	B frontend.Variable
 }
 
 func DummyWitness() *DummyCircuit {
-	return &DummyCircuit{1, 1}
+	return &DummyCircuit{1}
 }
 
 func (c *DummyCircuit) Define(api frontend.API) error {
@@ -20,7 +19,7 @@ func (c *DummyCircuit) Define(api frontend.API) error {
 	if !ok {
 		return errors.New("api not committer")
 	}
-	b, err := cmter.Commit(c.B)
+	b, err := cmter.Commit(frontend.Variable(1))
 	if err != nil {
 		return err
 	}

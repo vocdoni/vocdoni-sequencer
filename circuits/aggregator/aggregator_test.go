@@ -23,10 +23,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
-const (
-	nVotes  = 1
-	nLevels = 160
-)
+const nVotes = 1
 
 func TestAggregatorCircuit(t *testing.T) {
 	c := qt.New(t)
@@ -162,10 +159,12 @@ func TestAggregatorCircuit(t *testing.T) {
 	finalPlaceholder := AggregatorCircuit{
 		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 		VerifyPublicInputs: [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		VerificationKey: VerfiyingAndDummyKey{
-			Vk:    fixedVk,
-			Dummy: dummyVk,
-		},
+		Vk:                 fixedVk,
+		Dummy:              dummyVk,
+		// VerificationKey: VerifiyingAndDummyKey{
+		// 	Vk:    fixedVk,
+		// 	Dummy: dummyVk,
+		// },
 	}
 	for i := 0; i < MaxVotes; i++ {
 		if i < nVotes {

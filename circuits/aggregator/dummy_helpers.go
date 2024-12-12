@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
@@ -38,7 +37,7 @@ func fillToN(inputs []*big.Int, n int) []*big.Int {
 	return inputs
 }
 
-func prepareDummy(field *big.Int, opts ...backend.ProverOption) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
+func prepareDummy(outer *big.Int, field *big.Int) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
 	ccs, err := frontend.Compile(field, r1cs.NewBuilder, &DummyCircuit{})
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -51,7 +50,7 @@ func prepareDummy(field *big.Int, opts ...backend.ProverOption) (constraint.Cons
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	proof, err := groth16.Prove(ccs, pk, fullWitness, opts...)
+	proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(outer, field))
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -59,11 +58,14 @@ func prepareDummy(field *big.Int, opts ...backend.ProverOption) (constraint.Cons
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	if err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(outer, field)); err != nil {
+		return nil, nil, nil, nil, err
+	}
 	return ccs, publicWitness, proof, vk, nil
 }
 
 func fillWithDummyValues(w AggregatorCircuit, nVotes int) (AggregatorCircuit, constraint.ConstraintSystem, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
-	dummyCCS, pubWitness, proof, vk, err := prepareDummy(ecc.BLS12_377.ScalarField(), stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	dummyCCS, pubWitness, proof, vk, err := prepareDummy(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
 	if err != nil {
 		return AggregatorCircuit{}, nil, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}, err
 	}

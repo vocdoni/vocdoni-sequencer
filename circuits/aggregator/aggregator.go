@@ -26,8 +26,11 @@
 package aggregator
 
 import (
+	"fmt"
+
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
+	"github.com/consensys/gnark/std/commitments/pedersen"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
@@ -35,7 +38,7 @@ import (
 )
 
 const (
-	MaxVotes  = 10
+	MaxVotes  = 1
 	MaxFields = circomtest.NFields
 )
 
@@ -64,7 +67,9 @@ type AggregatorCircuit struct {
 	// VerifyCircuit proofs
 	VerifyProofs       [MaxVotes]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
 	VerifyPublicInputs [MaxVotes]groth16.Witness[sw_bls12377.ScalarField]
-	VerificationKey    VerfiyingAndDummyKey
+	// VerificationKey    VerifiyingAndDummyKey `gnark:"-"`
+	Vk    groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
+	Dummy groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
 func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
@@ -94,6 +99,53 @@ func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
 	return nil
 }
 
+func (c *AggregatorCircuit) Switch(api frontend.API, selector frontend.Variable) (groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
+	nilVk := groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
+	if len(c.Vk.G1.K) != len(c.Dummy.G1.K) {
+		return nilVk, fmt.Errorf("g1 k len missmatch")
+	}
+	if len(c.Vk.CommitmentKeys) != len(c.Dummy.CommitmentKeys) {
+		return nilVk, fmt.Errorf("commitmentKeys len missmatch")
+	}
+	// select between G1's
+	k := []sw_bls12377.G1Affine{}
+	for i, vkk := range c.Vk.G1.K {
+		k = append(k, *vkk.Select(api, selector, vkk, c.Dummy.G1.K[i]))
+	}
+	// select between G2's
+	gammaNeg := sw_bls12377.G2Affine{
+		P: *c.Vk.G2.GammaNeg.P.Select(api, selector, c.Vk.G2.GammaNeg.P, c.Dummy.G2.GammaNeg.P),
+	}
+	deltaNeg := sw_bls12377.G2Affine{
+		P: *c.Vk.G2.DeltaNeg.P.Select(api, selector, c.Vk.G2.DeltaNeg.P, c.Dummy.G2.DeltaNeg.P),
+	}
+	// select between CommitmentKeys'
+	commitmentKeys := []pedersen.VerifyingKey[sw_bls12377.G2Affine]{}
+	for i, vkck := range c.Vk.CommitmentKeys {
+		commitmentKeys = append(commitmentKeys, pedersen.VerifyingKey[sw_bls12377.G2Affine]{
+			G: sw_bls12377.G2Affine{
+				P: *vkck.G.P.Select(api, selector, vkck.G.P, c.Dummy.CommitmentKeys[i].G.P),
+			},
+			GSigmaNeg: sw_bls12377.G2Affine{
+				P: *vkck.G.P.Select(api, selector, vkck.GSigmaNeg.P, c.Dummy.CommitmentKeys[i].GSigmaNeg.P),
+			},
+		})
+	}
+	// return the built vk selecting between E's
+	return groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{
+		E:  *c.Vk.E.Select(api, selector, c.Vk.E, c.Dummy.E),
+		G1: struct{ K []sw_bls12377.G1Affine }{k},
+		G2: struct {
+			GammaNeg sw_bls12377.G2Affine
+			DeltaNeg sw_bls12377.G2Affine
+		}{
+			GammaNeg: gammaNeg,
+			DeltaNeg: deltaNeg,
+		},
+		CommitmentKeys: commitmentKeys,
+	}, nil
+}
+
 func (c *AggregatorCircuit) Define(api frontend.API) error {
 	// check the inputs of the circuit
 	if err := c.checkInputs(api); err != nil {
@@ -109,17 +161,14 @@ func (c *AggregatorCircuit) Define(api frontend.API) error {
 	totalValidVotes := frontend.Variable(0)
 	validProofs := bits.ToBinary(api, c.ValidVotesBin)
 	for i := 0; i < len(c.VerifyProofs); i++ {
-		api.Println(validProofs[i])
-		vk, err := c.VerificationKey.Switch(api, validProofs[i])
+		vk, err := c.Switch(api, validProofs[i])
 		if err != nil {
 			return err
 		}
-		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			api.Println(11)
+		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i], groth16.WithCompleteArithmetic()); err != nil {
 			return err
 		}
 		totalValidVotes = api.Add(totalValidVotes, validProofs[i])
-		api.Println(totalValidVotes)
 	}
 	api.AssertIsEqual(totalValidVotes, c.ValidVotes)
 	return nil
