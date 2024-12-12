@@ -140,3 +140,15 @@ func BabyStepGiantStepECC(M, G ecc.Point, maxMessage uint64) (*big.Int, error) {
 
 	return nil, fmt.Errorf("failed to compute discrete logarithm using Baby-Step Giant-Step algorithm")
 }
+
+// CheckK checks if a given k was used to produce the ciphertext (c1, c2) under the given publicKey.
+// It returns true if c1 == k * G, false otherwise.
+// This does not require decrypting the message or computing the discrete log.
+func CheckK(c1 ecc.Point, k *big.Int) bool {
+	// Compute KCheck = k * G
+	KCheck := c1.New()
+	KCheck.ScalarBaseMult(k)
+
+	// Compare KCheck with c1
+	return KCheck.Equal(c1)
+}

@@ -50,3 +50,50 @@ func TestEncryptDecrypt(t *testing.T) {
 		qt.Assert(t, testPoint.Equal(M), qt.IsTrue)
 	}
 }
+
+func TestCheckK(t *testing.T) {
+	// Setup a curve point
+	curve, err := curves.New(curves.CurveTypeBN254)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Generate a key pair
+	pubKey, privKey, err := GenerateKey(curve)
+	if err != nil {
+		t.Fatalf("Failed to generate keys: %v", err)
+	}
+
+	// Define a message
+	msg := big.NewInt(42)
+	maxMsg := uint64(100)
+
+	// Encrypt the message
+	c1, c2, k, err := Encrypt(pubKey, msg)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	// Check that k is indeed the one used
+	if !CheckK(c1, k) {
+		t.Fatalf("CheckK failed: it should have found that this k was used")
+	}
+
+	// Try a wrong k
+	wrongK := big.NewInt(999999) // a random different k
+	if CheckK(c1, wrongK) {
+		t.Fatalf("CheckK failed: it should not have matched this wrong k")
+	}
+
+	// Bonus: try decrypting to ensure correctness (not necessary for CheckK logic)
+	M, mInt, err := Decrypt(pubKey, privKey, c1, c2, maxMsg)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+	if mInt.Cmp(msg) != 0 {
+		t.Fatalf("Decryption mismatch: got %s, want %s", mInt.String(), msg.String())
+	}
+
+	// Just ensure M was computed
+	if M == nil {
+		t.Fatalf("M point is nil after decrypt")
+	}
+}
