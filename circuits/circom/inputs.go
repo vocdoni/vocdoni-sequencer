@@ -1,11 +1,11 @@
-package test
+package circom
 
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	_ "embed"
 	"fmt"
 	"math/big"
-	"os"
 
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,10 +14,33 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
+	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
 	"go.vocdoni.io/dvote/util"
+)
+
+//go:embed ballot_proof.wasm
+var circuit []byte
+
+//go:embed ballot_proof_pkey.zkey
+var pkey []byte
+
+//go:embed ballot_proof_vkey.json
+var vkey []byte
+
+const (
+	// process config
+	NLevels         = 160
+	NFields         = 8
+	MaxCount        = 5
+	ForceUniqueness = 0
+	MaxValue        = 16
+	MinValue        = 0
+	CostExp         = 2
+	CostFromWeight  = 0
+	Weight          = 10
 )
 
 // GenerateECDSAaccount generates a new ECDSA account and returns the private
@@ -172,23 +195,13 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 // generates the proof using the inputs provided. It returns the proof and the
 // public signals of the proof. It uses Rapidsnark and Groth16 prover to
 // generate the proof.
-func CompileAndGenerateProof(inputs []byte, wasmFile, zkeyFile string) (string, string, error) {
+func CompileAndGenerateProof(inputs []byte) (string, string, error) {
 	finalInputs, err := witness.ParseInputs(inputs)
 	if err != nil {
 		return "", "", err
 	}
-	// read wasm file
-	bWasm, err := os.ReadFile(wasmFile)
-	if err != nil {
-		return "", "", err
-	}
-	// read zkey file
-	bZkey, err := os.ReadFile(zkeyFile)
-	if err != nil {
-		return "", "", err
-	}
 	// instance witness calculator
-	calc, err := witness.NewCircom2WitnessCalculator(bWasm, true)
+	calc, err := witness.NewCircom2WitnessCalculator(circuit, true)
 	if err != nil {
 		return "", "", err
 	}
@@ -198,5 +211,41 @@ func CompileAndGenerateProof(inputs []byte, wasmFile, zkeyFile string) (string, 
 		return "", "", err
 	}
 	// generate proof
-	return prover.Groth16ProverRaw(bZkey, w)
+	return prover.Groth16ProverRaw(pkey, w)
+}
+
+// Circom2GnarkProof
+func Circom2GnarkProof(witness []byte) (*parser.GnarkRecursionProof, error) {
+	// create circom proof and public signals
+	circomProof, pubSignals, err := CompileAndGenerateProof(witness)
+	if err != nil {
+		return nil, err
+	}
+	// transform to gnark format
+	gnarkProofData, err := parser.UnmarshalCircomProofJSON([]byte(circomProof))
+	if err != nil {
+		return nil, err
+	}
+	gnarkPubSignalsData, err := parser.UnmarshalCircomPublicSignalsJSON([]byte(pubSignals))
+	if err != nil {
+		return nil, err
+	}
+	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vkey)
+	if err != nil {
+		return nil, err
+	}
+	proof, err := parser.ConvertCircomToGnarkRecursion(gnarkVKeyData, gnarkProofData, gnarkPubSignalsData, true)
+	if err != nil {
+		return nil, err
+	}
+	return proof, nil
+}
+
+// Circom2GnarkPlaceholder
+func Circom2GnarkPlaceholder() (*parser.GnarkRecursionPlaceholders, error) {
+	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vkey)
+	if err != nil {
+		return nil, err
+	}
+	return parser.PlaceholdersForRecursion(gnarkVKeyData, 1, true)
 }

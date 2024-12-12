@@ -13,12 +13,14 @@ import (
 // switching between them in the same circuit to recursively verify a group of
 // proofs from two different different circuits recursively.
 type VerfiyingAndDummyKey struct {
-	Vk    groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]
-	Dummy groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]
+	Vk    groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
+	Dummy groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
 func (v VerfiyingAndDummyKey) Switch(api frontend.API, selector frontend.Variable) (groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
 	nilVk := groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
+	api.Println(len(v.Vk.G1.K), len(v.Dummy.G1.K))
+	api.Println(len(v.Vk.CommitmentKeys), len(v.Dummy.CommitmentKeys))
 	if len(v.Vk.G1.K) != len(v.Dummy.G1.K) {
 		return nilVk, fmt.Errorf("g1 k len missmatch")
 	}

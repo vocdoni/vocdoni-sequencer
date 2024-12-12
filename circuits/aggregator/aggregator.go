@@ -31,12 +31,12 @@ import (
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	ztest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test"
+	circomtest "github.com/vocdoni/vocdoni-z-sandbox/circuits/circom"
 )
 
 const (
 	MaxVotes  = 10
-	MaxFields = ztest.NFields
+	MaxFields = circomtest.NFields
 )
 
 type AggregatorCircuit struct {
@@ -64,7 +64,7 @@ type AggregatorCircuit struct {
 	// VerifyCircuit proofs
 	VerifyProofs       [MaxVotes]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
 	VerifyPublicInputs [MaxVotes]groth16.Witness[sw_bls12377.ScalarField]
-	VerificationKey    VerfiyingAndDummyKey `gnark:"-"`
+	VerificationKey    VerfiyingAndDummyKey
 }
 
 func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
@@ -115,9 +115,11 @@ func (c *AggregatorCircuit) Define(api frontend.API) error {
 			return err
 		}
 		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
+			api.Println(11)
 			return err
 		}
 		totalValidVotes = api.Add(totalValidVotes, validProofs[i])
+		api.Println(totalValidVotes)
 	}
 	api.AssertIsEqual(totalValidVotes, c.ValidVotes)
 	return nil
