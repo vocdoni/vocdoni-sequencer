@@ -14,11 +14,10 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
-	"github.com/vocdoni/circom2gnark/parser"
-	"github.com/vocdoni/vocdoni-z-sandbox/ecc"
-	bjj "github.com/vocdoni/vocdoni-z-sandbox/ecc/bjj_gnark"
-	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
-	"go.vocdoni.io/dvote/util"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
 //go:embed ballot_proof.wasm
@@ -122,7 +121,7 @@ func CipherBallotFields(fields []*big.Int, n int, pk ecc.Point, k *big.Int) ([][
 	plainCipherfields := []*big.Int{}
 	for i := 0; i < n; i++ {
 		if i < len(fields) {
-			c1, c2, err := encrypt.EncryptWithK(pk, fields[i], k)
+			c1, c2, err := elgamal.EncryptWithK(pk, fields[i], k)
 			if err != nil {
 				panic(err)
 			}

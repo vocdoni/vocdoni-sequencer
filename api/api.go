@@ -8,47 +8,67 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"go.vocdoni.io/dvote/apiclient"
-	"go.vocdoni.io/dvote/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	stg "github.com/vocdoni/vocdoni-z-sandbox/storage"
 )
 
+// APIConfig type represents the configuration for the API HTTP server.
+// It includes the host, port and the data directory.
 type APIConfig struct {
-	Host   string
-	Port   int
-	Client *apiclient.HTTPclient
+	Host    string
+	Port    int
+	DataDir string
 }
 
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
-	host   string
-	port   int
-	router *chi.Mux
-	client *apiclient.HTTPclient
+	router  *chi.Mux
+	storage *stg.Storage
 }
 
-// New creates a new API HTTP server. It does not start the server. Use Start() for that.
-func New(conf *APIConfig) *API {
+// New creates a new API instance with the given configuration.
+// It also initializes the storage and starts the HTTP server.
+func New(conf *APIConfig) (*API, error) {
 	if conf == nil {
-		return nil
+		return nil, fmt.Errorf("missing API configuration")
 	}
-	return &API{
-		host:   conf.Host,
-		port:   conf.Port,
-		client: conf.Client,
+	storage, err := stg.NewStorage(conf.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage in datadir %s: %w", conf.DataDir, err)
 	}
-}
-
-// Start starts the API HTTP server (non blocking).
-func (a *API) Start() {
+	a := &API{
+		storage: storage,
+	}
+	// Initialize router
+	a.initRouter()
 	go func() {
-		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", a.host, a.port), a.initRouter()); err != nil {
+		log.Infow("Starting API server", "host", conf.Host, "port", conf.Port)
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", conf.Host, conf.Port), a.router); err != nil {
 			log.Fatalf("failed to start the API server: %v", err)
 		}
 	}()
+	return a, nil
 }
 
-// router creates the router with all the routes and middleware.
-func (a *API) initRouter() http.Handler {
+// Router returns the chi router for testing purposes
+func (a *API) Router() *chi.Mux {
+	return a.router
+}
+
+// registerHandlers registers all the API handlers.
+func (a *API) registerHandlers() {
+	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")
+	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
+		httpWriteOK(w)
+	})
+	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "POST")
+	a.router.Post(ProcessEndpoint, a.newProcess)
+	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
+	a.router.Get(ProcessEndpoint, a.process)
+}
+
+// initRouter creates the router with all the routes and middleware.
+func (a *API) initRouter() {
 	// Create the router with a basic middleware stack
 	a.router = chi.NewRouter()
 	a.router.Use(cors.New(cors.Options{
@@ -63,12 +83,7 @@ func (a *API) initRouter() http.Handler {
 	a.router.Use(middleware.Throttle(100))
 	a.router.Use(middleware.ThrottleBacklog(5000, 40000, 60*time.Second))
 	a.router.Use(middleware.Timeout(45 * time.Second))
-	// Routes
-	a.router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte(".")); err != nil {
-			log.Warnw("failed to write ping response", "error", err)
-		}
-	})
-	// Return the router
-	return a.router
+
+	// Register the API handlers
+	a.registerHandlers()
 }

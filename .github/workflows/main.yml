@@ -1,0 +1,101 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - dev
+      - stage
+      - main
+      - release**
+  pull_request:
+
+jobs:
+  job_go_checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Print github env vars
+        run: |
+          echo github.event_name: ${{ github.event_name }}
+          echo github.ref: ${{ github.ref }}
+          echo github.ref_name: ${{ github.ref_name }}
+          echo github.head_ref: ${{ github.head_ref }}
+          echo github.base_ref: ${{ github.base_ref }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Tidy go module
+        run: |
+          go mod tidy
+          if [[ $(git status --porcelain) ]]; then
+            git diff
+            echo
+            echo "go mod tidy made these changes, please run 'go mod tidy' and include those changes in a commit"
+            exit 1
+          fi
+      - name: Run gofumpt
+        # Run gofumpt first, as it's quick and issues are common.
+        run: diff -u <(echo -n) <(go run mvdan.cc/gofumpt@v0.7.0 -d .)
+      - name: Run go vet
+        run: go vet ./...
+      - name: Run go generate
+        run: |
+          go generate ./...
+          if [[ $(git status --porcelain) ]]; then
+            git diff
+            echo
+            echo "go generate made these changes, please run 'go generate ./...' and include those changes in a commit"
+            exit 1
+          fi
+      - name: Run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2024.1.1
+          staticcheck -debug.version
+          staticcheck ./... 2> staticcheck-stderr
+      - name: Check staticcheck stderr (this step isn't needed because we are using actions/setup-go@v5 on GitHub hosted runner)
+        run: |
+          if cat staticcheck-stderr | grep "matched no packages" ; then
+            echo "staticcheck step did nothing, due to https://github.com/vocdoni/vocdoni-node/issues/444"
+            echo "Please re-run job."
+            # seize the opportunity to fix the underlying problem: a permissions error in ~/.cache
+            epoch=$(date +%s)
+            # if any file is reported by find, grep returns true and the mv is done
+            if [ -d ~/.cache ] && find ~/.cache -not -user `id --user` -print0 | grep -qz . ; then
+              echo "~/.cache had broken permissions, moving it away... (cache will be rebuilt with usage)"
+              mv -v ~/.cache ~/.cache-broken-by-root-$epoch
+            fi
+            exit 2
+          fi
+
+  job_go_test:
+    runs-on: ubuntu-latest
+    env:
+      LOG_PANIC_ON_INVALIDCHARS: true # check that log lines contains no invalid chars (evidence of format mismatch)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: benjlevesque/short-sha@v3.0 # sets env.SHA to the first 7 chars of github.sha
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - run: mkdir -p "$PWD/gocoverage-unit/"
+      - name: Run Go test -race
+        id: go-test-race
+        # note that -race can easily make the crypto stuff 10x slower
+        # this is further limited to selected branches at the beginning of this file
+        if: runner.debug ||
+            github.event_name == 'push' &&
+            github.ref != 'refs/heads/dev'
+        env:
+          GORACE: atexit_sleep_ms=10 # the default of 1000 makes every Go package test sleep for 1s; see https://go.dev/issues/20364
+        run: go test ./...
+          -race -timeout=15m -vet=off
+          -cover -coverpkg=./... -covermode=atomic -args -test.gocoverdir="$PWD/gocoverage-unit/"
+      - name: Run Go test
+        if: steps.go-test-race.outcome == 'skipped'
+        # quicker, non-race test in case it's a PR or push to dev
+        run: go test ./...
