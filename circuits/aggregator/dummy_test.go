@@ -79,6 +79,8 @@ func TestDummyCircuitInfo(t *testing.T) {
 	// check same K and CommitmentKeys length
 	c.Assert(dummyVk.G1.K, qt.HasLen, len(vk.G1.K))
 	c.Assert(dummyVk.CommitmentKeys, qt.HasLen, len(vk.CommitmentKeys))
+	c.Assert(dummyVk.PublicAndCommitmentCommitted, qt.ContentEquals, vk.PublicAndCommitmentCommitted)
 	c.Log("len(G1.K)", len(vk.G1.K))
 	c.Log("len(CommitmentKeys)", len(vk.CommitmentKeys))
+	c.Log("PublicAndCommitmentCommitted", vk.PublicAndCommitmentCommitted)
 }

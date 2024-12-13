@@ -23,7 +23,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
-const nVotes = 1
+const nVotes = MaxVotes
 
 func TestAggregatorCircuit(t *testing.T) {
 	c := qt.New(t)
@@ -68,7 +68,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		// generate the proof
 		proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
-		c.Assert(err, qt.IsNil)
+		c.Assert(err, qt.IsNil, qt.Commentf("proof %d", i))
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		c.Assert(err, qt.IsNil)
@@ -159,12 +159,10 @@ func TestAggregatorCircuit(t *testing.T) {
 	finalPlaceholder := AggregatorCircuit{
 		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 		VerifyPublicInputs: [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		Vk:                 fixedVk,
-		Dummy:              dummyVk,
-		// VerificationKey: VerifiyingAndDummyKey{
-		// 	Vk:    fixedVk,
-		// 	Dummy: dummyVk,
-		// },
+		VerificationKey: VerifiyingAndDummyKey{
+			Vk:    fixedVk,
+			Dummy: dummyVk,
+		},
 	}
 	for i := 0; i < MaxVotes; i++ {
 		if i < nVotes {
