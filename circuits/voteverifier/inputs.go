@@ -18,7 +18,7 @@ import (
 	"github.com/vocdoni/arbo"
 	primitivestest "github.com/vocdoni/gnark-crypto-primitives/testutil"
 	circomtest "github.com/vocdoni/vocdoni-z-sandbox/circuits/circom"
-	"github.com/vocdoni/vocdoni-z-sandbox/encrypt"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/util"
 )
 
@@ -72,7 +72,7 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 	encryptedBallots := [][circomtest.NFields][2][2]*big.Int{}
 	for _, voter := range votersData {
 		// encrypt the ballots
-		k, err := encrypt.RandK()
+		k, err := elgamal.RandK()
 		if err != nil {
 			return nil, VerifyVoteCircuit{}, nil, err
 		}

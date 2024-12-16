@@ -2,6 +2,8 @@ module github.com/vocdoni/vocdoni-z-sandbox
 
 go 1.23.2
 
+replace github.com/consensys/gnark => github.com/lucasmenendez/gnark v0.5.2-0.20241216133800-aa28939ae3c6
+
 require (
 	github.com/cockroachdb/pebble v1.1.2
 	github.com/consensys/gnark v0.11.1-0.20241210204654-a1e66c1d6b4d
@@ -16,8 +18,9 @@ require (
 	github.com/pressly/goose/v3 v3.21.1
 	github.com/rs/zerolog v1.33.0
 	github.com/vocdoni/arbo v0.0.0-20241120112623-8e1cc943f444
-	github.com/vocdoni/circom2gnark v1.0.1-0.20241118090531-f24bf0de0e2f
+	github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4
 	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241204072449-cc4388ff8631
+	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 
 require (
@@ -68,12 +71,11 @@ require (
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect

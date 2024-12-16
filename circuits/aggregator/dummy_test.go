@@ -4,83 +4,45 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
 	circomtest "github.com/vocdoni/vocdoni-z-sandbox/circuits/circom"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
-type OutterCircuit struct {
-	Proof           stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	PublicInputs    stdgroth16.Witness[sw_bls12377.ScalarField]
-	VerificationKey stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
-}
-
-func (c *OutterCircuit) Define(api frontend.API) error {
-	verifier, err := stdgroth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
-	if err != nil {
-		return err
-	}
-	if err := verifier.AssertProof(c.VerificationKey, c.Proof, c.PublicInputs, stdgroth16.WithCompleteArithmetic()); err != nil {
-		return err
-	}
-	return nil
-}
-
-func TestDummyCircuit(t *testing.T) {
+func TestSameCircuitsInfo(t *testing.T) {
 	c := qt.New(t)
-	dummyCCS, dummyPubWitness, dummyProof, dummyVk, err := prepareDummy(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
+
+	// generate users accounts and census
+	vvData := []voteverifier.VoterData{}
+	for i := 0; i < nVotes; i++ {
+		privKey, pubKey, address, err := circomtest.GenerateECDSAaccount()
+		c.Assert(err, qt.IsNil)
+		vvData = append(vvData, voteverifier.VoterData{
+			PrivKey: privKey,
+			PubKey:  pubKey,
+			Address: address,
+		})
+	}
+	_, vvPlaceholder, _, err := voteverifier.GenerateInputs(vvData)
 	c.Assert(err, qt.IsNil)
 
-	proofPlaceholder := stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
-	proof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyProof)
+	mainCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
 	c.Assert(err, qt.IsNil)
+	mainVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](mainCCS)
 
-	pubWitnessPlaceholder := stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
-	pubWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](dummyPubWitness)
-	c.Assert(err, qt.IsNil)
-
-	vk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](dummyVk)
-	c.Assert(err, qt.IsNil)
-
-	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(&OutterCircuit{
-		Proof:           proofPlaceholder,
-		PublicInputs:    pubWitnessPlaceholder,
-		VerificationKey: vk,
-	}, &OutterCircuit{
-		Proof:        proof,
-		PublicInputs: pubWitness,
-	}, test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
-		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
-}
-
-func TestDummyCircuitInfo(t *testing.T) {
-	c := qt.New(t)
-	// main circuit
-	ballotVerifierPlaceholder, err := circomtest.Circom2GnarkPlaceholder()
-	c.Assert(err, qt.IsNil)
-	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
-		CircomProof:            ballotVerifierPlaceholder.Proof,
-		CircomPublicInputsHash: ballotVerifierPlaceholder.Witness,
-		CircomVerificationKey:  ballotVerifierPlaceholder.Vk,
-	})
-	c.Assert(err, qt.IsNil)
-	vk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](ccs)
-	// dummy circuit
-	dummyCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &DummyCircuit{})
+	dummyCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, DummyPlaceholder(mainCCS))
 	c.Assert(err, qt.IsNil)
 	dummyVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](dummyCCS)
-	// check same K and CommitmentKeys length
-	c.Assert(dummyVk.G1.K, qt.HasLen, len(vk.G1.K))
-	c.Assert(dummyVk.CommitmentKeys, qt.HasLen, len(vk.CommitmentKeys))
-	c.Assert(dummyVk.PublicAndCommitmentCommitted, qt.ContentEquals, vk.PublicAndCommitmentCommitted)
-	c.Log("len(G1.K)", len(vk.G1.K))
-	c.Log("len(CommitmentKeys)", len(vk.CommitmentKeys))
-	c.Log("PublicAndCommitmentCommitted", vk.PublicAndCommitmentCommitted)
+
+	c.Log("len(G1.K)", len(mainVk.G1.K))
+	c.Log("len(CommitmentKeys)", len(mainVk.CommitmentKeys))
+	c.Log("PublicAndCommitmentCommitted", mainVk.PublicAndCommitmentCommitted)
+
+	c.Assert(dummyVk.G1.K, qt.HasLen, len(mainVk.G1.K), qt.Commentf("G1.K %d vs %d", len(dummyVk.G1.K), len(mainVk.G1.K)))
+	c.Assert(dummyVk.CommitmentKeys, qt.HasLen, len(mainVk.CommitmentKeys), qt.Commentf("CommitmentKeys %d vs %d", len(dummyVk.CommitmentKeys), len(mainVk.CommitmentKeys)))
+	c.Assert(dummyVk.PublicAndCommitmentCommitted, qt.ContentEquals, mainVk.PublicAndCommitmentCommitted, qt.Commentf("PublicAndCommitmentCommitted %v vs %v", dummyVk.PublicAndCommitmentCommitted, mainVk.PublicAndCommitmentCommitted))
 }

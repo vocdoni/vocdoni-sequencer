@@ -35,14 +35,13 @@ import (
 )
 
 const (
-	MaxVotes  = 1
+	MaxVotes  = 2
 	MaxFields = circomtest.NFields
 )
 
 type AggregatorCircuit struct {
-	InputsHash    frontend.Variable `gnark:",public"`
-	ValidVotes    frontend.Variable `gnark:",public"`
-	ValidVotesBin frontend.Variable `gnark:",public"`
+	InputsHash frontend.Variable `gnark:",public"`
+	ValidVotes frontend.Variable `gnark:",public"`
 	// The following variables are priv-public inputs, so should be hashed and
 	// compared with the InputsHash. All the variables should be hashed in the
 	// same order as they are defined here.
@@ -64,7 +63,9 @@ type AggregatorCircuit struct {
 	// VerifyCircuit proofs
 	VerifyProofs       [MaxVotes]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
 	VerifyPublicInputs [MaxVotes]groth16.Witness[sw_bls12377.ScalarField]
-	VerificationKey    VerifiyingAndDummyKey `gnark:"-"`
+	// VerificationKeys should contain the dummy circuit and the main circuit
+	// verification keys in that particular order
+	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
 func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
@@ -106,18 +107,19 @@ func (c *AggregatorCircuit) Define(api frontend.API) error {
 	}
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
-	totalValidVotes := frontend.Variable(0)
-	validProofs := bits.ToBinary(api, c.ValidVotesBin)
+	validProofs := bits.ToBinary(api, c.ValidVotes)
+	expectedValidVotes, totalValidVotes := frontend.Variable(0), frontend.Variable(0)
 	for i := 0; i < len(c.VerifyProofs); i++ {
-		vk, err := c.VerificationKey.Switch(api, validProofs[i])
+		vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
 		if err != nil {
 			return err
 		}
 		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
 			return err
 		}
+		expectedValidVotes = api.Add(expectedValidVotes, validProofs[i])
 		totalValidVotes = api.Add(totalValidVotes, validProofs[i])
 	}
-	api.AssertIsEqual(totalValidVotes, c.ValidVotes)
+	api.AssertIsEqual(expectedValidVotes, totalValidVotes)
 	return nil
 }

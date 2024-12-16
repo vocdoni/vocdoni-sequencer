@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -37,35 +38,41 @@ func fillToN(inputs []*big.Int, n int) []*big.Int {
 	return inputs
 }
 
-func prepareDummy(outer *big.Int, field *big.Int) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
-	ccs, err := frontend.Compile(field, r1cs.NewBuilder, &DummyCircuit{})
+func compileCircuit(placeholder, assigment frontend.Circuit, outer *big.Int, field *big.Int) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
+	ccs, err := frontend.Compile(field, r1cs.NewBuilder, placeholder)
 	if err != nil {
+		fmt.Printf("compilation: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
 	pk, vk, err := groth16.Setup(ccs)
 	if err != nil {
+		fmt.Printf("setup: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
-	fullWitness, err := frontend.NewWitness(DummyWitness(), field)
+	fullWitness, err := frontend.NewWitness(assigment, field)
 	if err != nil {
+		fmt.Printf("witness parse: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
 	proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(outer, field))
 	if err != nil {
+		fmt.Printf("proving: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
 	publicWitness, err := fullWitness.Public()
 	if err != nil {
+		fmt.Printf("getting public witnesss: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
 	if err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(outer, field)); err != nil {
+		fmt.Printf("verifying: %v\n", err)
 		return nil, nil, nil, nil, err
 	}
 	return ccs, publicWitness, proof, vk, nil
 }
 
-func fillWithDummyValues(w AggregatorCircuit, nVotes int) (AggregatorCircuit, constraint.ConstraintSystem, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
-	dummyCCS, pubWitness, proof, vk, err := prepareDummy(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
+func fillWithDummyValues(w AggregatorCircuit, main constraint.ConstraintSystem, nVotes int) (AggregatorCircuit, constraint.ConstraintSystem, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT], error) {
+	dummyCCS, pubWitness, proof, vk, err := compileCircuit(DummyPlaceholder(main), DummyAssigment(), ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
 	if err != nil {
 		return AggregatorCircuit{}, nil, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}, err
 	}
@@ -81,19 +88,18 @@ func fillWithDummyValues(w AggregatorCircuit, nVotes int) (AggregatorCircuit, co
 	if err != nil {
 		return AggregatorCircuit{}, nil, stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}, err
 	}
-
-	var emptyEncryptedBallots [MaxFields][2][2]frontend.Variable
+	dummyValue := frontend.Variable(0)
+	var dummyEncryptedBallots [MaxFields][2][2]frontend.Variable
 	for i := 0; i < MaxFields; i++ {
-		emptyEncryptedBallots[i] = [2][2]frontend.Variable{
-			{frontend.Variable(0), frontend.Variable(0)},
-			{frontend.Variable(0), frontend.Variable(0)},
+		dummyEncryptedBallots[i] = [2][2]frontend.Variable{
+			{dummyValue, dummyValue}, {dummyValue, dummyValue},
 		}
 	}
 	for i := nVotes; i < MaxVotes; i++ {
-		w.Nullifiers[i] = big.NewInt(0)
-		w.Commitments[i] = big.NewInt(0)
-		w.Addresses[i] = big.NewInt(0)
-		w.EncryptedBallots[i] = emptyEncryptedBallots
+		w.Nullifiers[i] = dummyValue
+		w.Commitments[i] = dummyValue
+		w.Addresses[i] = dummyValue
+		w.EncryptedBallots[i] = dummyEncryptedBallots
 		w.VerifyProofs[i] = dummyProof
 		w.VerifyPublicInputs[i] = dummyWitness
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
+	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"

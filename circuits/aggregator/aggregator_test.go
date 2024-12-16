@@ -23,7 +23,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
-const nVotes = MaxVotes
+const nVotes = 1
 
 func TestAggregatorCircuit(t *testing.T) {
 	c := qt.New(t)
@@ -48,11 +48,11 @@ func TestAggregatorCircuit(t *testing.T) {
 	// ###############################################################
 
 	// compile vote verifier circuit
-	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
+	vvCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
 	c.Assert(err, qt.IsNil)
-	pk, vk, err := groth16.Setup(ccs)
+	vvPk, vvVk, err := groth16.Setup(vvCCS)
 	c.Assert(err, qt.IsNil)
-	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
 	c.Assert(err, qt.IsNil)
 	// generate voters proofs
 	totalPlainCipherfields := []*big.Int{}
@@ -67,7 +67,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		fullWitness, err := frontend.NewWitness(&vvAssigments[i], ecc.BLS12_377.ScalarField())
 		c.Assert(err, qt.IsNil)
 		// generate the proof
-		proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil, qt.Commentf("proof %d", i))
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
@@ -75,7 +75,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		// convert the public inputs to the circuit public inputs type
 		publicWitness, err := fullWitness.Public()
 		c.Assert(err, qt.IsNil)
-		err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
 		c.Assert(err, qt.IsNil)
 		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
 		c.Assert(err, qt.IsNil)
@@ -121,10 +121,9 @@ func TestAggregatorCircuit(t *testing.T) {
 	}
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	// init fixed witness stuff
-	finalWitness := AggregatorCircuit{
+	witness := AggregatorCircuit{
 		InputsHash:         publicHash,
 		ValidVotes:         nVotes,
-		ValidVotesBin:      NBits(nVotes),
 		MaxCount:           circomtest.MaxCount,
 		ForceUniqueness:    circomtest.ForceUniqueness,
 		MaxValue:           circomtest.MaxValue,
@@ -141,33 +140,30 @@ func TestAggregatorCircuit(t *testing.T) {
 	}
 	// set voters witness stuff
 	for i := 0; i < nVotes; i++ {
-		finalWitness.Nullifiers[i] = vvInputs.Nullifiers[i]
-		finalWitness.Commitments[i] = vvInputs.Commitments[i]
-		finalWitness.Addresses[i] = new(big.Int).SetBytes(vvData[i].Address.Bytes())
+		witness.Nullifiers[i] = vvInputs.Nullifiers[i]
+		witness.Commitments[i] = vvInputs.Commitments[i]
+		witness.Addresses[i] = new(big.Int).SetBytes(vvData[i].Address.Bytes())
 		for j := 0; j < MaxFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {
-					finalWitness.EncryptedBallots[i][j][n][m] = vvInputs.EncryptedBallots[i][j][n][m]
+					witness.EncryptedBallots[i][j][n][m] = vvInputs.EncryptedBallots[i][j][n][m]
 				}
 			}
 		}
 	}
 	// fill empty votes
-	finalWitness, dummyCCS, dummyVk, err := fillWithDummyValues(finalWitness, nVotes)
+	finalWitness, dummyCCS, dummyVk, err := fillWithDummyValues(witness, vvCCS, nVotes)
 	c.Assert(err, qt.IsNil)
 	// generate circuit placeholder stuff
 	finalPlaceholder := AggregatorCircuit{
-		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 		VerifyPublicInputs: [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		VerificationKey: VerifiyingAndDummyKey{
-			Vk:    fixedVk,
-			Dummy: dummyVk,
-		},
+		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
+		VerificationKeys:   [2]stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{dummyVk, fixedVk},
 	}
 	for i := 0; i < MaxVotes; i++ {
 		if i < nVotes {
-			finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](ccs)
-			finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ccs)
+			finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](vvCCS)
+			finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](vvCCS)
 		} else {
 			finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
 			finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
