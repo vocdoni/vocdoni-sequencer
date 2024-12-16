@@ -1,11 +1,13 @@
 package bn254
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
 
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -62,6 +64,27 @@ func (g *G1) Marshal() []byte {
 func (g *G1) Unmarshal(buf []byte) error {
 	_, err := g.inner.SetBytes(buf)
 	return err
+}
+
+func (g *G1) MarshalJSON() ([]byte, error) {
+	points := &curve.PointEC{}
+	points.X = types.BigInt(*g.inner.X.BigInt(new(big.Int)))
+	points.Y = types.BigInt(*g.inner.Y.BigInt(new(big.Int)))
+	return json.Marshal(points)
+}
+
+func (g *G1) UnmarshalJSON(buf []byte) error {
+	points := &curve.PointEC{}
+	err := json.Unmarshal(buf, points)
+	if err != nil {
+		return err
+	}
+	if g.inner == nil {
+		g.inner = new(bn254.G1Affine)
+	}
+	g.inner.X.SetBigInt(points.X.MathBigInt())
+	g.inner.Y.SetBigInt(points.Y.MathBigInt())
+	return nil
 }
 
 func (g *G1) Equal(a curve.Point) bool {

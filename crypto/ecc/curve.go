@@ -2,6 +2,8 @@ package ecc
 
 import (
 	"math/big"
+
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 // Curve defines the common operations that can be performed on elliptic curve group elements.
@@ -39,6 +41,12 @@ type Point interface {
 	// The input buf must represent a valid serialized point, or an error will be returned.
 	Unmarshal(buf []byte) error
 
+	// MarshalJSON serializes the elliptic curve element into a JSON byte slice.
+	MarshalJSON() ([]byte, error)
+
+	// UnmarshalJSON deserializes a JSON byte slice into an elliptic curve element.
+	UnmarshalJSON(buf []byte) error
+
 	// Equal checks if two elliptic curve elements are equal.
 	// Returns true if the elements are identical, false otherwise.
 	Equal(a Point) bool
@@ -64,6 +72,14 @@ type Point interface {
 	// Point returns the X and Y coordinates of the elliptic curve element.
 	Point() (*big.Int, *big.Int)
 
-	// SetPoint sets the X and Y coordinates of the elliptic curve element.
+	// SetPoint sets the X and Y coordinates of the elliptic curve element. Modifies the receiver.
 	SetPoint(x, y *big.Int) Point
+}
+
+// PointEC represents a point on an elliptic curve in affine coordinates.
+// The X and Y coordinates are stored as big integers.
+// It is used to represent the affine coordinates in JSON format.
+type PointEC struct {
+	X types.BigInt `json:"x"`
+	Y types.BigInt `json:"y"`
 }
