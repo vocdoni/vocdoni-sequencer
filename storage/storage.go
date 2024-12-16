@@ -3,9 +3,8 @@ package storage
 import (
 	"fmt"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/storage/db"
-	"github.com/vocdoni/vocdoni-z-sandbox/storage/db/metadb"
-	"github.com/vocdoni/vocdoni-z-sandbox/storage/db/prefixeddb"
+	"go.vocdoni.io/dvote/db"
+	"go.vocdoni.io/dvote/db/prefixeddb"
 )
 
 const (
@@ -21,11 +20,8 @@ type Storage struct {
 }
 
 // NewStorage creates a new storage instance.
-func NewStorage(dataDir string) (*Storage, error) {
-	database, err := metadb.New(db.TypePebble, dataDir)
-	if err != nil {
-		return nil, err
-	}
+// It requires a database to store the data. A prefixed database is used internally to avoid key collisions.
+func NewStorage(database db.Database) (*Storage, error) {
 	return &Storage{
 		keys: prefixeddb.NewPrefixedDatabase(database, []byte(keyPrefix)),
 	}, nil

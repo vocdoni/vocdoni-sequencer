@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
@@ -44,17 +46,41 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 	x, y := publicKey.Point()
 
-	// Create the process response
-	pr := &ProcessResponse{
-		ProcessID:        pid.Marshal(),
-		EncryptionPubKey: [2]types.BigInt{types.BigInt(*x), types.BigInt(*y)},
-		StateRoot:        types.HexBytes{}, // TO-DO
-	}
-
 	// Store the encryption keys
 	if err := a.storage.StoreEncryptionKeys(pid, publicKey, privateKey); err != nil {
 		ErrGenericInternalServerError.Withf("could not store encryption keys: %v", err).Write(w)
 		return
+	}
+
+	// Initialize the state
+	st, err := state.New(memdb.New(), pid.Marshal())
+	if err != nil {
+		ErrGenericInternalServerError.Withf("could not create state: %v", err).Write(w)
+		return
+	}
+	defer st.Close()
+
+	ballotmode, err := p.BallotMode.Marshal()
+	if err != nil {
+		ErrGenericInternalServerError.Withf("could not marshal ballot mode: %v", err).Write(w)
+		return
+	}
+	state, err := st.Initialize(p.CensusRoot, ballotmode, publicKey.Marshal())
+	if err != nil {
+		ErrGenericInternalServerError.Withf("could not initialize state: %v", err).Write(w)
+		return
+	}
+	root, err := state.RootAsBigInt()
+	if err != nil {
+		ErrGenericInternalServerError.Withf("could not get state root: %v", err).Write(w)
+		return
+	}
+
+	// Create the process response
+	pr := &ProcessResponse{
+		ProcessID:        pid.Marshal(),
+		EncryptionPubKey: [2]types.BigInt{types.BigInt(*x), types.BigInt(*y)},
+		StateRoot:        root.Bytes(),
 	}
 
 	// Write the response
