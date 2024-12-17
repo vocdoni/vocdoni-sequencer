@@ -31,12 +31,12 @@ import (
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	circomtest "github.com/vocdoni/vocdoni-z-sandbox/circuits/circom"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 )
 
 const (
 	MaxVotes  = 10
-	MaxFields = circomtest.NFields
+	MaxFields = ballotproof.NFields
 )
 
 type AggregatorCircuit struct {

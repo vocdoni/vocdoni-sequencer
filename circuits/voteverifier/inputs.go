@@ -2,8 +2,6 @@ package voteverifier
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
-	"fmt"
 	"math"
 	"math/big"
 
@@ -14,46 +12,50 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	gnarkecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/vocdoni/arbo"
 	primitivestest "github.com/vocdoni/gnark-crypto-primitives/testutil"
-	circomtest "github.com/vocdoni/vocdoni-z-sandbox/circuits/circom"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"go.vocdoni.io/dvote/util"
 )
 
-type VoteVerifierResults struct {
+// VoteVerifierTestResults struct includes relevant data after VerifyVoteCircuit
+// inputs generation
+type VoteVerifierTestResults struct {
 	EncryptionPubKey [2]*big.Int
 	ProcessID        []byte
 	CensusRoot       *big.Int
 	Nullifiers       []*big.Int
 	Commitments      []*big.Int
-	EncryptedBallots [][circomtest.NFields][2][2]*big.Int
+	EncryptedBallots [][ballotproof.NFields][2][2]*big.Int
 }
 
-type VoterData struct {
+// VoterTestData struct includes the information required to generate the test
+// inputs for the VerifyVoteCircuit.
+type VoterTestData struct {
 	PrivKey *ecdsa.PrivateKey
 	PubKey  ecdsa.PublicKey
 	Address common.Address
 }
 
-// GenerateInputs returns the census root, the placeholder of the
-// circuit and it assigments.
-func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCircuit, []VerifyVoteCircuit, error) {
-	circomPlaceholder, err := circomtest.Circom2GnarkPlaceholder()
+// GenInputsForTest returns the VoteVerifierTestResults, the placeholder and
+// the assigments for a VerifyVoteCircuit including the provided voters. If
+// processId is nil, it will be randomly generated. If something fails it
+// returns an error.
+func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifierTestResults, VerifyVoteCircuit, []VerifyVoteCircuit, error) {
+	circomPlaceholder, err := ballotproof.Circom2GnarkPlaceholder()
 	if err != nil {
 		return nil, VerifyVoteCircuit{}, nil, err
 	}
 	bAddresses, bWeights := [][]byte{}, [][]byte{}
 	for _, voter := range votersData {
 		bAddresses = append(bAddresses, voter.Address.Bytes())
-		bWeights = append(bWeights, new(big.Int).SetInt64(int64(circomtest.Weight)).Bytes())
+		bWeights = append(bWeights, new(big.Int).SetInt64(int64(ballotproof.Weight)).Bytes())
 	}
 	// generate a test census
 	testCensus, err := primitivestest.GenerateCensusProofForTest(primitivestest.CensusTestConfig{
 		Dir:           "../assets/census",
 		ValidSiblings: 10,
-		TotalSiblings: circomtest.NLevels,
+		TotalSiblings: ballotproof.NLevels,
 		KeyLen:        20,
 		Hash:          arbo.HashFunctionMiMC_BLS12_377,
 		BaseFiled:     arbo.BLS12377BaseField,
@@ -62,67 +64,28 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 		return nil, VerifyVoteCircuit{}, nil, err
 	}
 	// common data
-	fields := circomtest.GenerateBallotFields(circomtest.MaxCount, circomtest.MaxValue, circomtest.MinValue, circomtest.ForceUniqueness > 0)
-	processID := util.RandomBytes(20)
-	encryptionKey := circomtest.GenerateEncryptionTestKey()
+	if processId != nil {
+		processId = util.RandomBytes(20)
+	}
+	encryptionKey := ballotproof.GenEncryptionKeyForTest()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// circuits assigments, voters data and proofs
 	var assigments []VerifyVoteCircuit
 	nullifiers, commitments := []*big.Int{}, []*big.Int{}
-	encryptedBallots := [][circomtest.NFields][2][2]*big.Int{}
+	encryptedBallots := [][ballotproof.NFields][2][2]*big.Int{}
 	for i, voter := range votersData {
-		// encrypt the ballots
-		k, err := elgamal.RandK()
+		voterProof, err := ballotproof.MockVoterForTest(voter.Address.Bytes(), processId, encryptionKey)
 		if err != nil {
 			return nil, VerifyVoteCircuit{}, nil, err
 		}
-		cipherfields, plainCipherfields := circomtest.CipherBallotFields(fields, circomtest.NFields, encryptionKey, k)
-		// generate and store voter nullifier and commitments
-		secret := util.RandomBytes(16)
-		commitment, nullifier, err := circomtest.MockedCommitmentAndNullifier(voter.Address.Bytes(), processID, secret)
-		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
-		}
-		nullifiers = append(nullifiers, nullifier)
-		commitments = append(commitments, commitment)
-		// store voter ballots
-		voterEncryptedBallots := [circomtest.NFields][2][2]*big.Int{}
-		for i := range voterEncryptedBallots {
-			c1X, _ := new(big.Int).SetString(cipherfields[i][0][0], 10)
-			c1Y, _ := new(big.Int).SetString(cipherfields[i][0][1], 10)
-			c2X, _ := new(big.Int).SetString(cipherfields[i][1][0], 10)
-			c2Y, _ := new(big.Int).SetString(cipherfields[i][1][1], 10)
-			voterEncryptedBallots[i] = [2][2]*big.Int{{c1X, c1Y}, {c2X, c2Y}}
-		}
-		encryptedBallots = append(encryptedBallots, voterEncryptedBallots)
-		// group the circom inputs to hash
-		bigCircomInputs := []*big.Int{
-			big.NewInt(int64(circomtest.MaxCount)),
-			big.NewInt(int64(circomtest.ForceUniqueness)),
-			big.NewInt(int64(circomtest.MaxValue)),
-			big.NewInt(int64(circomtest.MinValue)),
-			big.NewInt(int64(math.Pow(float64(circomtest.MaxValue), float64(circomtest.CostExp))) * int64(circomtest.MaxCount)),
-			big.NewInt(int64(circomtest.MaxCount)),
-			big.NewInt(int64(circomtest.CostExp)),
-			big.NewInt(int64(circomtest.CostFromWeight)),
-			arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(voter.Address.Bytes())),
-			big.NewInt(int64(circomtest.Weight)),
-			arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processID)),
-			encryptionKeyX,
-			encryptionKeyY,
-			nullifier,
-			commitment,
-		}
-		bigCircomInputs = append(bigCircomInputs, plainCipherfields...)
-		circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
-		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
-		}
+		nullifiers = append(nullifiers, voterProof.Nullifier)
+		commitments = append(commitments, voterProof.Commitment)
+		encryptedBallots = append(encryptedBallots, voterProof.EncryptedFields)
 		// transform the inputs hash to the field of the curve used by the circuit,
 		// if it is not done, the circuit will transform it during witness
 		// calculation and the hash will be different
 		// the resulting hash should have 32 bytes so if it does'nt, fill with 0s
-		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
+		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), voterProof.InputsHash)
 		if b := blsCircomInputsHash.Bytes(); len(b) < 32 {
 			for len(b) < 32 {
 				b = append(b, 0)
@@ -130,44 +93,13 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 			blsCircomInputsHash.SetBytes(b)
 		}
 		// sign the inputs hash with the private key
-		rSign, sSign, err := circomtest.SignECDSA(voter.PrivKey, blsCircomInputsHash.Bytes())
+		rSign, sSign, err := ballotproof.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash.Bytes())
 		if err != nil {
 			return nil, VerifyVoteCircuit{}, nil, err
 		}
-		// init circom inputs
-		circomInputs := map[string]any{
-			"fields":           circomtest.BigIntArrayToStringArray(fields, circomtest.NFields),
-			"max_count":        fmt.Sprint(circomtest.MaxCount),
-			"force_uniqueness": fmt.Sprint(circomtest.ForceUniqueness),
-			"max_value":        fmt.Sprint(circomtest.MaxValue),
-			"min_value":        fmt.Sprint(circomtest.MinValue),
-			"max_total_cost":   fmt.Sprint(int(math.Pow(float64(circomtest.MaxValue), float64(circomtest.CostExp))) * circomtest.MaxCount),
-			"min_total_cost":   fmt.Sprint(circomtest.MaxCount),
-			"cost_exp":         fmt.Sprint(circomtest.CostExp),
-			"cost_from_weight": fmt.Sprint(circomtest.CostFromWeight),
-			"address":          arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(voter.Address.Bytes())).String(),
-			"weight":           fmt.Sprint(circomtest.Weight),
-			"process_id":       arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processID)).String(),
-			"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
-			"k":                k.String(),
-			"cipherfields":     cipherfields,
-			"nullifier":        nullifier.String(),
-			"commitment":       commitment.String(),
-			"secret":           arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(secret)).String(),
-			"inputs_hash":      circomInputsHash.String(),
-		}
-		bCircomInputs, err := json.Marshal(circomInputs)
-		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
-		}
-		// create the proof
-		circomProof, err := circomtest.Circom2GnarkProof(bCircomInputs)
-		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
-		}
-		// transform cipherfields to gnark frontend.Variable
-		emulatedBallots := [circomtest.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
-		for i, c := range cipherfields {
+		// transform encryptedBallots to gnark frontend.Variable
+		emulatedBallots := [ballotproof.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
+		for i, c := range voterProof.EncryptedFields {
 			emulatedBallots[i] = [2][2]emulated.Element[sw_bn254.ScalarField]{
 				{
 					emulated.ValueOf[sw_bn254.ScalarField](c[0][0]),
@@ -180,7 +112,7 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 			}
 		}
 		// transform siblings to gnark frontend.Variable
-		fSiblings := [circomtest.NLevels]frontend.Variable{}
+		fSiblings := [ballotproof.NLevels]frontend.Variable{}
 		for i, s := range testCensus.Proofs[i].Siblings {
 			fSiblings[i] = frontend.Variable(s)
 		}
@@ -193,23 +125,23 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 		assigments = append(assigments, VerifyVoteCircuit{
 			InputsHash: inputsHash,
 			// circom inputs
-			MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](circomtest.MaxCount),
-			ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](circomtest.ForceUniqueness),
-			MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](circomtest.MaxValue),
-			MinValue:        emulated.ValueOf[sw_bn254.ScalarField](circomtest.MinValue),
-			MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(circomtest.MaxValue), float64(circomtest.CostExp))) * circomtest.MaxCount),
-			MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](circomtest.MaxCount),
-			CostExp:         emulated.ValueOf[sw_bn254.ScalarField](circomtest.CostExp),
-			CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](circomtest.CostFromWeight),
-			Address:         emulated.ValueOf[sw_bn254.ScalarField](voter.Address.Big()),
-			UserWeight:      emulated.ValueOf[sw_bn254.ScalarField](circomtest.Weight),
+			MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballotproof.MaxCount),
+			ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballotproof.ForceUniqueness),
+			MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballotproof.MaxValue),
+			MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballotproof.MinValue),
+			MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballotproof.MaxValue), float64(ballotproof.CostExp))) * ballotproof.MaxCount),
+			MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballotproof.MaxCount),
+			CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballotproof.CostExp),
+			CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballotproof.CostFromWeight),
+			Address:         emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
+			UserWeight:      emulated.ValueOf[sw_bn254.ScalarField](ballotproof.Weight),
 			EncryptionPubKey: [2]emulated.Element[sw_bn254.ScalarField]{
 				emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyX),
 				emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyY),
 			},
-			Nullifier:       emulated.ValueOf[sw_bn254.ScalarField](nullifier),
-			Commitment:      emulated.ValueOf[sw_bn254.ScalarField](commitment),
-			ProcessId:       emulated.ValueOf[sw_bn254.ScalarField](arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processID))),
+			Nullifier:       emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
+			Commitment:      emulated.ValueOf[sw_bn254.ScalarField](voterProof.Commitment),
+			ProcessId:       emulated.ValueOf[sw_bn254.ScalarField](voterProof.ProcessID),
 			EncryptedBallot: emulatedBallots,
 			// census proof
 			CensusRoot:     testCensus.Root,
@@ -225,14 +157,14 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 				S: emulated.ValueOf[emulated.Secp256k1Fr](sSign),
 			},
 			// circom proof
-			CircomProof:            circomProof.Proof,
-			CircomPublicInputsHash: circomProof.PublicInputs,
+			CircomProof:            voterProof.Proof.Proof,
+			CircomPublicInputsHash: voterProof.Proof.PublicInputs,
 		})
 	}
 
-	return &VoteVerifierResults{
+	return &VoteVerifierTestResults{
 			EncryptionPubKey: [2]*big.Int{encryptionKeyX, encryptionKeyY},
-			ProcessID:        processID,
+			ProcessID:        processId,
 			CensusRoot:       testCensus.Root,
 			Nullifiers:       nullifiers,
 			Commitments:      commitments,

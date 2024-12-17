@@ -32,10 +32,13 @@ func (c *dummyCircuit) Define(api frontend.API) error {
 	return nil
 }
 
+// DummyPlaceholder function returns the placeholder of a dummy circtuit for
+// the constraint.ConstraintSystem provided.
 func DummyPlaceholder(mainCircuit constraint.ConstraintSystem) *dummyCircuit {
 	return &dummyCircuit{nbConstraints: mainCircuit.GetNbConstraints()}
 }
 
+// DummyPlaceholder function returns the assigment of a dummy circtuit.
 func DummyAssigment() *dummyCircuit {
 	return &dummyCircuit{PublicInputs: 1, SecretInput: 1}
 }
