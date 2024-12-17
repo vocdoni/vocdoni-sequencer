@@ -23,7 +23,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
-const nVotes = 1
+const nVotes = 3
 
 func TestAggregatorCircuit(t *testing.T) {
 	c := qt.New(t)
@@ -123,7 +123,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	// init fixed witness stuff
 	witness := AggregatorCircuit{
 		InputsHash:         publicHash,
-		ValidVotes:         nVotes,
+		ValidVotes:         NBits(nVotes),
 		MaxCount:           circomtest.MaxCount,
 		ForceUniqueness:    circomtest.ForceUniqueness,
 		MaxValue:           circomtest.MaxValue,

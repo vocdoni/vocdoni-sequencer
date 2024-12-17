@@ -2,7 +2,7 @@ module github.com/vocdoni/vocdoni-z-sandbox
 
 go 1.23.2
 
-replace github.com/consensys/gnark => github.com/lucasmenendez/gnark v0.5.2-0.20241216133800-aa28939ae3c6
+replace github.com/consensys/gnark => github.com/lucasmenendez/gnark v0.5.2-0.20241217104836-b7c9c2fcbe8c
 
 require (
 	github.com/cockroachdb/pebble v1.1.2

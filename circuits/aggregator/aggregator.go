@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	MaxVotes  = 2
+	MaxVotes  = 10
 	MaxFields = circomtest.NFields
 )
 

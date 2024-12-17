@@ -70,7 +70,7 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 	var assigments []VerifyVoteCircuit
 	nullifiers, commitments := []*big.Int{}, []*big.Int{}
 	encryptedBallots := [][circomtest.NFields][2][2]*big.Int{}
-	for _, voter := range votersData {
+	for i, voter := range votersData {
 		// encrypt the ballots
 		k, err := elgamal.RandK()
 		if err != nil {
@@ -181,7 +181,7 @@ func GenerateInputs(votersData []VoterData) (*VoteVerifierResults, VerifyVoteCir
 		}
 		// transform siblings to gnark frontend.Variable
 		fSiblings := [circomtest.NLevels]frontend.Variable{}
-		for i, s := range testCensus.Proofs[0].Siblings {
+		for i, s := range testCensus.Proofs[i].Siblings {
 			fSiblings[i] = frontend.Variable(s)
 		}
 		// hash the inputs of gnark circuit (circom inputs hash + census root)
