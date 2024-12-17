@@ -23,7 +23,7 @@ import (
 	"github.com/vocdoni/circom2gnark/parser"
 	ptestutil "github.com/vocdoni/gnark-crypto-primitives/testutil"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/testutil"
-	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -56,7 +56,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// generate encryption key and user nonce k
 	encryptionKey := testutil.GenerateEncryptionTestKey()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
-	k, err := encrypt.RandK()
+	k, err := elgamal.RandK()
 	c.Assert(err, qt.IsNil)
 	// encrypt the ballots
 	cipherfields, plainCipherfields := testutil.CipherBallotFields(fields, n_fields, encryptionKey, k)

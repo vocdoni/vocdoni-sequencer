@@ -41,6 +41,8 @@ func Encrypt(publicKey ecc.Point, msg *big.Int) (ecc.Point, ecc.Point, *big.Int,
 // EncryptWithK function encrypts a message using the public key provided as
 // elliptic curve point and the random k value provided. It returns the two
 // points that represent the encrypted message and error if any.
+//
+// TODO: remove error return, since it can never error
 func EncryptWithK(pubKey ecc.Point, msg, k *big.Int) (ecc.Point, ecc.Point, error) {
 	order := pubKey.Order()
 	// ensure the message is within the field

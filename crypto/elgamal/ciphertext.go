@@ -6,27 +6,28 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/vocdoni/arbo"
+	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 )
+
+// size in bytes needed to serialize an ecc.Point coord
+const sizePointCoord = 32
 
 // Ciphertext represents an ElGamal encrypted message with homomorphic properties.
 // It is a wrapper for convenience of the elGamal ciphersystem that encapsulates the two points of a ciphertext.
 type Ciphertext struct {
-	CurveType string    `json:"curveType"`
-	C1        ecc.Point `json:"c1"`
-	C2        ecc.Point `json:"c2"`
+	C1 ecc.Point `json:"c1"`
+	C2 ecc.Point `json:"c2"`
 }
 
-// NewCiphertext creates a new Ciphertext with the given curve type.
-// The curve type must be one of the supported curves by crypto/ecc/curves package.
-func NewCiphertext(curveType string) *Ciphertext {
-	return &Ciphertext{
-		C1:        curves.New(curveType),
-		C2:        curves.New(curveType),
-		CurveType: curveType,
-	}
+// NewCiphertext creates a new Ciphertext on the same curve as the given Point.
+// The Point must be one on of the supported curves by crypto/ecc/curves package,
+// can be easily created with curves.New(type)
+func NewCiphertext(curve ecc.Point) *Ciphertext {
+	return &Ciphertext{C1: curve.New(), C2: curve.New()}
 }
 
 // Encrypt encrypts a message using the public key provided as elliptic curve point.
@@ -43,11 +44,9 @@ func (z *Ciphertext) Encrypt(message *big.Int, publicKey ecc.Point, k *big.Int) 
 	if err != nil {
 		return nil, fmt.Errorf("elgamal encryption failed: %w", err)
 	}
-	return &Ciphertext{
-		CurveType: z.CurveType,
-		C1:        c1,
-		C2:        c2,
-	}, nil
+	z.C1 = c1
+	z.C2 = c2
+	return z, nil
 }
 
 // Add adds two Ciphertext and stores the result in z, which is also returned.
@@ -58,50 +57,43 @@ func (z *Ciphertext) Add(x, y *Ciphertext) *Ciphertext {
 }
 
 // Serialize returns a slice of len 4*32 bytes,
-// representing the C1.X, C1.Y, C2.X, C2.Y as little-endian.
+// representing the C1.X, C1.Y, C2.X, C2.Y as little-endian,
+// in reduced twisted edwards form.
 func (z *Ciphertext) Serialize() []byte {
-	x1, y1 := z.C1.Point()
-	x2, y2 := z.C2.Point()
 	var buf bytes.Buffer
-	for _, bi := range []*big.Int{
-		x1,
-		y1,
-		x2,
-		y2,
-	} {
-		if _, err := buf.Write(arbo.BigIntToBytes(32, bi)); err != nil {
-			panic(err)
-		}
+	// TODO: we wouldn't need the format conversion if Point() returns the correct format
+	c1x, c1y := format.FromTEtoRTE(z.C1.Point())
+	c2x, c2y := format.FromTEtoRTE(z.C2.Point())
+	for _, bi := range []*big.Int{c1x, c1y, c2x, c2y} {
+		buf.Write(arbo.BigIntToBytes(sizePointCoord, bi))
 	}
 	return buf.Bytes()
 }
 
-// Deserialize reconstructs a Ciphertext from a slice of bytes.
-// The input must be of len 4*32 bytes, representing the C1.X, C1.Y, C2.X, C2.Y as little-endian.
+// Deserialize reconstructs an Ciphertext from a slice of bytes.
+// The input must be of len 4*32 bytes (otherwise it returns an error),
+// representing the C1.X, C1.Y, C2.X, C2.Y as little-endian,
+// in reduced twisted edwards form.
 func (z *Ciphertext) Deserialize(data []byte) error {
-	const fieldSize = 32 // Each field element is 32 bytes
-	expectedLen := 4 * fieldSize
-
 	// Validate the input length
-	if len(data) != expectedLen {
-		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), expectedLen)
+	if len(data) != 4*sizePointCoord {
+		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), 4*sizePointCoord)
 	}
 
 	// Helper function to extract *big.Int from a 32-byte slice
 	readBigInt := func(offset int) *big.Int {
-		return arbo.BytesToBigInt(data[offset : offset+fieldSize])
+		return arbo.BytesToBigInt(data[offset : offset+sizePointCoord])
 	}
-
 	// Deserialize each field
-	x1 := readBigInt(0 * fieldSize)
-	y1 := readBigInt(1 * fieldSize)
-	x2 := readBigInt(2 * fieldSize)
-	y2 := readBigInt(3 * fieldSize)
-
-	// Set the points and store the returned points
-	z.C1 = z.C1.SetPoint(x1, y1)
-	z.C2 = z.C2.SetPoint(x2, y2)
-
+	// TODO: we wouldn't need the format conversion if SetPoint() accepts the correct format
+	z.C1 = z.C1.SetPoint(format.FromRTEtoTE(
+		readBigInt(0*sizePointCoord),
+		readBigInt(1*sizePointCoord),
+	))
+	z.C2 = z.C2.SetPoint(format.FromRTEtoTE(
+		readBigInt(2*sizePointCoord),
+		readBigInt(3*sizePointCoord),
+	))
 	return nil
 }
 
@@ -121,4 +113,16 @@ func (z *Ciphertext) String() string {
 		return "{C1: nil, C2: nil}"
 	}
 	return fmt.Sprintf("{C1: %s, C2: %s}", z.C1.String(), z.C2.String())
+}
+
+// ToGnark returns z as the struct used by gnark,
+// with the points in reduced twisted edwards format
+func (z *Ciphertext) ToGnark() gelgamal.Ciphertext {
+	// TODO: we wouldn't need the format conversion if Point() returns the correct format
+	c1x, c1y := format.FromTEtoRTE(z.C1.Point())
+	c2x, c2y := format.FromTEtoRTE(z.C2.Point())
+	return gelgamal.Ciphertext{
+		C1: twistededwards.Point{X: c1x, Y: c1y},
+		C2: twistededwards.Point{X: c2x, Y: c2y},
+	}
 }

@@ -2,14 +2,20 @@ package state
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/vocdoni/arbo"
+	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
+
 	garbo "github.com/vocdoni/gnark-crypto-primitives/tree/arbo"
-	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/gnark-crypto-primitives/tree/smt"
+	"github.com/vocdoni/gnark-crypto-primitives/utils"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
 
 // ArboProof stores the proof in arbo native types
@@ -22,26 +28,50 @@ type ArboProof struct {
 	Existence bool
 }
 
-func GenArboProof(t *arbo.Tree, k []byte) (ArboProof, error) {
-	root, err := t.Root()
+// GenArboProof generates a ArboProof for the given key
+func (o *State) GenArboProof(k []byte) (*ArboProof, error) {
+	root, err := o.tree.Root()
 	if err != nil {
-		return ArboProof{}, err
+		return nil, err
 	}
-	leafK, leafV, packedSiblings, existence, err := t.GenProof(k)
+	leafK, leafV, packedSiblings, existence, err := o.tree.GenProof(k)
 	if err != nil {
-		return ArboProof{}, err
+		return nil, err
 	}
 	unpackedSiblings, err := arbo.UnpackSiblings(arbo.HashFunctionPoseidon, packedSiblings)
 	if err != nil {
-		return ArboProof{}, err
+		return nil, err
 	}
-	return ArboProof{
+	return &ArboProof{
 		Root:      root,
 		Siblings:  unpackedSiblings,
 		Key:       leafK,
 		Value:     leafV,
 		Existence: existence,
 	}, nil
+}
+
+// ArboProofsFromAddOrUpdate generates an ArboProof before adding (or updating) the given leaf,
+// and another ArboProof after updating, and returns both.
+func (o *State) ArboProofsFromAddOrUpdate(k []byte, v []byte) (*ArboProof, *ArboProof, error) {
+	mpBefore, err := o.GenArboProof(k)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, _, err := o.tree.Get(k); errors.Is(err, arbo.ErrKeyNotFound) {
+		if err := o.tree.Add(k, v); err != nil {
+			return nil, nil, fmt.Errorf("add key failed: %w", err)
+		}
+	} else {
+		if err := o.tree.Update(k, v); err != nil {
+			return nil, nil, fmt.Errorf("update key failed: %w", err)
+		}
+	}
+	mpAfter, err := o.GenArboProof(k)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mpBefore, mpAfter, nil
 }
 
 // MerkleProof stores the leaf, the path, and the root hash.
@@ -54,15 +84,17 @@ type MerkleProof struct {
 	Fnc      frontend.Variable // 0: inclusion, 1: non inclusion
 }
 
-func GenMerkleProof(t *arbo.Tree, k []byte) (MerkleProof, error) {
-	p, err := GenArboProof(t, k)
+// GenMerkleProof generates a MerkleProof for the given key
+func (o *State) GenMerkleProof(k []byte) (MerkleProof, error) {
+	p, err := o.GenArboProof(k)
 	if err != nil {
 		return MerkleProof{}, err
 	}
 	return MerkleProofFromArboProof(p), nil
 }
 
-func MerkleProofFromArboProof(p ArboProof) MerkleProof {
+// MerkleProofFromArboProof converts an ArboProof into a MerkleProof
+func MerkleProofFromArboProof(p *ArboProof) MerkleProof {
 	fnc := 0 // inclusion
 	if !p.Existence {
 		fnc = 1 // non-inclusion
@@ -91,7 +123,7 @@ func padSiblings(unpackedSiblings [][]byte) [MaxLevels]frontend.Variable {
 // Verify uses garbo.CheckInclusionProof to verify that:
 //   - mp.Root matches passed root
 //   - Key + Value belong to Root
-func (mp *MerkleProof) VerifyProof(api frontend.API, hFn garbo.Hash, root frontend.Variable) {
+func (mp *MerkleProof) VerifyProof(api frontend.API, hFn utils.Hasher, root frontend.Variable) {
 	api.AssertIsEqual(root, mp.Root)
 
 	if err := garbo.CheckInclusionProof(api, hFn, mp.Key, mp.Value, mp.Root, mp.Siblings[:]); err != nil {
@@ -114,10 +146,16 @@ type MerkleTransition struct {
 	IsOld0   frontend.Variable
 	Fnc0     frontend.Variable
 	Fnc1     frontend.Variable
+
+	// TODO: replace Is*ElGamal by a check on len(Ciphertext) or something?
+	IsOldElGamal  frontend.Variable
+	IsNewElGamal  frontend.Variable
+	OldCiphertext gelgamal.Ciphertext
+	NewCiphertext gelgamal.Ciphertext
 }
 
 // MerkleTransitionFromArboProofPair generates a MerkleTransition based on the pair of proofs passed
-func MerkleTransitionFromArboProofPair(before, after ArboProof) MerkleTransition {
+func MerkleTransitionFromArboProofPair(before, after *ArboProof) MerkleTransition {
 	//	Fnction
 	//	fnc[0]  fnc[1]
 	//	0       0       NOP
@@ -144,49 +182,59 @@ func MerkleTransitionFromArboProofPair(before, after ArboProof) MerkleTransition
 	mpBefore := MerkleProofFromArboProof(before)
 	mpAfter := MerkleProofFromArboProof(after)
 	return MerkleTransition{
-		Siblings: mpBefore.Siblings,
-		OldRoot:  mpBefore.Root,
-		OldKey:   mpBefore.Key,
-		OldValue: mpBefore.Value,
-		NewRoot:  mpAfter.Root,
-		NewKey:   mpAfter.Key,
-		NewValue: mpAfter.Value,
-		IsOld0:   isOld0,
-		Fnc0:     fnc0,
-		Fnc1:     fnc1,
+		Siblings:      mpBefore.Siblings,
+		OldRoot:       mpBefore.Root,
+		OldKey:        mpBefore.Key,
+		OldValue:      mpBefore.Value,
+		NewRoot:       mpAfter.Root,
+		NewKey:        mpAfter.Key,
+		NewValue:      mpAfter.Value,
+		IsOld0:        isOld0,
+		Fnc0:          fnc0,
+		Fnc1:          fnc1,
+		IsOldElGamal:  0,
+		IsNewElGamal:  0,
+		OldCiphertext: *gelgamal.NewCiphertext(),
+		NewCiphertext: *gelgamal.NewCiphertext(),
 	}
 }
 
 // MerkleTransitionFromAddOrUpdate adds or updates a key in the tree,
 // and returns a MerkleTransition.
-func MerkleTransitionFromAddOrUpdate(t *arbo.Tree, k []byte, v []byte) (MerkleTransition, error) {
-	mpBefore, err := GenArboProof(t, k)
+func (o *State) MerkleTransitionFromAddOrUpdate(k []byte, v []byte) (MerkleTransition, error) {
+	mpBefore, mpAfter, err := o.ArboProofsFromAddOrUpdate(k, v)
 	if err != nil {
 		return MerkleTransition{}, err
 	}
-	if _, _, err := t.Get(k); errors.Is(err, arbo.ErrKeyNotFound) {
-		if err := t.Add(k, v); err != nil {
-			return MerkleTransition{}, fmt.Errorf("add key failed: %w", err)
+	mp := MerkleTransitionFromArboProofPair(mpBefore, mpAfter)
+
+	oldCiphertext, newCiphertext := elgamal.NewCiphertext(Curve), elgamal.NewCiphertext(Curve)
+	if len(mpBefore.Value) > 32 {
+		if err := oldCiphertext.Deserialize(mpBefore.Value); err != nil {
+			return MerkleTransition{}, err
 		}
-	} else {
-		if err := t.Update(k, v); err != nil {
-			return MerkleTransition{}, fmt.Errorf("update key failed: %w", err)
+		mp.IsOldElGamal = 1
+	}
+	if len(mpAfter.Value) > 32 {
+		if err := newCiphertext.Deserialize(mpAfter.Value); err != nil {
+			return MerkleTransition{}, err
 		}
+		mp.IsNewElGamal = 1
 	}
-	mpAfter, err := GenArboProof(t, k)
-	if err != nil {
-		return MerkleTransition{}, err
-	}
-	return MerkleTransitionFromArboProofPair(mpBefore, mpAfter), nil
+
+	mp.OldCiphertext = oldCiphertext.ToGnark()
+	mp.NewCiphertext = newCiphertext.ToGnark()
+
+	return mp, nil
 }
 
 // MerkleTransitionFromNoop returns a NOOP MerkleTransition.
-func MerkleTransitionFromNoop(t *arbo.Tree) (MerkleTransition, error) {
-	root, err := t.Root()
+func (o *State) MerkleTransitionFromNoop() (MerkleTransition, error) {
+	root, err := o.tree.Root()
 	if err != nil {
 		return MerkleTransition{}, err
 	}
-	mp := ArboProof{
+	mp := &ArboProof{
 		Root:      root,
 		Siblings:  [][]byte{},
 		Key:       []byte{},
@@ -194,6 +242,67 @@ func MerkleTransitionFromNoop(t *arbo.Tree) (MerkleTransition, error) {
 		Existence: false,
 	}
 	return MerkleTransitionFromArboProofPair(mp, mp), nil
+}
+
+// Verify uses smt.Processor to verify that:
+//   - mp.OldRoot matches passed oldRoot
+//   - OldKey + OldValue belong to OldRoot
+//   - NewKey + NewValue belong to NewRoot
+//   - no other changes were introduced between OldRoot -> NewRoot
+//
+// and returns mp.NewRoot
+func (mp *MerkleTransition) Verify(api frontend.API, hFn utils.Hasher, oldRoot frontend.Variable) frontend.Variable {
+	mp.printDebugLog(api)
+
+	api.AssertIsEqual(oldRoot, mp.OldRoot)
+
+	hash1Old := api.Select(mp.IsOldElGamal,
+		smt.Hash1(api, hFn, mp.OldKey, mp.OldCiphertext.Serialize()...),
+		smt.Hash1(api, hFn, mp.OldKey, mp.OldValue),
+	)
+	hash1New := api.Select(mp.IsNewElGamal,
+		smt.Hash1(api, hFn, mp.NewKey, mp.NewCiphertext.Serialize()...),
+		smt.Hash1(api, hFn, mp.NewKey, mp.NewValue),
+	)
+
+	root := smt.ProcessorWithLeafHash(api, hFn,
+		mp.OldRoot,
+		mp.Siblings[:],
+		mp.OldKey,
+		hash1Old,
+		mp.IsOld0,
+		mp.NewKey,
+		hash1New,
+		mp.Fnc0,
+		mp.Fnc1,
+	)
+
+	api.AssertIsEqual(root, mp.NewRoot)
+	return mp.NewRoot
+}
+
+// TODO: remove this debug log
+func (mp *MerkleTransition) printDebugLog(api frontend.API) {
+	prettyHex := func(v frontend.Variable) string {
+		type hasher interface {
+			HashCode() [16]byte
+		}
+		switch v := v.(type) {
+		case (*big.Int):
+			return hex.EncodeToString(arbo.BigIntToBytes(32, v)[:4])
+		case int:
+			return fmt.Sprintf("%d", v)
+		case []byte:
+			return fmt.Sprintf("%x", v[:4])
+		case hasher:
+			return fmt.Sprintf("%x", v.HashCode())
+		default:
+			return fmt.Sprintf("(%v)=%+v", reflect.TypeOf(v), v)
+		}
+	}
+
+	api.Println("verify transition", prettyHex(mp.OldRoot), "->", prettyHex(mp.NewRoot), "|",
+		mp.OldKey, "=", mp.OldValue, "->", mp.NewKey, "=", mp.NewValue)
 }
 
 // IsUpdate returns true when mp.Fnc0 == 0 && mp.Fnc1 == 1
@@ -213,25 +322,4 @@ func (mp *MerkleTransition) IsInsert(api frontend.API) frontend.Variable {
 // IsInsertOrUpdate returns true when IsInsert or IsUpdate is true
 func (mp *MerkleTransition) IsInsertOrUpdate(api frontend.API) frontend.Variable {
 	return api.Or(mp.IsInsert(api), mp.IsUpdate(api))
-}
-
-type MerkleTransitionElGamal struct {
-	MerkleTransition
-	OldCiphertext encrypt.Ciphertext
-	NewCiphertext encrypt.Ciphertext
-}
-
-// IsUpdate returns true when mp.Fnc0 == 0 && mp.Fnc1 == 1
-func (mp *MerkleTransitionElGamal) IsUpdate(api frontend.API) frontend.Variable {
-	return mp.MerkleTransition.IsUpdate(api)
-}
-
-// IsInsert returns true when mp.Fnc0 == 1 && mp.Fnc1 == 0
-func (mp *MerkleTransitionElGamal) IsInsert(api frontend.API) frontend.Variable {
-	return mp.MerkleTransition.IsInsert(api)
-}
-
-// IsInsertOrUpdate returns true when IsInsert or IsUpdate is true
-func (mp *MerkleTransitionElGamal) IsInsertOrUpdate(api frontend.API) frontend.Variable {
-	return mp.MerkleTransition.IsInsertOrUpdate(api)
 }

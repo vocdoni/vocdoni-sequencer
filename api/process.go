@@ -65,12 +65,12 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 		ErrGenericInternalServerError.Withf("could not marshal ballot mode: %v", err).Write(w)
 		return
 	}
-	state, err := st.Initialize(p.CensusRoot, ballotmode, publicKey.Marshal())
-	if err != nil {
+
+	if err := st.Initialize(p.CensusRoot, ballotmode, publicKey.Marshal()); err != nil {
 		ErrGenericInternalServerError.Withf("could not initialize state: %v", err).Write(w)
 		return
 	}
-	root, err := state.RootAsBigInt()
+	root, err := st.RootAsBigInt()
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not get state root: %v", err).Write(w)
 		return
