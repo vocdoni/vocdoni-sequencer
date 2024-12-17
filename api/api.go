@@ -41,10 +41,7 @@ func New(conf *APIConfig) (*API, error) {
 		return nil, err
 	}
 
-	storage, err := stg.NewStorage(database)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage in datadir %s: %w", conf.DataDir, err)
-	}
+	storage := stg.New(database)
 
 	a := &API{
 		storage: storage,

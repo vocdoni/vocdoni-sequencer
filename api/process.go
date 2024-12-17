@@ -47,7 +47,7 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	x, y := publicKey.Point()
 
 	// Store the encryption keys
-	if err := a.storage.StoreEncryptionKeys(pid, publicKey, privateKey); err != nil {
+	if err := a.storage.SetEncryptionKeys(pid, publicKey, privateKey); err != nil {
 		ErrGenericInternalServerError.Withf("could not store encryption keys: %v", err).Write(w)
 		return
 	}
@@ -104,7 +104,7 @@ func (a *API) process(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve the process
-	pubk, _, err := a.storage.LoadEncryptionKeys(pid)
+	pubk, _, err := a.storage.EncryptionKeys(pid)
 	if err != nil {
 		ErrProcessNotFound.Withf("could not retrieve process: %v", err).Write(w)
 		return
