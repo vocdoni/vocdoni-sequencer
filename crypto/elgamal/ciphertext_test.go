@@ -11,7 +11,7 @@ import (
 func TestNewCiphertext(t *testing.T) {
 	c := qt.New(t)
 
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(curves.New(curves.CurveTypeBN254))
 	c.Assert(cipher, qt.Not(qt.IsNil))
 	c.Assert(cipher.C1, qt.Not(qt.IsNil))
 	c.Assert(cipher.C2, qt.Not(qt.IsNil))
@@ -29,7 +29,7 @@ func TestCiphertext_Encrypt(t *testing.T) {
 	msg := big.NewInt(42)
 
 	// Test with nil k (random k generation)
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(publicKey)
 	encrypted, err := cipher.Encrypt(msg, publicKey, nil)
 	c.Assert(err, qt.IsNil)
 	c.Assert(encrypted, qt.Not(qt.IsNil))
@@ -57,16 +57,16 @@ func TestCiphertext_Add(t *testing.T) {
 	k1 := big.NewInt(789)
 	k2 := big.NewInt(987)
 
-	cipher1 := NewCiphertext(curves.CurveTypeBN254)
+	cipher1 := NewCiphertext(publicKey)
 	encrypted1, err := cipher1.Encrypt(msg1, publicKey, k1)
 	c.Assert(err, qt.IsNil)
 
-	cipher2 := NewCiphertext(curves.CurveTypeBN254)
+	cipher2 := NewCiphertext(publicKey)
 	encrypted2, err := cipher2.Encrypt(msg2, publicKey, k2)
 	c.Assert(err, qt.IsNil)
 
 	// Test addition
-	result := NewCiphertext(curves.CurveTypeBN254)
+	result := NewCiphertext(publicKey)
 	// Initialize result points with the first ciphertext's values
 	result.C1 = encrypted1.C1
 	result.C2 = encrypted1.C2
@@ -88,7 +88,7 @@ func TestCiphertext_SerializeDeserialize(t *testing.T) {
 	msg := big.NewInt(42)
 	k := big.NewInt(789)
 
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(publicKey)
 	encrypted, err := cipher.Encrypt(msg, publicKey, k)
 	c.Assert(err, qt.IsNil)
 
@@ -98,7 +98,7 @@ func TestCiphertext_SerializeDeserialize(t *testing.T) {
 	c.Assert(len(serialized), qt.Equals, 128) // 4 * 32 bytes
 
 	// Test deserialization
-	deserialized := NewCiphertext(curves.CurveTypeBN254)
+	deserialized := NewCiphertext(publicKey)
 	err = deserialized.Deserialize(serialized)
 	c.Assert(err, qt.IsNil)
 
@@ -125,7 +125,7 @@ func TestCiphertext_MarshalUnmarshal(t *testing.T) {
 	msg := big.NewInt(42)
 	k := big.NewInt(789)
 
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(publicKey)
 	encrypted, err := cipher.Encrypt(msg, publicKey, k)
 	c.Assert(err, qt.IsNil)
 
@@ -135,7 +135,7 @@ func TestCiphertext_MarshalUnmarshal(t *testing.T) {
 	c.Assert(marshaled, qt.Not(qt.IsNil))
 
 	// Test unmarshaling
-	unmarshaled := NewCiphertext(curves.CurveTypeBN254)
+	unmarshaled := NewCiphertext(publicKey)
 	err = unmarshaled.Unmarshal(marshaled)
 	c.Assert(err, qt.IsNil)
 
@@ -162,7 +162,7 @@ func TestCiphertext_String(t *testing.T) {
 	msg := big.NewInt(42)
 	k := big.NewInt(789)
 
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(publicKey)
 	encrypted, err := cipher.Encrypt(msg, publicKey, k)
 	c.Assert(err, qt.IsNil)
 
@@ -172,13 +172,12 @@ func TestCiphertext_String(t *testing.T) {
 	c.Assert(str, qt.Matches, `\{C1: .+, C2: .+\}`)
 }
 
-func TestCiphertext_DeserializeErrors(t *testing.T) {
+func TestCiphertext_DeserializeError(t *testing.T) {
 	c := qt.New(t)
 
-	cipher := NewCiphertext(curves.CurveTypeBN254)
+	cipher := NewCiphertext(curves.New(curves.CurveTypeBN254))
 
-	// Test with invalid length
-	err := cipher.Deserialize(make([]byte, 127)) // Should be 128
-	c.Assert(err, qt.Not(qt.IsNil))
-	c.Assert(err.Error(), qt.Matches, "invalid input length.*")
+	// Test with invalid length, should panic
+	c.Assert(cipher.Deserialize(make([]byte, 127)), // Should be 128
+		qt.ErrorMatches, "invalid input length.*")
 }

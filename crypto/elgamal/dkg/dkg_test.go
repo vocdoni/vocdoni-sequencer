@@ -10,7 +10,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
-	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
 
 func TestDKG(t *testing.T) {
@@ -100,7 +100,7 @@ func TestDKG(t *testing.T) {
 				<-sem
 			}()
 
-			c1, c2, _, err := encrypt.Encrypt(participants[1].PublicKey, voteValue)
+			c1, c2, _, err := elgamal.Encrypt(participants[1].PublicKey, voteValue)
 			c.Assert(err, qt.IsNil)
 
 			// Aggregate ciphertexts

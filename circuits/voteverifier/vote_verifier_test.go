@@ -21,9 +21,9 @@ import (
 	"github.com/iden3/go-iden3-crypto/mimc7"
 	arbotree "github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
-	ptest "github.com/vocdoni/gnark-crypto-primitives/test"
-	ztest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test"
-	encrypt "github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	ptestutil "github.com/vocdoni/gnark-crypto-primitives/testutil"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/testutil"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -45,7 +45,7 @@ var (
 	costExp         = 2
 	costFromWeight  = 0
 	weight          = 10
-	fields          = ztest.GenerateBallotFields(maxCount, maxValue, minValue, forceUniqueness > 0)
+	fields          = testutil.GenerateBallotFields(maxCount, maxValue, minValue, forceUniqueness > 0)
 )
 
 func TestVerifyVoteCircuit(t *testing.T) {
@@ -54,19 +54,19 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// CLIENT SIDE CIRCOM CIRCUIT
 
 	// generate encryption key and user nonce k
-	encryptionKey := ztest.GenerateEncryptionTestKey()
+	encryptionKey := testutil.GenerateEncryptionTestKey()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
-	k, err := encrypt.RandK()
+	k, err := elgamal.RandK()
 	c.Assert(err, qt.IsNil)
 	// encrypt the ballots
-	cipherfields, plainCipherfields := ztest.CipherBallotFields(fields, n_fields, encryptionKey, k)
+	cipherfields, plainCipherfields := testutil.CipherBallotFields(fields, n_fields, encryptionKey, k)
 	// generate voter account
-	privKey, pubKey, address, err := ztest.GenerateECDSAaccount()
+	privKey, pubKey, address, err := testutil.GenerateECDSAaccount()
 	c.Assert(err, qt.IsNil)
 	// generate the commitment
 	processID := util.RandomBytes(20)
 	secret := util.RandomBytes(16)
-	commitment, nullifier, err := ztest.MockedCommitmentAndNullifier(address.Bytes(), processID, secret)
+	commitment, nullifier, err := testutil.MockedCommitmentAndNullifier(address.Bytes(), processID, secret)
 	c.Assert(err, qt.IsNil)
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
@@ -94,11 +94,11 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	// calculation and the hash will be different
 	blsCircomInputsHash := arbotree.BigToFF(ecc.BLS12_377.ScalarField(), circomInputsHash)
 	// sign the inputs hash with the private key
-	rSign, sSign, err := ztest.SignECDSA(privKey, blsCircomInputsHash.Bytes())
+	rSign, sSign, err := testutil.SignECDSA(privKey, blsCircomInputsHash.Bytes())
 	c.Assert(err, qt.IsNil)
 	// init circom inputs
 	circomInputs := map[string]any{
-		"fields":           ztest.BigIntArrayToStringArray(fields, n_fields),
+		"fields":           testutil.BigIntArrayToStringArray(fields, n_fields),
 		"max_count":        fmt.Sprint(maxCount),
 		"force_uniqueness": fmt.Sprint(forceUniqueness),
 		"max_value":        fmt.Sprint(maxValue),
@@ -121,7 +121,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	bCircomInputs, err := json.Marshal(circomInputs)
 	c.Assert(err, qt.IsNil)
 	// create the proof
-	circomProof, pubSignals, err := ztest.CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
+	circomProof, pubSignals, err := testutil.CompileAndGenerateProof(bCircomInputs, ballotProofWasm, ballotProofPKey)
 	c.Assert(err, qt.IsNil)
 	// transform cipherfields to gnark frontend.Variable
 	fBallots := [n_fields][2][2]emulated.Element[sw_bn254.ScalarField]{}
@@ -138,18 +138,18 @@ func TestVerifyVoteCircuit(t *testing.T) {
 		}
 	}
 	// generate a test census proof
-	testCensus, err := ptest.GenerateCensusProofForTest(ptest.CensusTestConfig{
+	testCensus, err := ptestutil.GenerateCensusProofForTest(ptestutil.CensusTestConfig{
 		Dir:           "../assets/census",
 		ValidSiblings: 10,
 		TotalSiblings: n_levels,
 		KeyLen:        20,
 		Hash:          arbotree.HashFunctionMiMC_BLS12_377,
 		BaseFiled:     arbotree.BLS12377BaseField,
-	}, address.Bytes(), new(big.Int).SetInt64(int64(weight)).Bytes())
+	}, [][]byte{address.Bytes()}, [][]byte{new(big.Int).SetInt64(int64(weight)).Bytes()})
 	c.Assert(err, qt.IsNil)
 	// transform siblings to gnark frontend.Variable
 	fSiblings := [n_levels]frontend.Variable{}
-	for i, s := range testCensus.Siblings {
+	for i, s := range testCensus.Proofs[0].Siblings {
 		fSiblings[i] = frontend.Variable(s)
 	}
 	// hash the inputs of gnark circuit (circom inputs hash + census root)
