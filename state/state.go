@@ -75,16 +75,16 @@ func New(db db.Database, processId []byte) (*State, error) {
 //
 // after Initialize, caller is expected to StartBatch, AddVote, EndBatch, StartBatch...
 func (o *State) Initialize(censusRoot, ballotMode, encryptionKey []byte) error {
-	if err := o.tree.Add(KeyProcessID, o.processID); err != nil {
+	if err := o.tree.Add(KeyProcessID, o.processID[:31]); err != nil {
 		return err
 	}
-	if err := o.tree.Add(KeyCensusRoot, censusRoot); err != nil {
+	if err := o.tree.Add(KeyCensusRoot, censusRoot[:31]); err != nil {
 		return err
 	}
-	if err := o.tree.Add(KeyBallotMode, ballotMode); err != nil {
+	if err := o.tree.Add(KeyBallotMode, ballotMode[:31]); err != nil {
 		return err
 	}
-	if err := o.tree.Add(KeyEncryptionKey, encryptionKey); err != nil {
+	if err := o.tree.Add(KeyEncryptionKey, encryptionKey[:31]); err != nil {
 		return err
 	}
 	if err := o.tree.Add(KeyResultsAdd, elgamal.NewCiphertext(Curve).Serialize()); err != nil {
