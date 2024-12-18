@@ -1,73 +1,193 @@
-// storage package contains all the artifacts that are stored in the database,
-// but also is an abstraction of a queue for the processing of them by different
-// services. The storage package includes a prefixed key-value store that allows
-// to store the different types of artifacts in the database. The following
-// prefixes are used:
-//   - 'm/' for metadata
-//   - 'c/' for censuses
-//   - 'p/' for processes
-//   - 'v/' for votes (with their proofs) (queued)
-//   - 'au/' for authentications proofs (queued)
-//   - 'ag/' for aggregations proofs (queued)
-//
-// Note: Not all the prefixes support queue operations, only the ones that are
-// used in the processing of the artifacts.
 package storage
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
 )
 
 var (
-	// Prefixes for the keys in the database.
-	metadataPrefix                 = []byte("m/")
-	ballotPrefix                   = []byte("b/")
-	ballotProcessingPrefix         = []byte("bp/")
-	verifiedBallotPrefix           = []byte("vb/")
-	verifiedBallotProcessingPrefix = []byte("vbp/")
-	aggrPrefix                     = []byte("ag/")
-	aggrProcessingPrefix           = []byte("agp/")
-	encryptionKeyPrefix            = []byte("ek/")
+	ErrKeyAlreadyExists = errors.New("key already exists")
+	ErrNotFound         = errors.New("not found")
+	ErrNoMoreElements   = errors.New("no more elements")
 
-	censusPrefix  = []byte("c/")
-	processPrefix = []byte("p/")
-	votePrefix    = []byte("v/")
-	authPrefix    = []byte("au/")
+	// Prefixes
+	ballotPrefix            = []byte("b/")
+	ballotReservationPrefix = []byte("br/")
+	verifiedBallotPrefix    = []byte("vb/")
+	aggregBatchPrefix       = []byte("ag/")
+	aggregBatchReservPrefix = []byte("agr/")
+	encryptionKeyPrefix     = []byte("ek/")
+	metadataPrefix          = []byte("m/")
 
-	ErrKeyAlreadyExists = fmt.Errorf("key already exists")
-	ErrNotFound         = fmt.Errorf("key not found")
-	ErrNoMoreElements   = fmt.Errorf("no more elements")
-)
-
-const (
-	// maxKeySize is the maximum size of the key in bytes. It is used to
-	// generate the key of the artifacts stored in the database by truncating
-	// the hash of the artifact itself.
 	maxKeySize = 12
 )
 
-// Storage is the interface that wraps the basic methods to interact with the
-// storage.
+// reservationRecord stores metadata about a reservation (timestamp, etc.)
+type reservationRecord struct {
+	Timestamp int64
+}
+
+// Storage manages artifacts in various stages with reservations.
 type Storage struct {
-	db         db.Database
-	ballotLock sync.Mutex
+	db db.Database
+
+	globalLock sync.Mutex
 }
 
-// New creates a new Storage instance.
+// New creates a new Storage instance and attempts to recover from a previous crash.
 func New(db db.Database) *Storage {
-	return &Storage{db: db}
+	s := &Storage{db: db}
+	go func() {
+		if err := s.recover(); err != nil {
+			// If we fail here, we may panic because we must ensure consistency.
+			panic(fmt.Errorf("failed to recover from crash: %w", err))
+		}
+	}()
+	return s
 }
 
-// Close closes the storage.
+// recover cleans up any stale reservations and ensures that no items are blocked.
+// After a crash, any reservations left behind must be cleared so that
+// the corresponding ballots or aggregated batches are available for processing again.
+func (s *Storage) recover() error {
+	s.globalLock.Lock()
+	defer s.globalLock.Unlock()
+
+	// Clear ballot reservations
+	if err := s.clearAllReservations(ballotReservationPrefix); err != nil {
+		return fmt.Errorf("failed to clear ballot reservations: %w", err)
+	}
+
+	// Clear aggregated batch reservations
+	if err := s.clearAllReservations(aggregBatchReservPrefix); err != nil {
+		return fmt.Errorf("failed to clear aggregated batch reservations: %w", err)
+	}
+
+	return nil
+}
+
+// clearAllReservations iterates over the given reservation prefix and removes all reservation entries.
+// This ensures that no item remains "reserved" after a crash.
+func (s *Storage) clearAllReservations(prefix []byte) error {
+	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
+	var keysToDelete [][]byte
+
+	// Collect all keys to delete
+	rd.Iterate(nil, func(k, _ []byte) bool {
+		kCopy := make([]byte, len(k))
+		copy(kCopy, k)
+		keysToDelete = append(keysToDelete, kCopy)
+		return true
+	})
+
+	// Delete them in a write transaction
+	if len(keysToDelete) > 0 {
+		wTx := s.db.WriteTx()
+		pwt := prefixeddb.NewPrefixedWriteTx(wTx, prefix)
+		for _, kk := range keysToDelete {
+			if err := pwt.Delete(kk); err != nil {
+				pwt.Discard()
+				return fmt.Errorf("failed to delete reservation key %x: %w", kk, err)
+			}
+		}
+		if err := pwt.Commit(); err != nil {
+			return fmt.Errorf("failed to commit reservation deletion: %w", err)
+		}
+	}
+	return nil
+}
+
 func (s *Storage) Close() {
 	s.db.Close()
+}
+
+// releaseStaleReservations checks and frees stale reservations.
+func (s *Storage) ReleaseStaleReservations(maxAge time.Duration) error {
+	s.globalLock.Lock()
+	defer s.globalLock.Unlock()
+
+	now := time.Now().Unix()
+	err := s.releaseStaleInPrefix(ballotReservationPrefix, now, maxAge)
+	if err != nil {
+		return err
+	}
+	err = s.releaseStaleInPrefix(aggregBatchReservPrefix, now, maxAge)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Duration) error {
+	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
+	var staleKeys [][]byte
+	rd.Iterate(nil, func(k, v []byte) bool {
+		r, err := decodeReservation(v)
+		if err != nil {
+			staleKeys = append(staleKeys, append([]byte(nil), k...))
+			return true
+		}
+		if now-r.Timestamp > int64(maxAge.Seconds()) {
+			staleKeys = append(staleKeys, append([]byte(nil), k...))
+		}
+		return true
+	})
+
+	if len(staleKeys) == 0 {
+		return nil
+	}
+
+	wTx := s.db.WriteTx()
+	for _, sk := range staleKeys {
+		pwt := prefixeddb.NewPrefixedWriteTx(wTx, prefix)
+		if err := pwt.Delete(sk); err != nil {
+			pwt.Discard()
+			return fmt.Errorf("delete stale reservation: %w", err)
+		}
+		if err := pwt.Commit(); err != nil {
+			return fmt.Errorf("commit stale deletion: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Storage) setReservation(prefix, key []byte) error {
+	val, err := encodeReservation(&reservationRecord{Timestamp: time.Now().Unix()})
+	if err != nil {
+		return err
+	}
+	if _, err := prefixeddb.NewPrefixedReader(s.db, prefix).Get(key); err == nil {
+		return ErrKeyAlreadyExists
+	}
+	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), prefix)
+	if err := wTx.Set(key, val); err != nil {
+		wTx.Discard()
+		return err
+	}
+	return wTx.Commit()
+}
+
+func (s *Storage) isReserved(prefix, key []byte) bool {
+	_, err := prefixeddb.NewPrefixedReader(s.db, prefix).Get(key)
+	return err == nil
+}
+
+func (s *Storage) deleteArtifact(prefix, key []byte) error {
+	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), prefix)
+	if err := wTx.Delete(key); err != nil {
+		wTx.Discard()
+		return err
+	}
+	return wTx.Commit()
 }
 
 // setArtifact helper function stores any kind of artifact in the storage. It
@@ -132,27 +252,4 @@ func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 	}
 
 	return artifact, nil
-}
-
-func (s *Storage) deleteArtifact(prefix []byte, key []byte) error {
-	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), prefix)
-	if err := wTx.Delete(key); err != nil {
-		return err
-	}
-	return wTx.Commit()
-}
-
-func (s *Storage) getAndDeleteNextArtifact(prefix, innerPrefix []byte) (any, error) {
-	var data, key []byte
-	// iterate over the keys in the database, take the next key
-	// and get the artifact
-	prefixeddb.NewPrefixedReader(s.db, prefix).Iterate(innerPrefix, func(k, v []byte) bool {
-		data = v
-		key = k
-		return false
-	})
-	if data == nil {
-		return nil, ErrNoMoreElements
-	}
-	return data, s.deleteArtifact(prefix, key)
 }
