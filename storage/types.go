@@ -28,8 +28,7 @@ type VerifiedBallot struct {
 	Commitment      types.HexBytes     `json:"commitment"`
 	EncryptedBallot elgamal.Ciphertext `json:"encryptedBallot"`
 	Address         types.HexBytes     `json:"address"`
-
-	Proof groth16.Proof `json:"proof"`
+	Proof           groth16.Proof      `json:"proof"`
 }
 
 type Ballot struct {

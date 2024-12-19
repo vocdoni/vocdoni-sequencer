@@ -89,28 +89,49 @@ func TestBallotQueue(t *testing.T) {
 	}
 	c.Assert(st.MarkBallotDone(b2key, verified2), qt.IsNil)
 
-	// Now retrieve verified ballots for the process
-	// Test GetVerifiedBallots with different maxCount values
+	// There should be now 2 verified ballots.
+	c.Assert(st.CountVerifiedBallots(
+		processID.Marshal()),
+		qt.Equals,
+		2,
+		qt.Commentf("should have 2 verified ballots"),
+	)
+
+	// Now pull verified ballots for the process
+	// Test PullVerifiedBallots with different maxCount values
 
 	// Test maxCount = 1 should return only one ballot
-	vbs1, err := st.GetVerifiedBallots(processID.Marshal(), 1)
-	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=1"))
+	vbs1, keys1, err := st.PullVerifiedBallots(processID.Marshal(), 1)
+	c.Assert(err, qt.IsNil, qt.Commentf("must pull verified ballots with maxCount=2"))
 	c.Assert(len(vbs1), qt.Equals, 1, qt.Commentf("should return exactly 1 ballot"))
+	c.Assert(len(keys1), qt.Equals, 1, qt.Commentf("should return exactly 1 key"))
 
-	// Test maxCount = 2 should return both ballots
-	vbs2, err := st.GetVerifiedBallots(processID.Marshal(), 2)
-	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=2"))
-	c.Assert(len(vbs2), qt.Equals, 2, qt.Commentf("should return exactly 2 ballots"))
+	// Verify reservation was created
+	c.Assert(st.isReserved(verifiedBallotReservPrefix, keys1[0]), qt.IsTrue, qt.Commentf("ballot should be reserved"))
+
+	// Mark first ballot as done
+	c.Assert(st.MarkVerifiedBallotDone(keys1[0]), qt.IsNil)
+
+	// Now we should be able to pull the second ballot
+	vbs3, keys3, err := st.PullVerifiedBallots(processID.Marshal(), 2)
+	c.Assert(err, qt.IsNil, qt.Commentf("must pull verified ballots after marking first as done"))
+	c.Assert(len(vbs3), qt.Equals, 1, qt.Commentf("should return exactly 1 ballot"))
+	c.Assert(len(keys3), qt.Equals, 1, qt.Commentf("should return exactly 1 key"))
+
+	// Verify the second ballot is now reserved
+	c.Assert(st.isReserved(verifiedBallotReservPrefix, keys3[0]), qt.IsTrue, qt.Commentf("second ballot should be reserved"))
 
 	// Test maxCount = 0 should return no ballots
-	vbs0, err := st.GetVerifiedBallots(processID.Marshal(), 0)
-	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=0"))
+	vbs0, keys0, err := st.PullVerifiedBallots(processID.Marshal(), 0)
+	c.Assert(err, qt.IsNil, qt.Commentf("must pull verified ballots with maxCount=0"))
 	c.Assert(len(vbs0), qt.Equals, 0, qt.Commentf("should return no ballots"))
+	c.Assert(len(keys0), qt.Equals, 0, qt.Commentf("should return no keys"))
 
-	// Test maxCount > number of available ballots should return all ballots
-	vbs10, err := st.GetVerifiedBallots(processID.Marshal(), 10)
-	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=10"))
-	c.Assert(len(vbs10), qt.Equals, 2, qt.Commentf("should return all available ballots"))
+	// Test maxCount > number of available ballots should return remaining unreserved ballots
+	vbs10, keys10, err := st.PullVerifiedBallots(processID.Marshal(), 10)
+	c.Assert(err, qt.Equals, ErrNotFound, qt.Commentf("should return ErrNotFound when no unreserved ballots"))
+	c.Assert(vbs10, qt.IsNil)
+	c.Assert(keys10, qt.IsNil)
 
 	// Try again NextBallot. There should be no more ballots.
 	_, _, err = st.NextBallot()
@@ -127,9 +148,10 @@ func TestBallotQueue(t *testing.T) {
 		ChainID: 0,
 		Nonce:   999,
 	}
-	vbsEmpty, err := st.GetVerifiedBallots(anotherPID.Marshal(), 10)
+	vbsEmpty, keysEmpty, err := st.PullVerifiedBallots(anotherPID.Marshal(), 10)
 	c.Assert(err, qt.Equals, ErrNotFound, qt.Commentf("no verified ballots for a new process"))
 	c.Assert(vbsEmpty, qt.IsNil)
+	c.Assert(keysEmpty, qt.IsNil)
 }
 
 func TestBallotBatchQueue(t *testing.T) {
@@ -202,8 +224,6 @@ func TestBallotBatchQueue(t *testing.T) {
 
 	// Mark batch2 done and wait
 	c.Assert(st.MarkBallotBatchDone(b2key), qt.IsNil)
-
-	c.Assert(st.ListBallotBatch(), qt.IsNil)
 
 	// Push and verify batch3
 	batch3 := &AggregatedBallotBatch{

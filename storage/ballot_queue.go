@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"go.vocdoni.io/dvote/db/prefixeddb"
 )
 
@@ -23,6 +25,8 @@ func (s *Storage) PushBallot(b *Ballot) error {
 }
 
 // NextBallot returns the next non-reserved ballot, creates a reservation, and returns it.
+// It returns the ballot, the key, and an error. If no ballots are available, returns ErrNoMoreElements.
+// The key is used to mark the ballot as done after processing and to pass it to the next stage.
 func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -56,9 +60,8 @@ func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 	return &b, chosenKey, nil
 }
 
-// MarkBallotDone called after we have processed the ballot. We must remove reservation and possibly move it to next stage.
+// MarkBallotDone called after we have processed the ballot. We push the verified ballot to the next queue.
 // In this scenario, next stage is verifiedBallot so we do not store the original ballot.
-// The aggregator stage expects verified ballots as input.
 func (s *Storage) MarkBallotDone(k []byte, vb *VerifiedBallot) error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -88,24 +91,67 @@ func (s *Storage) MarkBallotDone(k []byte, vb *VerifiedBallot) error {
 	return wTx.Commit()
 }
 
-// GetVerifiedBallots returns all verified ballots for a given processID
-func (s *Storage) GetVerifiedBallots(processID []byte) ([]VerifiedBallot, error) {
+// PullVerifiedBallots returns a list of non-reserved verified ballots for a given processID
+// and creates reservations for them. The maxCount parameter is used to limit the number of results.
+// If no ballots are available, returns ErrNotFound.
+func (s *Storage) PullVerifiedBallots(processID []byte, maxCount int) ([]*VerifiedBallot, [][]byte, error) {
+	s.globalLock.Lock()
+	defer s.globalLock.Unlock()
+
+	if maxCount == 0 {
+		return []*VerifiedBallot{}, nil, nil
+	}
+
+	rd := prefixeddb.NewPrefixedReader(s.db, verifiedBallotPrefix)
+	var res []*VerifiedBallot
+	var keys [][]byte
+	rd.Iterate(processID, func(k, v []byte) bool {
+		key := append(processID, k...)
+		if maxCount > 0 && len(res) >= maxCount {
+			return false
+		}
+		// Skip if already reserved
+		if s.isReserved(verifiedBallotReservPrefix, key) {
+			return true
+		}
+		var vb VerifiedBallot
+		if err := decodeArtifact(v, &vb); err != nil {
+			log.Warnw("failed to decode verified ballot", "key", hex.EncodeToString(key), "error", err.Error())
+			return true
+		}
+		// Set reservation before adding to results
+		if err := s.setReservation(verifiedBallotReservPrefix, key); err != nil {
+			log.Warnw("failed to set reservation for verified ballot", "key", hex.EncodeToString(key), "error", err.Error())
+			return true
+		}
+		// Make a copy of the key to avoid any potential modification
+		keyCopy := make([]byte, len(key))
+		copy(keyCopy, key)
+		res = append(res, &vb)
+		keys = append(keys, keyCopy)
+		return true
+	})
+
+	// Return ErrNotFound if we found no ballots at all
+	if len(res) == 0 {
+		return nil, nil, ErrNotFound
+	}
+
+	return res, keys, nil
+}
+
+// CountVerifiedBallots returns the number of verified ballots for a given processID.
+func (s *Storage) CountVerifiedBallots(processID []byte) int {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
 
 	rd := prefixeddb.NewPrefixedReader(s.db, verifiedBallotPrefix)
-	var res []VerifiedBallot
-	rd.Iterate(processID, func(k, v []byte) bool {
-		var vb VerifiedBallot
-		if err := decodeArtifact(v, &vb); err == nil {
-			res = append(res, vb)
-		}
+	count := 0
+	rd.Iterate(processID, func(_, _ []byte) bool {
+		count++
 		return true
 	})
-	if len(res) == 0 {
-		return nil, ErrNotFound
-	}
-	return res, nil
+	return count
 }
 
 // PushBallotBatch pushes an aggregated ballot batch to the aggregator queue.
@@ -123,22 +169,6 @@ func (s *Storage) PushBallotBatch(abb *AggregatedBallotBatch) error {
 	return wTx.Commit()
 }
 
-// ListBallotBatch returns all aggregated ballot batches keys.
-func (s *Storage) ListBallotBatch() [][]byte {
-	s.globalLock.Lock()
-	defer s.globalLock.Unlock()
-
-	rd := prefixeddb.NewPrefixedReader(s.db, aggregBatchPrefix)
-	var res [][]byte
-	rd.Iterate(nil, func(k, v []byte) bool {
-		k2 := make([]byte, len(k))
-		copy(k2, k)
-		res = append(res, k2)
-		return true
-	})
-	return res
-}
-
 // NextBallotBatch returns the next aggregated ballot batch for a given processID, sets a reservation.
 func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []byte, error) {
 	s.globalLock.Lock()
@@ -147,10 +177,11 @@ func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []b
 	pr := prefixeddb.NewPrefixedReader(s.db, aggregBatchPrefix)
 	var chosenKey, chosenVal []byte
 	pr.Iterate(processID, func(k, v []byte) bool {
-		if s.isReserved(aggregBatchReservPrefix, k) {
+		key := append(processID, k...)
+		if s.isReserved(aggregBatchReservPrefix, key) {
 			return true
 		}
-		chosenKey = append(processID, k...)
+		chosenKey = key
 		chosenVal = v
 		return false
 	})
@@ -168,6 +199,24 @@ func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []b
 	}
 
 	return &abb, chosenKey, nil
+}
+
+// MarkVerifiedBallotDone removes the reservation and the verified ballot.
+func (s *Storage) MarkVerifiedBallotDone(k []byte) error {
+	s.globalLock.Lock()
+	defer s.globalLock.Unlock()
+
+	// remove reservation
+	if err := s.deleteArtifact(verifiedBallotReservPrefix, k); err != nil && !errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("delete verified ballot reservation: %w", err)
+	}
+
+	// remove from verified queue
+	if err := s.deleteArtifact(verifiedBallotPrefix, k); err != nil && !errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("delete verified ballot: %w", err)
+	}
+
+	return nil
 }
 
 // MarkBallotBatchDone called after processing aggregator batch. For simplicity, we just remove it from aggregator queue and reservation.
