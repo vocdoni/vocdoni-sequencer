@@ -12,6 +12,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
@@ -72,7 +73,7 @@ func CreateTestProcess(c *qt.C, cli *client.HTTPclient, signer *ethereum.SignKey
 
 	process := &api.Process{
 		CensusRoot: censusRoot,
-		BallotMode: api.BallotMode{
+		BallotMode: types.BallotMode{
 			MaxCount:        5,
 			ForceUniqueness: true,
 			MaxValue:        *toBigInt(100),

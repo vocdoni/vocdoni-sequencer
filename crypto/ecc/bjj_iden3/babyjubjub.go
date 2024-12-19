@@ -1,6 +1,7 @@
 package bjj
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	babyjubjub "github.com/iden3/go-iden3-crypto/babyjub"
 
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 // BJJ is the affine representation of the BabyJubJub group element.
@@ -57,6 +59,27 @@ func (g *BJJ) Unmarshal(buf []byte) error {
 	copy(b32[:], buf)
 	_, err := g.inner.Decompress(b32)
 	return err
+}
+
+func (g *BJJ) MarshalJSON() ([]byte, error) {
+	points := &curve.PointEC{}
+	points.X = types.BigInt(*g.inner.X)
+	points.Y = types.BigInt(*g.inner.Y)
+	return json.Marshal(points)
+}
+
+func (g *BJJ) UnmarshalJSON(buf []byte) error {
+	points := &curve.PointEC{}
+	err := json.Unmarshal(buf, points)
+	if err != nil {
+		return err
+	}
+	if g.inner == nil {
+		g.inner = babyjubjub.NewPoint()
+	}
+	g.inner.X = g.inner.X.Set(points.X.MathBigInt())
+	g.inner.Y = g.inner.Y.Set(points.Y.MathBigInt())
+	return nil
 }
 
 func (g *BJJ) Equal(a curve.Point) bool {

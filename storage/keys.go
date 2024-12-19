@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"math/big"
 
@@ -11,45 +9,31 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-type encryptionKeys struct {
-	PublicKeyX *big.Int
-	PublicKeyY *big.Int
-	PrivateKey *big.Int
-}
-
-// StoreEncryptionKeys stores the encryption keys for a process.
-func (s *Storage) StoreEncryptionKeys(pid types.ProcessID, publicKey ecc.Point, privateKey *big.Int) error {
+// SetEncryptionKeys stores the encryption keys for a process.
+func (s *Storage) SetEncryptionKeys(pid types.ProcessID, publicKey ecc.Point, privateKey *big.Int) error {
 	x, y := publicKey.Point()
-	eks := encryptionKeys{
-		PublicKeyX: x,
-		PublicKeyY: y,
+	eks := EncryptionKeys{
+		X:          x,
+		Y:          y,
 		PrivateKey: privateKey,
 	}
-	w := bytes.NewBuffer(nil)
-	if err := gob.NewEncoder(w).Encode(eks); err != nil {
-		return fmt.Errorf("could not encode encryption keys: %w", err)
-	}
-	tx := s.keys.WriteTx()
-	if err := tx.Set(pid.Marshal(), w.Bytes()); err != nil {
-		return fmt.Errorf("could not write encryption keys: %w", err)
-	}
-	return tx.Commit()
+
+	return s.setArtifact(encryptionKeyPrefix, pid.Marshal(), eks)
 }
 
-// LoadEncryptionKeys loads the encryption keys for a process. Returns ErrNotFound if the keys do not exist
-func (s *Storage) LoadEncryptionKeys(pid types.ProcessID) (ecc.Point, *big.Int, error) {
-	data, err := s.keys.Get(pid.Marshal())
+// EncryptionKeys loads the encryption keys for a process. Returns ErrNotFound if the keys do not exist
+func (s *Storage) EncryptionKeys(pid types.ProcessID) (ecc.Point, *big.Int, error) {
+	artifact, err := s.getArtifact(encryptionKeyPrefix, pid.Marshal())
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not read encryption keys: %w", err)
 	}
-	if data == nil {
+	if artifact == nil {
 		return nil, nil, ErrNotFound
 	}
-	r := bytes.NewReader(data)
-	var eks encryptionKeys
-	if err := gob.NewDecoder(r).Decode(&eks); err != nil {
-		return nil, nil, fmt.Errorf("could not decode encryption keys: %w", err)
+	eks, ok := artifact.(EncryptionKeys)
+	if !ok {
+		panic("unexpected artifact type")
 	}
-	pubKey := curves.New(curves.CurveTypeBN254).SetPoint(eks.PublicKeyX, eks.PublicKeyY)
+	pubKey := curves.New(curves.CurveTypeBN254).SetPoint(eks.X, eks.Y)
 	return pubKey, eks.PrivateKey, nil
 }

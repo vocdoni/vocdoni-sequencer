@@ -1,6 +1,7 @@
 package bjj
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	babyjubjub "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 var Params babyjubjub.CurveParams
@@ -108,6 +110,29 @@ func (p *BJJ) Marshal() []byte {
 // Unmarshal deserializes the elliptic curve element from a byte slice.
 func (p *BJJ) Unmarshal(buf []byte) error {
 	return p.inner.Unmarshal(buf)
+}
+
+// MarshalJson serializes the elliptic curve element into a JSON byte slice.
+func (p *BJJ) MarshalJSON() ([]byte, error) {
+	points := &curve.PointEC{}
+	points.X = types.BigInt(*p.inner.X.BigInt(new(big.Int)))
+	points.Y = types.BigInt(*p.inner.Y.BigInt(new(big.Int)))
+	return json.Marshal(points)
+}
+
+// UnmarshalJson deserializes the elliptic curve element from a JSON byte slice.
+func (p *BJJ) UnmarshalJSON(buf []byte) error {
+	points := &curve.PointEC{}
+	err := json.Unmarshal(buf, points)
+	if err != nil {
+		return err
+	}
+	if p.inner == nil {
+		p.inner = new(babyjubjub.PointAffine)
+	}
+	p.inner.X.SetBigInt(points.X.MathBigInt())
+	p.inner.Y.SetBigInt(points.Y.MathBigInt())
+	return nil
 }
 
 // Point returns the X and Y coordinates of the elliptic curve element in
