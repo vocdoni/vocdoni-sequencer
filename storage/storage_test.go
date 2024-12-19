@@ -90,9 +90,27 @@ func TestBallotQueue(t *testing.T) {
 	c.Assert(st.MarkBallotDone(b2key, verified2), qt.IsNil)
 
 	// Now retrieve verified ballots for the process
-	vbs, err := st.GetVerifiedBallots(processID.Marshal())
-	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots"))
-	c.Assert(len(vbs), qt.Equals, 2, qt.Commentf("we have 2 verified ballots"))
+	// Test GetVerifiedBallots with different maxCount values
+
+	// Test maxCount = 1 should return only one ballot
+	vbs1, err := st.GetVerifiedBallots(processID.Marshal(), 1)
+	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=1"))
+	c.Assert(len(vbs1), qt.Equals, 1, qt.Commentf("should return exactly 1 ballot"))
+
+	// Test maxCount = 2 should return both ballots
+	vbs2, err := st.GetVerifiedBallots(processID.Marshal(), 2)
+	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=2"))
+	c.Assert(len(vbs2), qt.Equals, 2, qt.Commentf("should return exactly 2 ballots"))
+
+	// Test maxCount = 0 should return no ballots
+	vbs0, err := st.GetVerifiedBallots(processID.Marshal(), 0)
+	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=0"))
+	c.Assert(len(vbs0), qt.Equals, 0, qt.Commentf("should return no ballots"))
+
+	// Test maxCount > number of available ballots should return all ballots
+	vbs10, err := st.GetVerifiedBallots(processID.Marshal(), 10)
+	c.Assert(err, qt.IsNil, qt.Commentf("must get verified ballots with maxCount=10"))
+	c.Assert(len(vbs10), qt.Equals, 2, qt.Commentf("should return all available ballots"))
 
 	// Try again NextBallot. There should be no more ballots.
 	_, _, err = st.NextBallot()
@@ -109,7 +127,7 @@ func TestBallotQueue(t *testing.T) {
 		ChainID: 0,
 		Nonce:   999,
 	}
-	vbsEmpty, err := st.GetVerifiedBallots(anotherPID.Marshal())
+	vbsEmpty, err := st.GetVerifiedBallots(anotherPID.Marshal(), 10)
 	c.Assert(err, qt.Equals, ErrNotFound, qt.Commentf("no verified ballots for a new process"))
 	c.Assert(vbsEmpty, qt.IsNil)
 }
