@@ -2,6 +2,7 @@ package voteverifier
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -53,7 +54,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 	}
 	// generate a test census
 	testCensus, err := primitivestest.GenerateCensusProofForTest(primitivestest.CensusTestConfig{
-		Dir:           "../assets/census",
+		Dir:           fmt.Sprintf("../assets/census%d", util.RandomInt(0, 1000)),
 		ValidSiblings: 10,
 		TotalSiblings: ballotproof.NLevels,
 		KeyLen:        20,
