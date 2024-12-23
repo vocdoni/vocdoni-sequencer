@@ -81,19 +81,17 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 		nullifiers = append(nullifiers, voterProof.Nullifier)
 		commitments = append(commitments, voterProof.Commitment)
 		encryptedBallots = append(encryptedBallots, voterProof.EncryptedFields)
-		// transform the inputs hash to the field of the curve used by the circuit,
-		// if it is not done, the circuit will transform it during witness
-		// calculation and the hash will be different
-		// the resulting hash should have 32 bytes so if it does'nt, fill with 0s
-		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), voterProof.InputsHash)
-		if b := blsCircomInputsHash.Bytes(); len(b) < 32 {
-			for len(b) < 32 {
-				b = append(b, 0)
-			}
-			blsCircomInputsHash.SetBytes(b)
+		// transform the inputs hash to the field of the curve used by the
+		// circuit, if it is not done, the circuit will transform it during the
+		// witness calculation and the hash will be different, the resulting
+		// hash should be 32 bytes so if it is not, fill with zeros at the
+		// beginning of the bytes representation.
+		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), voterProof.InputsHash).Bytes()
+		for len(blsCircomInputsHash) < 32 {
+			blsCircomInputsHash = append([]byte{0}, blsCircomInputsHash...)
 		}
 		// sign the inputs hash with the private key
-		rSign, sSign, err := ballotproof.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash.Bytes())
+		rSign, sSign, err := ballotproof.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
 			return nil, VerifyVoteCircuit{}, nil, err
 		}
@@ -118,7 +116,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 		}
 		// hash the inputs of gnark circuit (circom inputs hash + census root)
 		hFn := mimc.NewMiMC()
-		hFn.Write(blsCircomInputsHash.Bytes())
+		hFn.Write(blsCircomInputsHash)
 		hFn.Write(testCensus.Root.Bytes())
 		inputsHash := new(big.Int).SetBytes(hFn.Sum(nil))
 		// compose circuit placeholders
