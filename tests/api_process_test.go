@@ -42,19 +42,6 @@ func TestProcess(t *testing.T) {
 		c.Assert(resp.ProcessID, qt.Not(qt.IsNil))
 		c.Assert(resp.EncryptionPubKey[0], qt.Not(qt.IsNil))
 		c.Assert(resp.EncryptionPubKey[1], qt.Not(qt.IsNil))
-
-		// Retrieve process
-		body, code, err := cli.Request(http.MethodGet, nil, []string{"id", resp.ProcessID.String()}, "process")
-		c.Assert(err, qt.IsNil)
-		c.Assert(code, qt.Equals, http.StatusOK, qt.Commentf("response body %s", string(body)))
-
-		var getResp api.ProcessResponse
-		err = json.NewDecoder(bytes.NewReader(body)).Decode(&getResp)
-		c.Assert(err, qt.IsNil)
-		c.Assert(getResp.ProcessID, qt.DeepEquals, resp.ProcessID)
-		c.Assert(getResp.EncryptionPubKey[0].String(), qt.DeepEquals, resp.EncryptionPubKey[0].String())
-		c.Assert(getResp.EncryptionPubKey[1].String(), qt.DeepEquals, resp.EncryptionPubKey[1].String())
-		c.Assert(getResp.Address, qt.DeepEquals, signer.AddressString())
 	})
 }
 

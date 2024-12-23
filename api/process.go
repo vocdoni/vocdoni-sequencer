@@ -84,7 +84,12 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Write the response
-	log.Infow("new process", "processId", pr.ProcessID.String(), "pubKey", pr.EncryptionPubKey, "stateRoot", pr.StateRoot.String())
+	log.Infow("new process",
+		"processId", pr.ProcessID.String(),
+		"pubKeyX", pr.EncryptionPubKey[0].String(),
+		"pubKeyY", pr.EncryptionPubKey[1].String(),
+		"stateRoot", pr.StateRoot.String(),
+	)
 	httpWriteJSON(w, pr)
 }
 
