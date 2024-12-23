@@ -16,7 +16,7 @@ require (
 	github.com/iden3/go-rapidsnark/witness v0.0.6
 	github.com/pressly/goose/v3 v3.21.1
 	github.com/rs/zerolog v1.33.0
-	github.com/vocdoni/arbo v0.0.0-20241216103934-e64315269b49
+	github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4
 	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241218124633-bd3f44d2cb73
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5

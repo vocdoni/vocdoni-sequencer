@@ -19,13 +19,14 @@ var (
 	ErrNoMoreElements   = errors.New("no more elements")
 
 	// Prefixes
-	ballotPrefix            = []byte("b/")
-	ballotReservationPrefix = []byte("br/")
-	verifiedBallotPrefix    = []byte("vb/")
-	aggregBatchPrefix       = []byte("ag/")
-	aggregBatchReservPrefix = []byte("agr/")
-	encryptionKeyPrefix     = []byte("ek/")
-	metadataPrefix          = []byte("m/")
+	ballotPrefix               = []byte("b/")
+	ballotReservationPrefix    = []byte("br/")
+	verifiedBallotPrefix       = []byte("vb/")
+	verifiedBallotReservPrefix = []byte("vbr/")
+	aggregBatchPrefix          = []byte("ag/")
+	aggregBatchReservPrefix    = []byte("agr/")
+	encryptionKeyPrefix        = []byte("ek/")
+	metadataPrefix             = []byte("m/")
 
 	maxKeySize = 12
 )
@@ -61,12 +62,13 @@ func (s *Storage) recover() error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
 
-	// Clear ballot reservations
+	// Clear all reservations
 	if err := s.clearAllReservations(ballotReservationPrefix); err != nil {
 		return fmt.Errorf("failed to clear ballot reservations: %w", err)
 	}
-
-	// Clear aggregated batch reservations
+	if err := s.clearAllReservations(verifiedBallotReservPrefix); err != nil {
+		return fmt.Errorf("failed to clear verified ballot reservations: %w", err)
+	}
 	if err := s.clearAllReservations(aggregBatchReservPrefix); err != nil {
 		return fmt.Errorf("failed to clear aggregated batch reservations: %w", err)
 	}
@@ -115,14 +117,22 @@ func (s *Storage) ReleaseStaleReservations(maxAge time.Duration) error {
 	defer s.globalLock.Unlock()
 
 	now := time.Now().Unix()
-	err := s.releaseStaleInPrefix(ballotReservationPrefix, now, maxAge)
-	if err != nil {
+
+	// Release stale ballot reservations
+	if err := s.releaseStaleInPrefix(ballotReservationPrefix, now, maxAge); err != nil {
 		return err
 	}
-	err = s.releaseStaleInPrefix(aggregBatchReservPrefix, now, maxAge)
-	if err != nil {
+
+	// Release stale verified ballot reservations
+	if err := s.releaseStaleInPrefix(verifiedBallotReservPrefix, now, maxAge); err != nil {
 		return err
 	}
+
+	// Release stale aggregated batch reservations
+	if err := s.releaseStaleInPrefix(aggregBatchReservPrefix, now, maxAge); err != nil {
+		return err
+	}
+
 	return nil
 }
 

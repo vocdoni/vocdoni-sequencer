@@ -205,8 +205,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a h1:1ur3QoCqvE5fl+nylMaIr9PVV1w343YRDtsy+Rwu7XI=
 github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a/go.mod h1:RRCYJbIwD5jmqPI9XoAFR0OcDxqUctll6zUj/+B4S48=
-github.com/vocdoni/arbo v0.0.0-20241216103934-e64315269b49 h1:GMyepEuxLflqhdDHts/eUMtVkbrCI5mJc8RVdlwZBoA=
-github.com/vocdoni/arbo v0.0.0-20241216103934-e64315269b49/go.mod h1:wXxPP+5vkT5t54lrKz6bCXKIyv8aRplKq8uCFb2wgy4=
+github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359 h1:T35/NQ3qL9tsWZxslxYahVXtpfL0FFIEkXaARBRdSZ4=
+github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359/go.mod h1:wXxPP+5vkT5t54lrKz6bCXKIyv8aRplKq8uCFb2wgy4=
 github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4 h1:aYeMlhWAW+/OQs9BinA8Yetjcf5IPoCsFFtxXx3uLdc=
 github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4/go.mod h1:A1WU0hL7rO9oZlvp82you2uCc4T3/ySi1UNW6N6hBJs=
 github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241218124633-bd3f44d2cb73 h1:pfmyx98qiu1KpKV/OnjL0UMZ2oH0CueozIOA2gxYnAk=
