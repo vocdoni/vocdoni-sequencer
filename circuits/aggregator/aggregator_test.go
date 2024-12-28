@@ -44,7 +44,7 @@ func TestAggregatorCircuitGenArtifact(t *testing.T) {
 	now = time.Now()
 
 	// 0. Compile
-	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, placeholder)
+	cs, err := frontend.Compile(ecc.BW6_761.ScalarField(), r1cs.NewBuilder, placeholder)
 	c.Assert(err, qt.IsNil)
 
 	// 1. One time setup
@@ -52,8 +52,8 @@ func TestAggregatorCircuitGenArtifact(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// 2. Proof creation
-	witness, _ := frontend.NewWitness(assigments, ecc.BN254.ScalarField())
-	proof, err := groth16.Prove(cs, pk, witness)
+	witness, _ := frontend.NewWitness(assigments, ecc.BW6_761.ScalarField())
+	proof, err := groth16.Prove(cs, pk, witness, stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField()))
 	c.Assert(err, qt.IsNil)
 
 	// 2.a. Public witness
