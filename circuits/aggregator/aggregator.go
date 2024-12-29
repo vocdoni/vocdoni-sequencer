@@ -31,11 +31,12 @@ import (
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 )
 
 const (
-	MaxVotes  = 10
+	MaxVotes  = circuits.VoteBatchSize
 	MaxFields = ballotproof.NFields
 )
 

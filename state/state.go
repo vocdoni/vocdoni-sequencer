@@ -4,7 +4,9 @@ import (
 	"math/big"
 
 	"github.com/vocdoni/arbo"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
@@ -12,18 +14,18 @@ import (
 
 const (
 	// size of the inclusion proofs
-	MaxLevels = 160
+	MaxLevels = circuits.StateTreeMaxLevels
 	// MaxKeyLen is ceil(maxLevels/8)
 	MaxKeyLen = (MaxLevels + 7) / 8
 	// votes that were processed in AggregatedProof
-	VoteBatchSize = 10
+	VoteBatchSize = aggregator.MaxVotes
 )
 
 var (
 	// HashFunc is the hash function used in the state tree.
-	HashFunc = arbo.HashFunctionMiMC_BN254
+	HashFunc = circuits.StateTreeHashFunc
 	// Curve is the curve used for the encryption
-	Curve = curves.New(curves.CurveTypeBabyJubJubGnark)
+	Curve = ballotproof.Curve
 )
 
 var (

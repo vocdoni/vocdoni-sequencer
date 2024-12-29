@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/arbo"
 	primitivestest "github.com/vocdoni/gnark-crypto-primitives/testutil"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"go.vocdoni.io/dvote/util"
 )
@@ -54,7 +55,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 		ValidSiblings: 10,
 		TotalSiblings: ballotproof.NLevels,
 		KeyLen:        20,
-		Hash:          arbo.HashFunctionMiMC_BLS12_377,
+		Hash:          circuits.CensusProofHashFunc,
 		BaseFiled:     arbo.BLS12377BaseField,
 	}, bAddresses, bWeights)
 	if err != nil {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
@@ -34,6 +34,6 @@ func (s *Storage) EncryptionKeys(pid types.ProcessID) (ecc.Point, *big.Int, erro
 	if !ok {
 		panic("unexpected artifact type")
 	}
-	pubKey := curves.New(curves.CurveTypeBN254).SetPoint(eks.X, eks.Y)
+	pubKey := circuits.EncryptionKeysCurve.SetPoint(eks.X, eks.Y)
 	return pubKey, eks.PrivateKey, nil
 }
