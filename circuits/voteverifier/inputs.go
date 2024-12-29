@@ -38,15 +38,11 @@ type VoterTestData struct {
 	Address common.Address
 }
 
-// GenInputsForTest returns the VoteVerifierTestResults, the placeholder and
+// GenInputsForTest returns the VoteVerifierTestResults, and
 // the assigments for a VerifyVoteCircuit including the provided voters. If
 // processId is nil, it will be randomly generated. If something fails it
 // returns an error.
-func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifierTestResults, VerifyVoteCircuit, []VerifyVoteCircuit, error) {
-	circomPlaceholder, err := ballotproof.Circom2GnarkPlaceholder()
-	if err != nil {
-		return nil, VerifyVoteCircuit{}, nil, err
-	}
+func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifierTestResults, []VerifyVoteCircuit, error) {
 	bAddresses, bWeights := [][]byte{}, [][]byte{}
 	for _, voter := range votersData {
 		bAddresses = append(bAddresses, voter.Address.Bytes())
@@ -62,7 +58,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 		BaseFiled:     arbo.BLS12377BaseField,
 	}, bAddresses, bWeights)
 	if err != nil {
-		return nil, VerifyVoteCircuit{}, nil, err
+		return nil, nil, err
 	}
 	// common data
 	if processId != nil {
@@ -77,7 +73,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 	for i, voter := range votersData {
 		voterProof, err := ballotproof.MockVoterForTest(voter.Address.Bytes(), processId, encryptionKey)
 		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
+			return nil, nil, err
 		}
 		nullifiers = append(nullifiers, voterProof.Nullifier)
 		commitments = append(commitments, voterProof.Commitment)
@@ -94,7 +90,7 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballotproof.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
-			return nil, VerifyVoteCircuit{}, nil, err
+			return nil, nil, err
 		}
 		// transform encryptedBallots to gnark frontend.Variable
 		emulatedBallots := [ballotproof.NFields][2][2]emulated.Element[sw_bn254.ScalarField]{}
@@ -162,15 +158,20 @@ func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifi
 	}
 
 	return &VoteVerifierTestResults{
-			EncryptionPubKey: [2]*big.Int{encryptionKeyX, encryptionKeyY},
-			ProcessID:        processId,
-			CensusRoot:       testCensus.Root,
-			Nullifiers:       nullifiers,
-			Commitments:      commitments,
-			EncryptedBallots: encryptedBallots,
-		}, VerifyVoteCircuit{
-			CircomVerificationKey:  circomPlaceholder.Vk,
-			CircomProof:            circomPlaceholder.Proof,
-			CircomPublicInputsHash: circomPlaceholder.Witness,
-		}, assigments, nil
+		EncryptionPubKey: [2]*big.Int{encryptionKeyX, encryptionKeyY},
+		ProcessID:        processId,
+		CensusRoot:       testCensus.Root,
+		Nullifiers:       nullifiers,
+		Commitments:      commitments,
+		EncryptedBallots: encryptedBallots,
+	}, assigments, nil
+}
+
+func CircuitPlaceholder() *VerifyVoteCircuit {
+	circomPlaceholder := ballotproof.Circom2GnarkPlaceholder()
+	return &VerifyVoteCircuit{
+		CircomVerificationKey:  circomPlaceholder.Vk,
+		CircomProof:            circomPlaceholder.Proof,
+		CircomPublicInputsHash: circomPlaceholder.Witness,
+	}
 }

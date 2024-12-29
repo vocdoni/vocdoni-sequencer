@@ -30,10 +30,14 @@ func Circom2GnarkProof(witness []byte) (*parser.GnarkRecursionProof, error) {
 }
 
 // Circom2GnarkPlaceholder
-func Circom2GnarkPlaceholder() (*parser.GnarkRecursionPlaceholders, error) {
+func Circom2GnarkPlaceholder() *parser.GnarkRecursionPlaceholders {
 	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vkey)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return parser.PlaceholdersForRecursion(gnarkVKeyData, 1, true)
+	placeholder, err := parser.PlaceholdersForRecursion(gnarkVKeyData, 1, true)
+	if err != nil {
+		panic(err)
+	}
+	return placeholder
 }
