@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/vocdoni/arbo/memdb"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
@@ -39,7 +39,7 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate the elgamal key
-	publicKey, privateKey, err := elgamal.GenerateKey(curves.New(curves.CurveTypeBN254))
+	publicKey, privateKey, err := elgamal.GenerateKey(circuits.EncryptionKeysCurve)
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not generate elgamal key: %v", err).Write(w)
 		return

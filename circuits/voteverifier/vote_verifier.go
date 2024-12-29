@@ -64,6 +64,7 @@ import (
 	address "github.com/vocdoni/gnark-crypto-primitives/emulated/ecdsa"
 	"github.com/vocdoni/gnark-crypto-primitives/tree/arbo"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
 type VerifyVoteCircuit struct {
@@ -72,23 +73,23 @@ type VerifyVoteCircuit struct {
 	// The following variables are priv-public inputs, so should be hashed
 	// and compared with the InputsHash or CircomPublicInputsHash. All the
 	// variables should be hashed in the same order as they are defined here.
-	MaxCount         emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	ForceUniqueness  emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	MaxValue         emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	MinValue         emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	MaxTotalCost     emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	MinTotalCost     emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	CostExp          emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	CostFromWeight   emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	Address          emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	UserWeight       emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	EncryptionPubKey [2]emulated.Element[sw_bn254.ScalarField]       // Part of CircomPublicInputsHash & InputsHash
-	Nullifier        emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	Commitment       emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	ProcessId        emulated.Element[sw_bn254.ScalarField]          // Part of CircomPublicInputsHash & InputsHash
-	EncryptedBallot  [8][2][2]emulated.Element[sw_bn254.ScalarField] // Part of CircomPublicInputsHash & InputsHash
-	CensusRoot       frontend.Variable                               // Part of InputsHash
-	CensusSiblings   [160]frontend.Variable
+	MaxCount         emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	ForceUniqueness  emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	MaxValue         emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	MinValue         emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	MaxTotalCost     emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	MinTotalCost     emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	CostExp          emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	CostFromWeight   emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	Address          emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	UserWeight       emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	EncryptionPubKey [2]emulated.Element[sw_bn254.ScalarField]                              // Part of CircomPublicInputsHash & InputsHash
+	Nullifier        emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	Commitment       emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	ProcessId        emulated.Element[sw_bn254.ScalarField]                                 // Part of CircomPublicInputsHash & InputsHash
+	EncryptedBallot  [circuits.BallotNumFields][2][2]emulated.Element[sw_bn254.ScalarField] // Part of CircomPublicInputsHash & InputsHash
+	CensusRoot       frontend.Variable                                                      // Part of InputsHash
+	CensusSiblings   [circuits.CensusProofMaxLevels]frontend.Variable
 	// The following variables are private inputs and they are used to verify
 	// the user identity ownership
 	Msg       emulated.Element[emulated.Secp256k1Fr]

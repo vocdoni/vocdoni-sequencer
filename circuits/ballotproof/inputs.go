@@ -21,7 +21,6 @@ import (
 	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
-	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -76,7 +75,7 @@ func GenEncryptionKeyForTest() ecc.Point {
 	privkey := babyjub.NewRandPrivKey()
 
 	x, y := privkey.Public().X, privkey.Public().Y
-	return new(bjj.BJJ).SetPoint(x, y)
+	return Curve.SetPoint(x, y)
 }
 
 // GenBallotFieldsForTest generates a list of n random fields between min and max

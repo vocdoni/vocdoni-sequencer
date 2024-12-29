@@ -53,12 +53,12 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 		})
 	}
 	// generate vote verifier circuit and inputs
-	vvInputs, vvPlaceholder, vvAssigments, err := voteverifier.GenInputsForTest(vvData, processId)
+	vvInputs, vvAssigments, err := voteverifier.GenInputsForTest(vvData, processId)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// compile vote verifier circuit
-	vvCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
+	vvCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, voteverifier.CircuitPlaceholder())
 	if err != nil {
 		return nil, nil, nil, err
 	}
