@@ -1,21 +1,6 @@
 package circuits
 
-import (
-	"math/big"
-
-	"github.com/vocdoni/circom2gnark/parser"
-)
-
-// Circom2GnarkPlaceholder function is a wrapper to convert the circom ballot
-// circuit to a gnark recursion placeholder, it returns the resulting
-// placeholders for the recursion.
-func Circom2GnarkPlaceholder(vkey []byte) (*parser.GnarkRecursionPlaceholders, error) {
-	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vkey)
-	if err != nil {
-		return nil, err
-	}
-	return parser.PlaceholdersForRecursion(gnarkVKeyData, BallotProofNPubInputs, true)
-}
+import "math/big"
 
 // BigIntArrayToN pads the big.Int array to n elements, if needed,
 // with zeros.
