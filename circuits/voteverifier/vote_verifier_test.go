@@ -2,6 +2,7 @@ package voteverifier
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func TestVerifyVoteCircuit(t *testing.T) {
+	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+		t.Skip("skipping test in short mode.")
+	}
 	c := qt.New(t)
 	// generate voter account
 	privKey, pubKey, address, err := ballotproof.GenECDSAaccountForTest()
@@ -35,6 +39,9 @@ func TestVerifyVoteCircuit(t *testing.T) {
 }
 
 func TestMultipleVerifyVoteCircuit(t *testing.T) {
+	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+		t.Skip("skipping test in short mode.")
+	}
 	c := qt.New(t)
 	data := []VoterTestData{}
 	for i := 0; i < 10; i++ {

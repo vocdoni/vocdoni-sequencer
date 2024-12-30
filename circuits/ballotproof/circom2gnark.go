@@ -2,13 +2,15 @@ package ballotproof
 
 import "github.com/vocdoni/circom2gnark/parser"
 
-// Circom2GnarkProof
-func Circom2GnarkProof(witness []byte) (*parser.GnarkRecursionProof, error) {
-	// create circom proof and public signals
-	circomProof, pubSignals, err := CompileAndGenerateProofForTest(witness)
-	if err != nil {
-		return nil, err
-	}
+// BallotProofNPubInputs is the number of public inputs for the ballot proof
+// circom circuit.
+const BallotProofNPubInputs = 1
+
+// Circom2GnarkProof function is a wrapper to convert a circom proof to a gnark
+// proof, it receives the circom proof and the public signals as strings, as
+// snarkjs returns them. Then, it parses the inputs to the gnark format and
+// transforms the proof to the gnark recursion format.
+func Circom2GnarkProof(vkey []byte, circomProof, pubSignals string) (*parser.GnarkRecursionProof, error) {
 	// transform to gnark format
 	gnarkProofData, err := parser.UnmarshalCircomProofJSON([]byte(circomProof))
 	if err != nil {
@@ -29,11 +31,13 @@ func Circom2GnarkProof(witness []byte) (*parser.GnarkRecursionProof, error) {
 	return proof, nil
 }
 
-// Circom2GnarkPlaceholder
-func Circom2GnarkPlaceholder() (*parser.GnarkRecursionPlaceholders, error) {
+// Circom2GnarkPlaceholder function is a wrapper to convert the circom ballot
+// circuit to a gnark recursion placeholder, it returns the resulting
+// placeholders for the recursion.
+func Circom2GnarkPlaceholder(vkey []byte) (*parser.GnarkRecursionPlaceholders, error) {
 	gnarkVKeyData, err := parser.UnmarshalCircomVerificationKeyJSON(vkey)
 	if err != nil {
 		return nil, err
 	}
-	return parser.PlaceholdersForRecursion(gnarkVKeyData, 1, true)
+	return parser.PlaceholdersForRecursion(gnarkVKeyData, BallotProofNPubInputs, true)
 }

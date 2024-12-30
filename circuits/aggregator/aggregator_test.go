@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func TestAggregatorCircuit(t *testing.T) {
+	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+		t.Skip("skipping circuit tests...")
+	}
 	c := qt.New(t)
 	// inputs generation
 	now := time.Now()

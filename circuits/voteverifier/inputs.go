@@ -43,7 +43,7 @@ type VoterTestData struct {
 // processId is nil, it will be randomly generated. If something fails it
 // returns an error.
 func GenInputsForTest(votersData []VoterTestData, processId []byte) (*VoteVerifierTestResults, VerifyVoteCircuit, []VerifyVoteCircuit, error) {
-	circomPlaceholder, err := ballotproof.Circom2GnarkPlaceholder()
+	circomPlaceholder, err := ballotproof.Circom2GnarkPlaceholder(ballotproof.TestCircomVerificationKey)
 	if err != nil {
 		return nil, VerifyVoteCircuit{}, nil, err
 	}
