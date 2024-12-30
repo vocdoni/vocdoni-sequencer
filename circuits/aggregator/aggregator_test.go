@@ -14,7 +14,7 @@ import (
 )
 
 func TestAggregatorCircuit(t *testing.T) {
-	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
 		t.Skip("skipping circuit tests...")
 	}
 	c := qt.New(t)

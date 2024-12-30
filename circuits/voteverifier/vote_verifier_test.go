@@ -14,7 +14,7 @@ import (
 )
 
 func TestVerifyVoteCircuit(t *testing.T) {
-	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
 		t.Skip("skipping test in short mode.")
 	}
 	c := qt.New(t)
@@ -39,7 +39,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 }
 
 func TestMultipleVerifyVoteCircuit(t *testing.T) {
-	if os.Getenv("FULL_TEST_CIRCUITS") == "" {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
 		t.Skip("skipping test in short mode.")
 	}
 	c := qt.New(t)
