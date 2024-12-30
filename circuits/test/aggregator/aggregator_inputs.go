@@ -18,7 +18,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
-	
 )
 
 // AggregateTestResults struct includes relevant data after AggregateCircuit
