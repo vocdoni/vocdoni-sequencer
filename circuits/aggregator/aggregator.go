@@ -68,18 +68,22 @@ type AggregatorCircuit struct {
 	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
+func checkInputs(api frontend.API, inputsHash, maxCount, forceUniqueness, maxValue, minValue,
+	maxTotalCost, minTotalCost, costExp, costFromWeight, processId, censusRoot frontend.Variable,
+	encryptionKeys [2]frontend.Variable, nullifiers, commitments, addresses []frontend.Variable,
+	encryptedBallots [][MaxFields][2][2]frontend.Variable,
+) error {
 	// group all the inputs to hash them
 	inputs := []frontend.Variable{
-		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
-		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.EncryptionPubKey[0],
-		c.EncryptionPubKey[1], c.ProcessId, c.CensusRoot,
+		maxCount, forceUniqueness, maxValue, minValue, maxTotalCost,
+		minTotalCost, costExp, costFromWeight, encryptionKeys[0],
+		encryptionKeys[1], processId, censusRoot,
 	}
-	inputs = append(inputs, c.Nullifiers[:]...)
-	inputs = append(inputs, c.Commitments[:]...)
-	inputs = append(inputs, c.Addresses[:]...)
+	inputs = append(inputs, nullifiers...)
+	inputs = append(inputs, commitments...)
+	inputs = append(inputs, addresses...)
 	// include flattened EncryptedBallots
-	for _, voterBallots := range c.EncryptedBallots {
+	for _, voterBallots := range encryptedBallots {
 		for _, ballot := range voterBallots {
 			inputs = append(inputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
 		}
@@ -91,13 +95,17 @@ func (c *AggregatorCircuit) checkInputs(api frontend.API) error {
 	}
 	hFn.Write(inputs...)
 	// compare the hash with the provided InputsHash
-	api.AssertIsEqual(c.InputsHash, hFn.Sum())
+	api.AssertIsEqual(inputsHash, hFn.Sum())
 	return nil
 }
 
 func (c *AggregatorCircuit) Define(api frontend.API) error {
 	// check the inputs of the circuit
-	if err := c.checkInputs(api); err != nil {
+	if err := checkInputs(api, c.InputsHash, c.MaxCount, c.ForceUniqueness,
+		c.MaxValue, c.MinValue, c.MaxTotalCost, c.MinTotalCost, c.CostExp,
+		c.CostFromWeight, c.ProcessId, c.CensusRoot, c.EncryptionPubKey,
+		c.Nullifiers[:], c.Commitments[:], c.Addresses[:], c.EncryptedBallots[:],
+	); err != nil {
 		return err
 	}
 	// initialize the verifier
