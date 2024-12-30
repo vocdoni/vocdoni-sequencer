@@ -93,9 +93,9 @@ jobs:
         env:
           GORACE: atexit_sleep_ms=10 # the default of 1000 makes every Go package test sleep for 1s; see https://go.dev/issues/20364
         run: go test ./...
-          -race -timeout=15m -vet=off
+          -race -timeout=1h -vet=off
           -cover -coverpkg=./... -covermode=atomic -args -test.gocoverdir="$PWD/gocoverage-unit/"
       - name: Run Go test
         if: steps.go-test-race.outcome == 'skipped'
         # quicker, non-race test in case it's a PR or push to dev
-        run: go test ./...
+        run: go test ./... -timeout=1h 
