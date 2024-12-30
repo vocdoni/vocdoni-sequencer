@@ -15,7 +15,7 @@ import (
 
 func TestVerifySingleVoteCircuit(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
-		t.Skip("skipping test in short mode.")
+		t.Skip("skipping circuit tests...")
 	}
 	c := qt.New(t)
 	// generate voter account
@@ -40,7 +40,7 @@ func TestVerifySingleVoteCircuit(t *testing.T) {
 
 func TestVerifyMultipleVotesCircuit(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
-		t.Skip("skipping test in short mode.")
+		t.Skip("skipping circuit tests...")
 	}
 	c := qt.New(t)
 	data := []VoterTestData{}
