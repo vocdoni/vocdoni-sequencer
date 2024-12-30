@@ -1,4 +1,4 @@
-package voteverifier
+package voteverifiertest
 
 import (
 	"fmt"
@@ -10,18 +10,18 @@ import (
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
+	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 )
 
-func TestVerifyVoteCircuit(t *testing.T) {
+func TestVerifySingleVoteCircuit(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
 		t.Skip("skipping test in short mode.")
 	}
 	c := qt.New(t)
 	// generate voter account
-	privKey, pubKey, address, err := ballotproof.GenECDSAaccountForTest()
+	privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 	c.Assert(err, qt.IsNil)
-	_, placeholder, assigments, err := GenInputsForTest([]VoterTestData{
+	_, placeholder, assigments, err := VoteVerifierInputsForTest([]VoterTestData{
 		{
 			PrivKey: privKey,
 			PubKey:  pubKey,
@@ -38,7 +38,7 @@ func TestVerifyVoteCircuit(t *testing.T) {
 	fmt.Println("proving tooks", time.Since(now))
 }
 
-func TestMultipleVerifyVoteCircuit(t *testing.T) {
+func TestVerifyMultipleVotesCircuit(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
 		t.Skip("skipping test in short mode.")
 	}
@@ -46,11 +46,11 @@ func TestMultipleVerifyVoteCircuit(t *testing.T) {
 	data := []VoterTestData{}
 	for i := 0; i < 10; i++ {
 		// generate voter account
-		privKey, pubKey, address, err := ballotproof.GenECDSAaccountForTest()
+		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		c.Assert(err, qt.IsNil)
 		data = append(data, VoterTestData{privKey, pubKey, address})
 	}
-	_, placeholder, assigments, err := GenInputsForTest(data, nil)
+	_, placeholder, assigments, err := VoteVerifierInputsForTest(data, nil)
 	c.Assert(err, qt.IsNil)
 	assert := test.NewAssert(t)
 	now := time.Now()

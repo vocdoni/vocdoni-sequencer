@@ -3,9 +3,7 @@ package aggregator
 import (
 	"math"
 	"math/big"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
@@ -13,33 +11,13 @@ import (
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/consensys/gnark/test"
+	gtest "github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
+	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
-
-func TestAggregatorCircuit(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" {
-		t.Skip("skipping circuit tests...")
-	}
-	c := qt.New(t)
-	// inputs generation
-	now := time.Now()
-	processId := util.RandomBytes(20)
-	_, placeholder, assigments, err := GenInputsForTest(processId, 3)
-	c.Assert(err, qt.IsNil)
-	c.Logf("inputs generation tooks %s", time.Since(now).String())
-	// proving
-	now = time.Now()
-	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(placeholder, assigments,
-		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
-		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
-	c.Logf("proving tooks %s", time.Since(now).String())
-}
 
 type testCheckInputsCircuit struct {
 	InputsHash       frontend.Variable `gnark:",public"`
@@ -72,23 +50,23 @@ func TestCheckInputs(t *testing.T) {
 
 	processId := arbo.BigToFF(ecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
 	censusRoot := arbo.BigToFF(ecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
-	encryptionKey := ballotproof.GenEncryptionKeyForTest()
+	encryptionKey := ballottest.GenEncryptionKeyForTest()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// voter data
-	_, _, address, err := ballotproof.GenECDSAaccountForTest()
+	_, _, address, err := ballottest.GenECDSAaccountForTest()
 	c.Assert(err, qt.IsNil)
-	voterProofRes, err := ballotproof.MockVoterForTest(address.Bytes(), processId.Bytes(), encryptionKey)
+	voterProofRes, err := ballottest.BallotProofForTest(address.Bytes(), processId.Bytes(), encryptionKey)
 	c.Assert(err, qt.IsNil)
 
 	inputs := []*big.Int{
-		big.NewInt(int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.ForceUniqueness)),
-		big.NewInt(int64(ballotproof.MaxValue)),
-		big.NewInt(int64(ballotproof.MinValue)),
-		big.NewInt(int64(math.Pow(float64(ballotproof.MaxValue), float64(ballotproof.CostExp))) * int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.CostExp)),
-		big.NewInt(int64(ballotproof.CostFromWeight)),
+		big.NewInt(int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.ForceUniqueness)),
+		big.NewInt(int64(ballottest.MaxValue)),
+		big.NewInt(int64(ballottest.MinValue)),
+		big.NewInt(int64(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.CostExp)),
+		big.NewInt(int64(ballottest.CostFromWeight)),
 		encryptionKeyX,
 		encryptionKeyY,
 		processId,
@@ -121,14 +99,14 @@ func TestCheckInputs(t *testing.T) {
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	assigment := testCheckInputsCircuit{
 		InputsHash:       publicHash,
-		MaxCount:         ballotproof.MaxCount,
-		ForceUniqueness:  ballotproof.ForceUniqueness,
-		MaxValue:         ballotproof.MaxValue,
-		MinValue:         ballotproof.MinValue,
-		MaxTotalCost:     int(math.Pow(float64(ballotproof.MaxValue), float64(ballotproof.CostExp))) * ballotproof.MaxCount,
-		MinTotalCost:     ballotproof.MaxCount,
-		CostExp:          ballotproof.CostExp,
-		CostFromWeight:   ballotproof.CostFromWeight,
+		MaxCount:         ballottest.MaxCount,
+		ForceUniqueness:  ballottest.ForceUniqueness,
+		MaxValue:         ballottest.MaxValue,
+		MinValue:         ballottest.MinValue,
+		MaxTotalCost:     int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
+		MinTotalCost:     ballottest.MaxCount,
+		CostExp:          ballottest.CostExp,
+		CostFromWeight:   ballottest.CostFromWeight,
 		ProcessId:        processId,
 		EncryptionPubKey: [2]frontend.Variable{encryptionKeyX, encryptionKeyY},
 		CensusRoot:       censusRoot,
@@ -156,8 +134,8 @@ func TestCheckInputs(t *testing.T) {
 		}
 	}
 
-	assert := test.NewAssert(t)
+	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&testCheckInputsCircuit{}, &assigment,
-		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
-		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
+		gtest.WithCurves(ecc.BW6_761), gtest.WithBackends(backend.GROTH16),
+		gtest.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 }
