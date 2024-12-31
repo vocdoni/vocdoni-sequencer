@@ -122,7 +122,6 @@ func checkInnerInputHash(api frontend.API, expectedHash emulated.Element[sw_bn25
 ) error {
 	// hash the circom public-private inputs and compare them with the unique
 	// public input of the circom circuit
-
 	h, err := mimc7.NewMiMC(api)
 	if err != nil {
 		return err
@@ -136,8 +135,9 @@ func checkInnerInputHash(api frontend.API, expectedHash emulated.Element[sw_bn25
 // compares it with the inputs hash provided by the user. It returns an error
 // if the hash of the circom inputs hash does not match the inputs hash
 // provided by the user.
-func checkInputHash(api frontend.API, expectedHash, censusRoot frontend.Variable,
+func checkInputHash(api frontend.API,
 	circomInputsHash emulated.Element[sw_bn254.ScalarField],
+	censusRoot, expectedHash frontend.Variable,
 ) error {
 	// convert the circom public inputs hash from element of bn254 scalar field
 	// to the current compiler field as a variable
@@ -241,8 +241,8 @@ func (c *VerifyVoteCircuit) Define(api frontend.API) error {
 		return err
 	}
 	// check the inputs hash
-	if err := checkInputHash(api, c.InputsHash, c.CensusRoot,
-		c.CircomPublicInputsHash.Public[0]); err != nil {
+	if err := checkInputHash(api, c.CircomPublicInputsHash.Public[0],
+		c.CensusRoot, c.InputsHash); err != nil {
 		return err
 	}
 	// check the signature of the circom inputs hash provided as Secp256k1

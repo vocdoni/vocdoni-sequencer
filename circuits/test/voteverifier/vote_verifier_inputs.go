@@ -87,15 +87,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		nullifiers = append(nullifiers, voterProof.Nullifier)
 		commitments = append(commitments, voterProof.Commitment)
 		encryptedBallots = append(encryptedBallots, voterProof.EncryptedFields)
-		// transform the inputs hash to the field of the curve used by the
-		// circuit, if it is not done, the circuit will transform it during the
-		// witness calculation and the hash will be different, the resulting
-		// hash should be 32 bytes so if it is not, fill with zeros at the
-		// beginning of the bytes representation.
-		blsCircomInputsHash := arbo.BigToFF(ecc.BLS12_377.ScalarField(), voterProof.InputsHash).Bytes()
-		for len(blsCircomInputsHash) < 32 {
-			blsCircomInputsHash = append([]byte{0}, blsCircomInputsHash...)
-		}
+		// convert the circom inputs hash to the field of the curve used by the
+		// circuit as input for MIMC hash
+		blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, ecc.BLS12_377.ScalarField())
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballottest.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
