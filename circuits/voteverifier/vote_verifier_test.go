@@ -13,7 +13,6 @@ import (
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/signature/ecdsa"
-	"github.com/consensys/gnark/test"
 	gtest "github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
 	"github.com/iden3/go-iden3-crypto/mimc7"
@@ -136,8 +135,8 @@ func TestCheckInnerInputHash(t *testing.T) {
 
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&checkInnerInputsCircuit{}, &assigments,
-		test.WithCurves(gecc.BLS12_377),
-		test.WithBackends(backend.GROTH16))
+		gtest.WithCurves(gecc.BLS12_377),
+		gtest.WithBackends(backend.GROTH16))
 }
 
 type checkInputsCircuit struct {
@@ -186,8 +185,8 @@ func TestCheckInputsHash(t *testing.T) {
 
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&checkInputsCircuit{}, &assigments,
-		test.WithCurves(gecc.BLS12_377),
-		test.WithBackends(backend.GROTH16))
+		gtest.WithCurves(gecc.BLS12_377),
+		gtest.WithBackends(backend.GROTH16))
 }
 
 type verifySigForAddressCircuit struct {
@@ -237,6 +236,6 @@ func TestVerifySigForAddress(t *testing.T) {
 	}
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&verifySigForAddressCircuit{}, &assigments,
-		test.WithCurves(gecc.BLS12_377),
-		test.WithBackends(backend.GROTH16))
+		gtest.WithCurves(gecc.BLS12_377),
+		gtest.WithBackends(backend.GROTH16))
 }
