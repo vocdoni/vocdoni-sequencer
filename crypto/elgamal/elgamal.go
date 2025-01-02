@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/vocdoni/arbo"
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 )
 
@@ -18,7 +18,7 @@ func RandK() (*big.Int, error) {
 		return nil, fmt.Errorf("failed to generate random k: %v", err)
 	}
 	k := new(big.Int).SetBytes(kBytes)
-	return arbo.BigToFF(arbo.BN254BaseField, k), nil
+	return ecc.BigToFF(gecc.BN254.BaseField(), k), nil
 }
 
 // Encrypt function encrypts a message using the public key provided as

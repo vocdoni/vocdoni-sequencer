@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc"
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	bw6761mimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
 	"github.com/consensys/gnark/backend"
@@ -13,23 +13,15 @@ import (
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	gtest "github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
-	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
 type testCheckInputsCircuit struct {
-	InputsHash       frontend.Variable `gnark:",public"`
-	MaxCount         frontend.Variable
-	ForceUniqueness  frontend.Variable
-	MaxValue         frontend.Variable
-	MinValue         frontend.Variable
-	MaxTotalCost     frontend.Variable
-	MinTotalCost     frontend.Variable
-	CostExp          frontend.Variable
-	CostFromWeight   frontend.Variable
-	EncryptionPubKey [2]frontend.Variable
+	InputsHash frontend.Variable `gnark:",public"`
+	circuits.BallotMode[frontend.Variable]
 	ProcessId        frontend.Variable
 	CensusRoot       frontend.Variable
 	Nullifiers       [MaxVotes]frontend.Variable
@@ -39,17 +31,15 @@ type testCheckInputsCircuit struct {
 }
 
 func (c *testCheckInputsCircuit) Define(api frontend.API) error {
-	return checkInputs(api, c.InputsHash, c.MaxCount, c.ForceUniqueness,
-		c.MaxValue, c.MinValue, c.MaxTotalCost, c.MinTotalCost, c.CostExp,
-		c.CostFromWeight, c.ProcessId, c.CensusRoot, c.EncryptionPubKey,
+	return checkInputs(api, c.BallotMode, c.InputsHash, c.ProcessId, c.CensusRoot,
 		c.Nullifiers[:], c.Commitments[:], c.Addresses[:], c.EncryptedBallots[:])
 }
 
 func TestCheckInputs(t *testing.T) {
 	c := qt.New(t)
 
-	processId := arbo.BigToFF(ecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
-	censusRoot := arbo.BigToFF(ecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
+	processId := ecc.BigToFF(gecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
+	censusRoot := ecc.BigToFF(gecc.BW6_761.ScalarField(), new(big.Int).SetBytes(util.RandomBytes(20)))
 	encryptionKey := ballottest.GenEncryptionKeyForTest()
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// voter data
@@ -98,18 +88,20 @@ func TestCheckInputs(t *testing.T) {
 	}
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	assigment := testCheckInputsCircuit{
-		InputsHash:       publicHash,
-		MaxCount:         ballottest.MaxCount,
-		ForceUniqueness:  ballottest.ForceUniqueness,
-		MaxValue:         ballottest.MaxValue,
-		MinValue:         ballottest.MinValue,
-		MaxTotalCost:     int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
-		MinTotalCost:     ballottest.MaxCount,
-		CostExp:          ballottest.CostExp,
-		CostFromWeight:   ballottest.CostFromWeight,
-		ProcessId:        processId,
-		EncryptionPubKey: [2]frontend.Variable{encryptionKeyX, encryptionKeyY},
-		CensusRoot:       censusRoot,
+		InputsHash: publicHash,
+		BallotMode: circuits.BallotMode[frontend.Variable]{
+			MaxCount:         ballottest.MaxCount,
+			ForceUniqueness:  ballottest.ForceUniqueness,
+			MaxValue:         ballottest.MaxValue,
+			MinValue:         ballottest.MinValue,
+			MaxTotalCost:     int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
+			MinTotalCost:     ballottest.MaxCount,
+			CostExp:          ballottest.CostExp,
+			CostFromWeight:   ballottest.CostFromWeight,
+			EncryptionPubKey: [2]frontend.Variable{encryptionKeyX, encryptionKeyY},
+		},
+		ProcessId:  processId,
+		CensusRoot: censusRoot,
 	}
 	assigment.EncryptedBallots = [MaxVotes][MaxFields][2][2]frontend.Variable{}
 	assigment.Nullifiers = [MaxVotes]frontend.Variable{}
@@ -136,6 +128,6 @@ func TestCheckInputs(t *testing.T) {
 
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&testCheckInputsCircuit{}, &assigment,
-		gtest.WithCurves(ecc.BW6_761), gtest.WithBackends(backend.GROTH16),
-		gtest.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
+		gtest.WithCurves(gecc.BW6_761), gtest.WithBackends(backend.GROTH16),
+		gtest.WithProverOpts(stdgroth16.GetNativeProverOptions(gecc.BN254.ScalarField(), gecc.BW6_761.ScalarField())))
 }

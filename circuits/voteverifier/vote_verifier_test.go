@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc"
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr/mimc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
@@ -21,6 +21,7 @@ import (
 	"github.com/vocdoni/gnark-crypto-primitives/testutil"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballotprooftest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
@@ -73,8 +74,8 @@ func TestCheckInnerInputHash(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// group the circom inputs to hash
-	ffAddress := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(address.Bytes()))
-	ffProcessID := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
+	ffAddress := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(address.Bytes()))
+	ffProcessID := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(processId))
 	bigCircomInputs := []*big.Int{
 		big.NewInt(int64(ballotprooftest.MaxCount)),
 		big.NewInt(int64(ballotprooftest.ForceUniqueness)),
@@ -135,7 +136,7 @@ func TestCheckInnerInputHash(t *testing.T) {
 
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&checkInnerInputsCircuit{}, &assigments,
-		test.WithCurves(ecc.BLS12_377),
+		test.WithCurves(gecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
 }
 
@@ -170,7 +171,7 @@ func TestCheckInputsHash(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
-	blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, ecc.BLS12_377.ScalarField())
+	blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
 	// hash the inputs of gnark circuit (circom inputs hash + census root)
 	hFn := mimc.NewMiMC()
 	hFn.Write(blsCircomInputsHash)
@@ -185,7 +186,7 @@ func TestCheckInputsHash(t *testing.T) {
 
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&checkInputsCircuit{}, &assigments,
-		test.WithCurves(ecc.BLS12_377),
+		test.WithCurves(gecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
 }
 
@@ -216,7 +217,7 @@ func TestVerifySigForAddress(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
-	blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, ecc.BLS12_377.ScalarField())
+	blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
 	leAddress := new(big.Int).SetBytes(arbo.SwapEndianness(address.Bytes()))
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(privKey, blsCircomInputsHash)
@@ -236,6 +237,6 @@ func TestVerifySigForAddress(t *testing.T) {
 	}
 	assert := gtest.NewAssert(t)
 	assert.SolvingSucceeded(&verifySigForAddressCircuit{}, &assigments,
-		test.WithCurves(ecc.BLS12_377),
+		test.WithCurves(gecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
 }

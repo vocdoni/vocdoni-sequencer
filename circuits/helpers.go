@@ -3,7 +3,7 @@ package circuits
 import (
 	"math/big"
 
-	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 )
 
 // BigIntArrayToN pads the big.Int array to n elements, if needed,
@@ -35,7 +35,7 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 // 32 bytes so if it is not, fill with zeros at the beginning of the bytes
 // representation.
 func BigIntToMIMCHash(input, base *big.Int) []byte {
-	hash := arbo.BigToFF(base, input).Bytes()
+	hash := ecc.BigToFF(base, input).Bytes()
 	for len(hash) < 32 {
 		hash = append([]byte{0}, hash...)
 	}

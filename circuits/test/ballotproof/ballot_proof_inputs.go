@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -253,8 +254,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(address))
-	ffProcessID := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
+	ffAddress := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(address))
+	ffProcessID := ecc.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
 		big.NewInt(int64(MaxCount)),
@@ -297,7 +298,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"cipherfields":     strCipherfields,
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(secret)).String(),
+		"secret":           ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)

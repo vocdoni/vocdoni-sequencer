@@ -26,11 +26,14 @@
 package aggregator
 
 import (
+	"fmt"
+
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
 const (
@@ -44,17 +47,15 @@ type AggregatorCircuit struct {
 	// The following variables are priv-public inputs, so should be hashed and
 	// compared with the InputsHash. All the variables should be hashed in the
 	// same order as they are defined here.
-	MaxCount         frontend.Variable                            // Part of InputsHash
-	ForceUniqueness  frontend.Variable                            // Part of InputsHash
-	MaxValue         frontend.Variable                            // Part of InputsHash
-	MinValue         frontend.Variable                            // Part of InputsHash
-	MaxTotalCost     frontend.Variable                            // Part of InputsHash
-	MinTotalCost     frontend.Variable                            // Part of InputsHash
-	CostExp          frontend.Variable                            // Part of InputsHash
-	CostFromWeight   frontend.Variable                            // Part of InputsHash
-	EncryptionPubKey [2]frontend.Variable                         // Part of InputsHash
-	ProcessId        frontend.Variable                            // Part of InputsHash
-	CensusRoot       frontend.Variable                            // Part of InputsHash
+
+	// BallotMode is a struct that contains the common inputs for all the
+	// voters. The values of this struct should be the same for all the voters
+	// in the same process.
+	circuits.BallotMode[frontend.Variable]
+	// Other common inputs
+	ProcessId  frontend.Variable // Part of InputsHash
+	CensusRoot frontend.Variable // Part of InputsHash
+	// Voter inputs
 	Nullifiers       [MaxVotes]frontend.Variable                  // Part of InputsHash
 	Commitments      [MaxVotes]frontend.Variable                  // Part of InputsHash
 	Addresses        [MaxVotes]frontend.Variable                  // Part of InputsHash
@@ -67,16 +68,16 @@ type AggregatorCircuit struct {
 	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-func checkInputs(api frontend.API, inputsHash, maxCount, forceUniqueness, maxValue, minValue,
-	maxTotalCost, minTotalCost, costExp, costFromWeight, processId, censusRoot frontend.Variable,
-	encryptionKeys [2]frontend.Variable, nullifiers, commitments, addresses []frontend.Variable,
+func checkInputs(api frontend.API, mode circuits.BallotMode[frontend.Variable],
+	inputsHash, processId, censusRoot frontend.Variable,
+	nullifiers, commitments, addresses []frontend.Variable,
 	encryptedBallots [][MaxFields][2][2]frontend.Variable,
 ) error {
 	// group all the inputs to hash them
 	inputs := []frontend.Variable{
-		maxCount, forceUniqueness, maxValue, minValue, maxTotalCost,
-		minTotalCost, costExp, costFromWeight, encryptionKeys[0],
-		encryptionKeys[1], processId, censusRoot,
+		mode.MaxCount, mode.ForceUniqueness, mode.MaxValue, mode.MinValue, mode.MaxTotalCost,
+		mode.MinTotalCost, mode.CostExp, mode.CostFromWeight, mode.EncryptionPubKey[0],
+		mode.EncryptionPubKey[1], processId, censusRoot,
 	}
 	inputs = append(inputs, nullifiers...)
 	inputs = append(inputs, commitments...)
@@ -90,7 +91,7 @@ func checkInputs(api frontend.API, inputsHash, maxCount, forceUniqueness, maxVal
 	// hash the inputs
 	hFn, err := mimc.NewMiMC(api)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating hash function: %w", err)
 	}
 	hFn.Write(inputs...)
 	// compare the hash with the provided InputsHash
@@ -100,17 +101,16 @@ func checkInputs(api frontend.API, inputsHash, maxCount, forceUniqueness, maxVal
 
 func (c *AggregatorCircuit) Define(api frontend.API) error {
 	// check the inputs of the circuit
-	if err := checkInputs(api, c.InputsHash, c.MaxCount, c.ForceUniqueness,
-		c.MaxValue, c.MinValue, c.MaxTotalCost, c.MinTotalCost, c.CostExp,
-		c.CostFromWeight, c.ProcessId, c.CensusRoot, c.EncryptionPubKey,
+	if err := checkInputs(api,
+		c.BallotMode, c.InputsHash, c.ProcessId, c.CensusRoot,
 		c.Nullifiers[:], c.Commitments[:], c.Addresses[:], c.EncryptedBallots[:],
 	); err != nil {
-		return err
+		return fmt.Errorf("inputs check error: %w", err)
 	}
 	// initialize the verifier
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create BLS12-377 verifier: %w", err)
 	}
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
@@ -119,10 +119,10 @@ func (c *AggregatorCircuit) Define(api frontend.API) error {
 	for i := 0; i < len(c.VerifyProofs); i++ {
 		vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to switch verification key: %w", err)
 		}
 		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			return err
+			return fmt.Errorf("failed to verify proof %d: %w", i, err)
 		}
 		expectedValidVotes = api.Add(expectedValidVotes, validProofs[i])
 		totalValidVotes = api.Add(totalValidVotes, validProofs[i])
