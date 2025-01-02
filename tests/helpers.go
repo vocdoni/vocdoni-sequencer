@@ -14,7 +14,9 @@ import (
 // toBigInt converts an int64 to a *types.BigInt
 func toBigInt(i int64) *types.BigInt {
 	bi := new(types.BigInt)
-	bi.UnmarshalText([]byte(fmt.Sprintf("%d", i)))
+	if err := bi.UnmarshalText([]byte(fmt.Sprintf("%d", i))); err != nil {
+		panic(err)
+	}
 	return bi
 }
 

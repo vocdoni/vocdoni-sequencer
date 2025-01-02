@@ -1,4 +1,4 @@
-package ballotproof
+package circuits
 
 import "github.com/vocdoni/circom2gnark/parser"
 

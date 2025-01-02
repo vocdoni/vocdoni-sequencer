@@ -43,7 +43,8 @@ type Storage struct {
 	globalLock sync.Mutex
 }
 
-// New creates a new Storage instance and attempts to recover from a previous crash.
+// New creates a new Storage instance and attempts to recover from a previous
+// crash.
 func New(db db.Database) *Storage {
 	s := &Storage{db: db}
 	go func() {
@@ -55,13 +56,13 @@ func New(db db.Database) *Storage {
 	return s
 }
 
-// recover cleans up any stale reservations and ensures that no items are blocked.
-// After a crash, any reservations left behind must be cleared so that
-// the corresponding ballots or aggregated batches are available for processing again.
+// recover cleans up any stale reservations and ensures that no items are
+// blocked. After a crash, any reservations left behind must be cleared so that
+// the corresponding ballots or aggregated batches are available for processing
+// again.
 func (s *Storage) recover() error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
-
 	// Clear all reservations
 	if err := s.clearAllReservations(ballotReservationPrefix); err != nil {
 		return fmt.Errorf("failed to clear ballot reservations: %w", err)
@@ -76,20 +77,21 @@ func (s *Storage) recover() error {
 	return nil
 }
 
-// clearAllReservations iterates over the given reservation prefix and removes all reservation entries.
-// This ensures that no item remains "reserved" after a crash.
+// clearAllReservations iterates over the given reservation prefix and removes
+// all reservation entries. This ensures that no item remains "reserved" after
+// a crash.
 func (s *Storage) clearAllReservations(prefix []byte) error {
 	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
 	var keysToDelete [][]byte
-
 	// Collect all keys to delete
-	rd.Iterate(nil, func(k, _ []byte) bool {
+	if err := rd.Iterate(nil, func(k, _ []byte) bool {
 		kCopy := make([]byte, len(k))
 		copy(kCopy, k)
 		keysToDelete = append(keysToDelete, kCopy)
 		return true
-	})
-
+	}); err != nil {
+		return fmt.Errorf("failed to iterate over reservation keys: %w", err)
+	}
 	// Delete them in a write transaction
 	if len(keysToDelete) > 0 {
 		wTx := s.db.WriteTx()
@@ -139,7 +141,7 @@ func (s *Storage) ReleaseStaleReservations(maxAge time.Duration) error {
 func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Duration) error {
 	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
 	var staleKeys [][]byte
-	rd.Iterate(nil, func(k, v []byte) bool {
+	if err := rd.Iterate(nil, func(k, v []byte) bool {
 		r, err := decodeReservation(v)
 		if err != nil {
 			staleKeys = append(staleKeys, append([]byte(nil), k...))
@@ -149,8 +151,9 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 			staleKeys = append(staleKeys, append([]byte(nil), k...))
 		}
 		return true
-	})
-
+	}); err != nil {
+		return fmt.Errorf("iterate stale reservations: %w", err)
+	}
 	if len(staleKeys) == 0 {
 		return nil
 	}
@@ -166,7 +169,6 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 			return fmt.Errorf("commit stale deletion: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -231,10 +233,10 @@ func (s *Storage) setArtifact(prefix []byte, key []byte, artifact any) error {
 	return wTx.Commit()
 }
 
-// getArtifact helper function retrieves any kind of artifact from the storage. It
-// receives the prefix of the key. It returns the artifact unmarshalled.
-// If the key is not provided, it retrieves the first artifact found for the prefix,
-// and returns ErrNoMoreElements if there are no more elements.
+// getArtifact helper function retrieves any kind of artifact from the storage.
+// It receives the prefix of the key. It returns the artifact unmarshalled.
+// If the key is not provided, it retrieves the first artifact found for the
+// prefix, and returns ErrNoMoreElements if there are no more elements.
 func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 	var data []byte
 	var err error
@@ -246,10 +248,12 @@ func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 	} else {
 		// iterate over the keys in the database, take the next key
 		// and get the artifact
-		prefixeddb.NewPrefixedReader(s.db, prefix).Iterate(nil, func(_, value []byte) bool {
+		if err := prefixeddb.NewPrefixedReader(s.db, prefix).Iterate(nil, func(_, value []byte) bool {
 			data = value
 			return false
-		})
+		}); err != nil {
+			return nil, err
+		}
 		if data == nil {
 			return nil, ErrNoMoreElements
 		}
@@ -260,6 +264,5 @@ func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 	if err := gob.NewDecoder(r).Decode(artifact); err != nil {
 		return nil, fmt.Errorf("could not decode artifact: %w", err)
 	}
-
 	return artifact, nil
 }

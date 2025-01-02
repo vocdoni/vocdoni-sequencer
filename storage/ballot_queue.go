@@ -33,7 +33,7 @@ func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 
 	pr := prefixeddb.NewPrefixedReader(s.db, ballotPrefix)
 	var chosenKey, chosenVal []byte
-	pr.Iterate(nil, func(k, v []byte) bool {
+	if err := pr.Iterate(nil, func(k, v []byte) bool {
 		// check if reserved
 		if s.isReserved(ballotReservationPrefix, k) {
 			return true
@@ -41,7 +41,9 @@ func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 		chosenKey = k
 		chosenVal = v
 		return false
-	})
+	}); err != nil {
+		return nil, nil, fmt.Errorf("iterate ballots: %w", err)
+	}
 	if chosenVal == nil {
 		return nil, nil, ErrNoMoreElements
 	}
@@ -105,7 +107,7 @@ func (s *Storage) PullVerifiedBallots(processID []byte, maxCount int) ([]*Verifi
 	rd := prefixeddb.NewPrefixedReader(s.db, verifiedBallotPrefix)
 	var res []*VerifiedBallot
 	var keys [][]byte
-	rd.Iterate(processID, func(k, v []byte) bool {
+	if err := rd.Iterate(processID, func(k, v []byte) bool {
 		key := append(processID, k...)
 		if maxCount > 0 && len(res) >= maxCount {
 			return false
@@ -130,7 +132,9 @@ func (s *Storage) PullVerifiedBallots(processID []byte, maxCount int) ([]*Verifi
 		res = append(res, &vb)
 		keys = append(keys, keyCopy)
 		return true
-	})
+	}); err != nil {
+		return nil, nil, fmt.Errorf("iterate ballots: %w", err)
+	}
 
 	// Return ErrNotFound if we found no ballots at all
 	if len(res) == 0 {
@@ -147,10 +151,12 @@ func (s *Storage) CountVerifiedBallots(processID []byte) int {
 
 	rd := prefixeddb.NewPrefixedReader(s.db, verifiedBallotPrefix)
 	count := 0
-	rd.Iterate(processID, func(_, _ []byte) bool {
+	if err := rd.Iterate(processID, func(_, _ []byte) bool {
 		count++
 		return true
-	})
+	}); err != nil {
+		log.Warnw("failed to count verified ballots", "error", err.Error())
+	}
 	return count
 }
 
@@ -176,7 +182,7 @@ func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []b
 
 	pr := prefixeddb.NewPrefixedReader(s.db, aggregBatchPrefix)
 	var chosenKey, chosenVal []byte
-	pr.Iterate(processID, func(k, v []byte) bool {
+	if err := pr.Iterate(processID, func(k, v []byte) bool {
 		key := append(processID, k...)
 		if s.isReserved(aggregBatchReservPrefix, key) {
 			return true
@@ -184,7 +190,9 @@ func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []b
 		chosenKey = key
 		chosenVal = v
 		return false
-	})
+	}); err != nil {
+		return nil, nil, fmt.Errorf("iterate agg batches: %w", err)
+	}
 	if chosenVal == nil {
 		return nil, nil, ErrNoMoreElements
 	}

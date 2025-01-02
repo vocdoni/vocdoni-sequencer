@@ -9,25 +9,22 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	qt "github.com/frankban/quicktest"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
 func TestSameCircuitsInfo(t *testing.T) {
 	c := qt.New(t)
-
-	// generate users accounts and census
-	privKey, pubKey, address, err := ballotproof.GenECDSAaccountForTest()
+	// generate inner circuit placeholders
+	circomPlaceholder, err := circuits.Circom2GnarkPlaceholder(ballottest.TestCircomVerificationKey)
 	c.Assert(err, qt.IsNil)
-	vvData := []voteverifier.VoterTestData{{
-		PrivKey: privKey,
-		PubKey:  pubKey,
-		Address: address,
-	}}
-	_, vvPlaceholder, _, err := voteverifier.GenInputsForTest(vvData, nil)
-	c.Assert(err, qt.IsNil)
-
-	mainCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
+	// compile the main circuit
+	mainCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
+		CircomVerificationKey:  circomPlaceholder.Vk,
+		CircomProof:            circomPlaceholder.Proof,
+		CircomPublicInputsHash: circomPlaceholder.Witness,
+	})
 	c.Assert(err, qt.IsNil)
 	mainVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](mainCCS)
 

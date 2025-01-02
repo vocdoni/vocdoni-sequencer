@@ -1,4 +1,4 @@
-package ballotproof
+package ballotprooftest
 
 import (
 	"crypto/ecdsa"
@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -26,13 +27,26 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
-//go:embed ballot_proof.wasm
+const (
+	// default process config
+	NLevels         = 160
+	NFields         = 8
+	MaxCount        = 5
+	ForceUniqueness = 0
+	MaxValue        = 16
+	MinValue        = 0
+	CostExp         = 2
+	CostFromWeight  = 0
+	Weight          = 10
+)
+
+//go:embed circom_assets/ballot_proof.wasm
 var TestCircomCircuit []byte
 
-//go:embed ballot_proof_pkey.zkey
+//go:embed circom_assets/ballot_proof_pkey.zkey
 var TestCircomProvingKey []byte
 
-//go:embed ballot_proof_vkey.json
+//go:embed circom_assets/ballot_proof_vkey.json
 var TestCircomVerificationKey []byte
 
 // GenECDSAaccountForTest generates a new ECDSA account and returns the private
@@ -197,12 +211,12 @@ type VoterProofResult struct {
 	InputsHash          *big.Int
 }
 
-// MockVoterForTest function return the information after proving a valid ballot
+// BallotProofForTest function return the information after proving a valid ballot
 // for the voter address, process id and encryption key provided. It generates
 // and encrypts the fields for the ballot, the nullifier and the commitment for
 // the user and generates a proof of a valid vote. It returns a *VoterProofResult
 // and an error if it fails.
-func MockVoterForTest(address, processId []byte, encryptionKey ecc.Point) (*VoterProofResult, error) {
+func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*VoterProofResult, error) {
 	// get encryption key coords
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// generate random fields
@@ -240,8 +254,8 @@ func MockVoterForTest(address, processId []byte, encryptionKey ecc.Point) (*Vote
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(address))
-	ffProcessID := arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
+	ffAddress := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(address))
+	ffProcessID := ecc.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
 		big.NewInt(int64(MaxCount)),
@@ -284,7 +298,7 @@ func MockVoterForTest(address, processId []byte, encryptionKey ecc.Point) (*Vote
 		"cipherfields":     strCipherfields,
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           arbo.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(secret)).String(),
+		"secret":           ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)
@@ -296,7 +310,7 @@ func MockVoterForTest(address, processId []byte, encryptionKey ecc.Point) (*Vote
 	if err != nil {
 		return nil, err
 	}
-	proof, err := Circom2GnarkProof(TestCircomVerificationKey, circomProof, pubSignals)
+	proof, err := circuits.Circom2GnarkProof(TestCircomVerificationKey, circomProof, pubSignals)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package aggregator
+package aggregatortest
 
 import (
 	"fmt"
@@ -15,8 +15,9 @@ import (
 	"github.com/consensys/gnark/std/math/emulated/emparams"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
+	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
 )
 
 // AggregateTestResults struct includes relevant data after AggregateCircuit
@@ -29,31 +30,31 @@ type AggregateTestResults struct {
 	Nullifiers            []*big.Int
 	Commitments           []*big.Int
 	Addresses             []*big.Int
-	EncryptedBallots      [][ballotproof.NFields][2][2]*big.Int
+	EncryptedBallots      [][ballottest.NFields][2][2]*big.Int
 	PlainEncryptedBallots []*big.Int
 }
 
-// GenInputsForTest returns the AggregateTestResults, the placeholder ant the
-// assigments of a AggregatorCircuit for the processId provided generating
-// nValidVoters. If something fails it returns an error.
-func GenInputsForTest(processId []byte, nValidVoters int) (
-	*AggregateTestResults, *AggregatorCircuit, *AggregatorCircuit, error,
+// AggregarorInputsForTest returns the AggregateTestResults, the placeholder
+// and the assigments of a AggregatorCircuit for the processId provided
+// generating nValidVoters. If something fails it returns an error.
+func AggregarorInputsForTest(processId []byte, nValidVoters int) (
+	*AggregateTestResults, *aggregator.AggregatorCircuit, *aggregator.AggregatorCircuit, error,
 ) {
 	// generate users accounts and census
-	vvData := []voteverifier.VoterTestData{}
+	vvData := []voteverifiertest.VoterTestData{}
 	for i := 0; i < nValidVoters; i++ {
-		privKey, pubKey, address, err := ballotproof.GenECDSAaccountForTest()
+		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		vvData = append(vvData, voteverifier.VoterTestData{
+		vvData = append(vvData, voteverifiertest.VoterTestData{
 			PrivKey: privKey,
 			PubKey:  pubKey,
 			Address: address,
 		})
 	}
 	// generate vote verifier circuit and inputs
-	vvInputs, vvPlaceholder, vvAssigments, err := voteverifier.GenInputsForTest(vvData, processId)
+	vvInputs, vvPlaceholder, vvAssigments, err := voteverifiertest.VoteVerifierInputsForTest(vvData, processId)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -68,8 +69,8 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// generate voters proofs
 	totalPlainEncryptedBallots := []*big.Int{}
-	proofs := [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
-	pubInputs := [MaxVotes]stdgroth16.Witness[emparams.BLS12377Fr]{}
+	proofs := [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
+	pubInputs := [aggregator.MaxVotes]stdgroth16.Witness[emparams.BLS12377Fr]{}
 	for i := range vvAssigments {
 		// flat encrypted ballots
 		for _, b := range vvInputs.EncryptedBallots[i] {
@@ -106,28 +107,28 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// compute public inputs hash
 	inputs := []*big.Int{
-		big.NewInt(int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.ForceUniqueness)),
-		big.NewInt(int64(ballotproof.MaxValue)),
-		big.NewInt(int64(ballotproof.MinValue)),
-		big.NewInt(int64(math.Pow(float64(ballotproof.MaxValue), float64(ballotproof.CostExp))) * int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.MaxCount)),
-		big.NewInt(int64(ballotproof.CostExp)),
-		big.NewInt(int64(ballotproof.CostFromWeight)),
+		big.NewInt(int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.ForceUniqueness)),
+		big.NewInt(int64(ballottest.MaxValue)),
+		big.NewInt(int64(ballottest.MinValue)),
+		big.NewInt(int64(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.MaxCount)),
+		big.NewInt(int64(ballottest.CostExp)),
+		big.NewInt(int64(ballottest.CostFromWeight)),
 		vvInputs.EncryptionPubKey[0],
 		vvInputs.EncryptionPubKey[1],
 		new(big.Int).SetBytes(vvInputs.ProcessID),
 		vvInputs.CensusRoot,
 	}
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, MaxVotes)
-	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, MaxVotes)
+	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, aggregator.MaxVotes)
+	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, aggregator.MaxVotes)
 	bigAddresses := []*big.Int{}
 	for _, d := range vvData {
 		bigAddresses = append(bigAddresses, new(big.Int).SetBytes(d.Address.Bytes()))
 	}
-	addresses := circuits.BigIntArrayToN(bigAddresses, MaxVotes)
-	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, MaxVotes*MaxFields*4)
+	addresses := circuits.BigIntArrayToN(bigAddresses, aggregator.MaxVotes)
+	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, aggregator.MaxVotes*ballottest.NFields*4)
 	// append voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	inputs = append(inputs, nullifiers...)
 	inputs = append(inputs, commitments...)
@@ -145,18 +146,20 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 	}
 	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	// init final assigments stuff
-	finalAssigments := &AggregatorCircuit{
-		InputsHash:         publicHash,
-		ValidVotes:         EncodeProofsSelector(nValidVoters),
-		MaxCount:           ballotproof.MaxCount,
-		ForceUniqueness:    ballotproof.ForceUniqueness,
-		MaxValue:           ballotproof.MaxValue,
-		MinValue:           ballotproof.MinValue,
-		MaxTotalCost:       int(math.Pow(float64(ballotproof.MaxValue), float64(ballotproof.CostExp))) * ballotproof.MaxCount,
-		MinTotalCost:       ballotproof.MaxCount,
-		CostExp:            ballotproof.CostExp,
-		CostFromWeight:     ballotproof.CostFromWeight,
-		EncryptionPubKey:   [2]frontend.Variable{vvInputs.EncryptionPubKey[0], vvInputs.EncryptionPubKey[1]},
+	finalAssigments := &aggregator.AggregatorCircuit{
+		InputsHash: publicHash,
+		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
+		BallotMode: circuits.BallotMode[frontend.Variable]{
+			MaxCount:         ballottest.MaxCount,
+			ForceUniqueness:  ballottest.ForceUniqueness,
+			MaxValue:         ballottest.MaxValue,
+			MinValue:         ballottest.MinValue,
+			MaxTotalCost:     int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
+			MinTotalCost:     ballottest.MaxCount,
+			CostExp:          ballottest.CostExp,
+			CostFromWeight:   ballottest.CostFromWeight,
+			EncryptionPubKey: [2]frontend.Variable{vvInputs.EncryptionPubKey[0], vvInputs.EncryptionPubKey[1]},
+		},
 		ProcessId:          new(big.Int).SetBytes(vvInputs.ProcessID),
 		CensusRoot:         vvInputs.CensusRoot,
 		VerifyProofs:       proofs,
@@ -167,7 +170,7 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 		finalAssigments.Nullifiers[i] = vvInputs.Nullifiers[i]
 		finalAssigments.Commitments[i] = vvInputs.Commitments[i]
 		finalAssigments.Addresses[i] = new(big.Int).SetBytes(vvData[i].Address.Bytes())
-		for j := 0; j < MaxFields; j++ {
+		for j := 0; j < ballottest.NFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {
 					finalAssigments.EncryptedBallots[i][j][n][m] = vvInputs.EncryptedBallots[i][j][n][m]
@@ -176,9 +179,9 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 		}
 	}
 	// create final placeholder
-	finalPlaceholder := &AggregatorCircuit{
-		VerifyPublicInputs: [MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		VerifyProofs:       [MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
+	finalPlaceholder := &aggregator.AggregatorCircuit{
+		VerifyPublicInputs: [aggregator.MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
+		VerifyProofs:       [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 		VerificationKeys:   [2]stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{},
 	}
 	// fix the vote verifier verification key
@@ -193,7 +196,7 @@ func GenInputsForTest(processId []byte, nValidVoters int) (
 		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](vvCCS)
 	}
 	// fill placeholder and witness with dummy circuits
-	if err := FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters); err != nil {
+	if err := aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters); err != nil {
 		return nil, nil, nil, err
 	}
 	return &AggregateTestResults{

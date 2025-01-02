@@ -42,7 +42,7 @@ func TestCheckInvalidChars(t *testing.T) {
 	// now enable panic and try again: should recover() and never reach t.Errorf()
 	panicOnInvalidChars = true
 	Init("debug", "stderr", nil)
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	Debugf("%s", v)
 	t.Errorf("Debugf(%s) should have panicked because of invalid char", v)
 }

@@ -1,6 +1,10 @@
 package circuits
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+)
 
 // BigIntArrayToN pads the big.Int array to n elements, if needed,
 // with zeros.
@@ -23,4 +27,17 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 		strArr = append(strArr, b.String())
 	}
 	return strArr
+}
+
+// BigIntToMIMCHash transform the inputs hash to the field provided, if it is
+// not done, the circuit will transform it during the witness calculation and
+// the resulting hash will be different. Moreover, the input hash should be
+// 32 bytes so if it is not, fill with zeros at the beginning of the bytes
+// representation.
+func BigIntToMIMCHash(input, base *big.Int) []byte {
+	hash := ecc.BigToFF(base, input).Bytes()
+	for len(hash) < 32 {
+		hash = append([]byte{0}, hash...)
+	}
+	return hash
 }
