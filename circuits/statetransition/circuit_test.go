@@ -24,6 +24,9 @@ import (
 )
 
 func TestCircuitCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
@@ -34,6 +37,9 @@ func TestCircuitCompile(t *testing.T) {
 }
 
 func TestCircuitProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
 	s := newMockState(t)
 
 	// first batch
@@ -145,6 +151,9 @@ func (circuit CircuitBallots) Define(api frontend.API) error {
 }
 
 func TestCircuitBallotsCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
@@ -155,6 +164,9 @@ func TestCircuitBallotsCompile(t *testing.T) {
 }
 
 func TestCircuitBallotsProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
 	s := newMockState(t)
 
 	if err := s.StartBatch(); err != nil {
@@ -192,6 +204,10 @@ func (circuit CircuitMerkleTransitions) Define(api frontend.API) error {
 }
 
 func TestCircuitMerkleTransitionsCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
@@ -202,6 +218,10 @@ func TestCircuitMerkleTransitionsCompile(t *testing.T) {
 }
 
 func TestCircuitMerkleTransitionsProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
 	s := newMockState(t)
 
 	if err := s.StartBatch(); err != nil {
