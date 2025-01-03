@@ -55,7 +55,6 @@ func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 
 	// set reservation
 	if err := s.setReservation(ballotReservationPrefix, chosenKey); err != nil {
-		// can't reserve? try next would be ideal, but let's return no elements
 		return nil, nil, ErrNoMoreElements
 	}
 

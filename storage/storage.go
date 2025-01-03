@@ -9,9 +9,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
 )
+
+func init() {
+	// Register types for gob encoding/decoding
+	gob.RegisterName("Metadata", &types.Metadata{})
+	gob.RegisterName("MultilingualString", types.MultilingualString{})
+	gob.RegisterName("MediaMetadata", types.MediaMetadata{})
+	gob.RegisterName("Question", types.Question{})
+	gob.RegisterName("Choice", types.Choice{})
+	gob.RegisterName("ProcessType", types.ProcessType{})
+	gob.RegisterName("GenericMetadata", types.GenericMetadata{})
+	gob.RegisterName("BallotMode", types.BallotMode{})
+}
 
 var (
 	ErrKeyAlreadyExists = errors.New("key already exists")
@@ -234,7 +247,7 @@ func (s *Storage) setArtifact(prefix []byte, key []byte, artifact any) error {
 }
 
 // getArtifact helper function retrieves any kind of artifact from the storage.
-// It receives the prefix of the key. It returns the artifact unmarshalled.
+// It receives the prefix of the key and a pointer to the artifact to decode into.
 // If the key is not provided, it retrieves the first artifact found for the
 // prefix, and returns ErrNoMoreElements if there are no more elements.
 func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
@@ -243,7 +256,7 @@ func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 	if key != nil {
 		data, err = prefixeddb.NewPrefixedReader(s.db, prefix).Get(key)
 		if err != nil {
-			return nil, err
+			return nil, ErrNotFound
 		}
 	} else {
 		// iterate over the keys in the database, take the next key
@@ -259,10 +272,25 @@ func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
 		}
 	}
 
-	var artifact any
+	// Create a new instance of the concrete type
+	var metadata types.Metadata
 	r := bytes.NewReader(data)
-	if err := gob.NewDecoder(r).Decode(artifact); err != nil {
+	if err := gob.NewDecoder(r).Decode(&metadata); err != nil {
 		return nil, fmt.Errorf("could not decode artifact: %w", err)
 	}
-	return artifact, nil
+	return &metadata, nil
+}
+
+// listArtifacts retrieves all the keys for a given prefix.
+func (s *Storage) listArtifacts(prefix []byte) ([][]byte, error) {
+	var keys [][]byte
+	if err := prefixeddb.NewPrefixedReader(s.db, prefix).Iterate(nil, func(k, _ []byte) bool {
+		kcopy := make([]byte, len(k))
+		copy(kcopy, k)
+		keys = append(keys, kcopy)
+		return true
+	}); err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
