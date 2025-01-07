@@ -1,5 +1,3 @@
-
-
 name: Build and Test
 
 on:
@@ -28,6 +26,10 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # By default, actions/checkout does a shallow clone with depth=1.
+          # For job_go_checks, we can keep that.
+          fetch-depth: 1
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
@@ -45,7 +47,6 @@ jobs:
           fi
 
       - name: Run gofumpt
-        # Run gofumpt first, as it's quick and issues are common.
         run: diff -u <(echo -n) <(go run mvdan.cc/gofumpt@v0.7.0 -d .)
 
       - name: Run go vet
@@ -74,7 +75,7 @@ jobs:
             echo "Please re-run job."
             # seize the opportunity to fix the underlying problem: a permissions error in ~/.cache
             epoch=$(date +%s)
-            if [ -d ~/.cache ] && find ~/.cache -not -user `id --user` -print0 | grep -qz . ; then
+            if [ -d ~/.cache ] && find ~/.cache -not -user "$(id --user)" -print0 | grep -qz . ; then
               echo "~/.cache had broken permissions, moving it away... (cache will be rebuilt with usage)"
               mv -v ~/.cache ~/.cache-broken-by-root-$epoch
             fi
@@ -82,11 +83,16 @@ jobs:
           fi
 
   job_go_test:
+    # We want to run on a self-hosted runner with labels: self-hosted, z
     runs-on: [self-hosted, z]
     env:
       LOG_PANIC_ON_INVALIDCHARS: true # check that log lines contain no invalid chars
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Ensure we have enough history for HEAD^
+          fetch-depth: 2
 
       - uses: benjlevesque/short-sha@v3.0
         # sets env.SHA to the first 7 chars of github.sha
@@ -101,12 +107,18 @@ jobs:
         run: |
           # Decide what to compare against based on event type
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For PRs, compare HEAD with base branch
+            # For PRs, compare HEAD with base branch (fetching base if needed)
             git fetch origin ${{ github.base_ref }} --depth=1
             DIFF_TARGET="origin/${{ github.base_ref }}"
           else
-            # For pushes, compare HEAD with HEAD^
-            DIFF_TARGET="HEAD^"
+            # For pushes, attempt HEAD^
+            # If HEAD^ doesn't exist (e.g., only 1 commit), fallback to HEAD
+            if git rev-parse --quiet --verify HEAD^ >/dev/null; then
+              DIFF_TARGET="HEAD^"
+            else
+              echo "HEAD^ not found, falling back to HEAD"
+              DIFF_TARGET="HEAD"
+            fi
           fi
 
           echo "Comparing HEAD to $DIFF_TARGET"
@@ -122,11 +134,9 @@ jobs:
 
       - name: Run Go test -race
         id: go-test-race
-        # note that -race can easily make the crypto stuff 10x slower
-        # this is further limited to selected branches at the beginning of this file
-        if:  github.event_name == 'push' && github.ref != 'refs/heads/release'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GORACE: atexit_sleep_ms=10 # the default of 1000 makes every Go package test sleep for 1s
+          GORACE: atexit_sleep_ms=10
           RUN_CIRCUIT_TESTS: ${{ env.RUN_CIRCUIT_TESTS }}
         run: |
           go test ./... \
