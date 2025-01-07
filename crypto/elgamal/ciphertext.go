@@ -14,7 +14,7 @@ import (
 )
 
 // NumCiphertexts represents how many Ciphertexts are grouped
-const NumCiphertexts = 2
+const NumCiphertexts = gelgamal.NumCiphertexts
 
 // sizes in bytes needed to serialize Ciphertexts
 const (

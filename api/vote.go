@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"math/big"
 	"net/http"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
@@ -22,20 +24,26 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		ErrMalformedBody.Withf("could not decode process id: %v", err).Write(w)
 		return
 	}
-	encryptionKeys, _, err := a.storage.EncryptionKeys(*pid)
-	if err != nil {
-		ErrGenericInternalServerError.Withf("could not get encryption keys: %v", err).Write(w)
-	}
-	// get process metadata
-	metadata, err := a.storage.ProcessMetadata(*pid)
-	if err != nil {
-		ErrGenericInternalServerError.Withf("could not get process metadata: %v", err).Write(w)
-	}
 	// convert the circom proof to gnark proof and verify it
 	// TODO: get verification key from somewhere
 	vkey := []byte{}
-	proof, err := circuits.VerifyAndConvertToRecursion(vkey, &vote.VoteProof, vote.VotePubSignals)
+	proof, err := circuits.VerifyAndConvertToRecursion(vkey, &vote.BallotProof, []string{vote.BallotInputsHash.String()})
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not verify and convert proof: %v", err).Write(w)
+	}
+	// set the ballot info in the processor
+	if err := a.storage.PushBallot(&storage.Ballot{
+		ProcessID:        vote.ProcessID,
+		VoterWeight:      new(big.Int).SetBytes(vote.CensusProof.Weight),
+		EncryptedBallot:  vote.Cipherfields,
+		Nullifier:        vote.Nullifier,
+		Commitment:       vote.Commitment,
+		Address:          vote.CensusProof.Address,
+		BallotInputsHash: vote.BallotInputsHash,
+		BallotProof:      *proof,
+		Signature:        vote.Signature,
+		CensusProof:      vote.CensusProof,
+	}); err != nil {
+		ErrGenericInternalServerError.Withf("could not push ballot: %v", err).Write(w)
 	}
 }
