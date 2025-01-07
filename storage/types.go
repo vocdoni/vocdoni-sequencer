@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -39,21 +40,9 @@ type Ballot struct {
 	Commitment       types.HexBytes     `json:"commitment"`
 	Address          types.HexBytes     `json:"address"`
 	BallotInputsHash types.HexBytes     `json:"ballotInputsHash"`
-	BallotProof      CircomProof        `json:"ballotProof"`
+	BallotProof      parser.CircomProof `json:"ballotProof"`
 	Signature        types.HexBytes     `json:"signature"`
-	CensusProof      CensusProof        `json:"censusProof"`
-}
-
-type CensusProof struct {
-	Root     types.HexBytes   `json:"root"`
-	Siblings []types.HexBytes `json:"siblings"`
-}
-
-type CircomProof struct {
-	A        []string   `json:"pi_a"`
-	B        [][]string `json:"pi_b"`
-	C        []string   `json:"pi_c"`
-	Protocol string     `json:"protocol"`
+	CensusProof      types.CensusProof  `json:"censusProof"`
 }
 
 type AggregatedBallotBatch struct {
