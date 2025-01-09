@@ -47,7 +47,7 @@ func TestLoadKey(t *testing.T) {
 	// create a dummy key
 	remoteURL, err := url.JoinPath(server.URL, dummyPath)
 	c.Assert(err, qt.IsNil)
-	dummyKey := &Key{
+	dummyKey := &Artifact{
 		RemoteURL: remoteURL,
 		Hash:      expectedHash,
 	}

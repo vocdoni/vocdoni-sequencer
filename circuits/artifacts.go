@@ -39,11 +39,11 @@ func init() {
 	}
 }
 
-// Key is a struct that holds the remote URL, the hash of the content and the
-// content itself. It provides a method to load the content from the local cache
-// or download it from the remote URL provided. It also checks the hash of the
-// content to ensure its integrity.
-type Key struct {
+// Artifact is a struct that holds the remote URL, the hash of the content and
+// the content itself. It provides a method to load the content from the local
+// cache or download it from the remote URL provided. It also checks the hash
+// of the content to ensure its integrity.
+type Artifact struct {
 	RemoteURL string
 	Hash      types.HexBytes
 	Content   types.HexBytes
@@ -57,7 +57,7 @@ type Key struct {
 // URL is not provided, or the content cannot be loaded locally, downloaded or
 // written to a local file. It also returns an error if the hash of the content
 // does not match the hash provided.
-func (k *Key) Load(ctx context.Context) error {
+func (k *Artifact) Load(ctx context.Context) error {
 	// if the key has content, it is already loaded and it will return
 	if len(k.Content) != 0 {
 		return nil
@@ -103,18 +103,18 @@ func (k *Key) Load(ctx context.Context) error {
 	return nil
 }
 
-// CircuitAssets is a struct that holds the proving and verifying keys of a
+// CircuitArtifacts is a struct that holds the proving and verifying keys of a
 // zkSNARK circuit. It provides a method to load the keys from the local cache
 // or download them from the remote URLs provided.
-type CircuitAssets struct {
-	provingKey   *Key
-	verifyingKey *Key
+type CircuitArtifacts struct {
+	provingKey   *Artifact
+	verifyingKey *Artifact
 }
 
-// NewCircuitAssets creates a new CircuitAssets struct with the proving and
-// verifying keys provided.
-func NewCircuitAssets(provingKey, verifyingKey *Key) *CircuitAssets {
-	return &CircuitAssets{
+// NewCircuitArtifacts creates a new CircuitArtifacts struct with the proving
+// and verifying keys provided.
+func NewCircuitArtifacts(provingKey, verifyingKey *Artifact) *CircuitArtifacts {
+	return &CircuitArtifacts{
 		provingKey:   provingKey,
 		verifyingKey: verifyingKey,
 	}
@@ -123,7 +123,7 @@ func NewCircuitAssets(provingKey, verifyingKey *Key) *CircuitAssets {
 // LoadAll method loads the proving and verifying keys creating a context with
 // a timeout of 5 minutes. It returns an error if the proving or verifying keys
 // cannot be loaded.
-func (ca *CircuitAssets) LoadAll() error {
+func (ca *CircuitArtifacts) LoadAll() error {
 	ctx, cancel := context.WithTimeout(context.Background(), downloadCircuitsTimeout)
 	defer cancel()
 	if ca.provingKey != nil {
