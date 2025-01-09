@@ -69,10 +69,9 @@ func FillWithDummyFixed(placeholder, assigments *AggregatorCircuit, main constra
 	}
 	// fill placeholders and assigments dummy values
 	for i := range assigments.VerifyProofs {
+		placeholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
+		placeholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
 		if i >= fromIdx {
-			placeholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
-			placeholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
-
 			assigments.Nullifiers[i] = dummyValue
 			assigments.Commitments[i] = dummyValue
 			assigments.Addresses[i] = dummyValue

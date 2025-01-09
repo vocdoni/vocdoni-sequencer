@@ -190,11 +190,6 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 	finalPlaceholder.VerificationKeys[1] = fixedVk
-	// set the vote verififer proofs and pubInputa
-	for i := 0; i < nValidVoters; i++ {
-		finalPlaceholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](vvCCS)
-		finalPlaceholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](vvCCS)
-	}
 	// fill placeholder and witness with dummy circuits
 	if err := aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters); err != nil {
 		return nil, nil, nil, err
