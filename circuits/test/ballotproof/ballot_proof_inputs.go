@@ -310,7 +310,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	proof, err := circuits.Circom2GnarkProof(TestCircomVerificationKey, circomProof, pubSignals)
+	proof, err := circuits.Circom2GnarkProofForRecursion(TestCircomVerificationKey, circomProof, pubSignals)
 	if err != nil {
 		return nil, err
 	}

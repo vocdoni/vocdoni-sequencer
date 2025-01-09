@@ -70,10 +70,17 @@ func (a *API) registerHandlers() {
 	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		httpWriteOK(w)
 	})
-	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "POST")
+	log.Infow("register handler", "endpoint", ProcessesEndpoint, "method", "POST")
 	a.router.Post(ProcessEndpoint, a.newProcess)
 	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
 	a.router.Get(ProcessEndpoint, a.process)
+	log.Infow("register handler", "endpoint", VotesEndpoint, "method", "POST")
+	a.router.Post(VotesEndpoint, a.newVote)
+
+	if testAvailable {
+		log.Infow("register test handler", "endpoint", TestProcessEndpoint, "method", "POST")
+		a.router.Post(TestProcessEndpoint, a.newVote)
+	}
 }
 
 // initRouter creates the router with all the routes and middleware.

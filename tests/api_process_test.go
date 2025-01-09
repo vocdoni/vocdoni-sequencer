@@ -75,7 +75,7 @@ func CreateTestProcess(c *qt.C, cli *client.HTTPclient, signer *ethereum.SignKey
 		Signature: signature,
 	}
 
-	body, code, err := cli.Request(http.MethodPost, process, nil, "process")
+	body, code, err := cli.Request(http.MethodPost, process, nil, api.ProcessesEndpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK, qt.Commentf("response body %s", string(body)))
 
