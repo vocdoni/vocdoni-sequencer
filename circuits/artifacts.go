@@ -126,6 +126,24 @@ func (ca *CircuitArtifacts) LoadAll() error {
 	return nil
 }
 
+// ProvingKey returns the content of the proving key as types.HexBytes. If the
+// proving key is not loaded, it returns nil.
+func (ca *CircuitArtifacts) ProvingKey() types.HexBytes {
+	if ca.provingKey == nil {
+		return nil
+	}
+	return ca.provingKey.Content
+}
+
+// VerifyingKey returns the content of the verifying key as types.HexBytes. If the
+// verifying key is not loaded, it returns nil.
+func (ca *CircuitArtifacts) VerifyingKey() types.HexBytes {
+	if ca.verifyingKey == nil {
+		return nil
+	}
+	return ca.verifyingKey.Content
+}
+
 func loadLocal(name string) ([]byte, error) {
 	// check if BaseDir exists and create it if it does not
 	if _, err := os.Stat(BaseDir); err != nil {

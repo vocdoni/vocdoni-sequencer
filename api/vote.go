@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -24,14 +25,22 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		ErrMalformedBody.Withf("could not decode process id: %v", err).Write(w)
 		return
 	}
+	// load the verification key for the ballot proof circuit, used by the user
+	// to generate a proof of a valid ballot
+	if err := ballotproof.Artifacts.LoadAll(); err != nil {
+		ErrGenericInternalServerError.Withf("could not load artifacts: %v", err).Write(w)
+	}
 	// convert the circom proof to gnark proof and verify it
-	// TODO: get verification key from somewhere
-	vkey := []byte{}
-	proof, err := circuits.VerifyAndConvertToRecursion(vkey, &vote.BallotProof, []string{vote.BallotInputsHash.String()})
+	proof, err := circuits.VerifyAndConvertToRecursion(
+		ballotproof.Artifacts.VerifyingKey(),
+		&vote.BallotProof,
+		[]string{vote.BallotInputsHash.String()},
+	)
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not verify and convert proof: %v", err).Write(w)
 	}
-	// set the ballot info in the processor
+	// push the ballot to the processor storage queue to be verified, aggregated
+	// and published
 	if err := a.storage.PushBallot(&storage.Ballot{
 		ProcessID:        vote.ProcessID,
 		VoterWeight:      new(big.Int).SetBytes(vote.CensusProof.Weight),

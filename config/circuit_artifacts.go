@@ -1,6 +1,9 @@
 package config
 
 const (
+	// BallotProof constants for github.com/vocdoni/z-ircuits
+	BallotProofVerificationKeyURL = "https://media.githubusercontent.com/media/vocdoni/vocdoni-circuits-artifacts/main/ballotproof/ballot_proof_pkey.zkey"
+	BallotProofVerificationKeyHash = "3e7a0b24250c6fea97c0950445cf104091c00bfd32796e8e8753955ab015429a"
 	// CircuitArtifacts constants for circuits/voteverifier package
 	VoteVerifierProvingKeyURL       = "https://media.githubusercontent.com/media/vocdoni/vocdoni-circuits-artifacts/main/voteverifier/voteverifier.pk"
 	VoteVerifierProvingKeyHash      = "4bcb2de78562f400a3f96e5adcdcc00d32ebd0e29c7af4145f857f05281eb9e8"
