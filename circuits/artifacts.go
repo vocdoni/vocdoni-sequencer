@@ -18,26 +18,13 @@ import (
 
 const downloadCircuitsTimeout = time.Minute * 5
 
-// BaseDir is where the artifact cache is expected to be found.
-// If the artifacts are not found there, they will be downloaded and stored.
+// BaseDir is the path where the artifact cache is expected to be found. If the
+// artifacts are not found there, they will be downloaded and stored. It can be
+// set to a different path if needed from other packages. Thats why it is not a
+// constant.
 //
-// Defaults to ~/.cache/vocdoni-sequencer/zkCircuits/
-//
-// In any case, the hash of the asset will be appended at the end
-var BaseDir = func() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
-	return filepath.Join(home, ".cache", "vocdoni-sequencer", "zkCircuits")
-}()
-
-// init creates the BaseDir if it does not exist
-func init() {
-	if err := os.MkdirAll(BaseDir, os.ModePerm); err != nil {
-		panic(err)
-	}
-}
+// Defaults to '.cache/circuits-artifacts'
+var BaseDir = filepath.Join(".cache", "circuits-artifacts")
 
 // Artifact is a struct that holds the remote URL, the hash of the content and
 // the content itself. It provides a method to load the content from the local
@@ -140,13 +127,27 @@ func (ca *CircuitArtifacts) LoadAll() error {
 }
 
 func loadLocal(name string) ([]byte, error) {
+	// check if BaseDir exists and create it if it does not
+	if _, err := os.Stat(BaseDir); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(BaseDir, os.ModePerm); err != nil {
+				return nil, fmt.Errorf("error creating the base directory: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("error checking the base directory: %w", err)
+		}
+	}
+	// append the name to the base directory and check if the file exists
 	path := filepath.Join(BaseDir, name)
 	if _, err := os.Stat(path); err != nil {
+		// if the file does not exists return nil content and nil error, but if
+		// the error is not a not exists error, return the error
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("error checking file %s: %w", path, err)
 	}
+	// if it exists, read the content of the file and return it
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if err == os.ErrNotExist {
