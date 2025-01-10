@@ -14,3 +14,7 @@ type BallotMode[T any] struct {
 	CostFromWeight   T
 	EncryptionPubKey [2]T
 }
+
+func (bm BallotMode[T]) Bytes() []byte {
+	return []byte{0x00}
+}
