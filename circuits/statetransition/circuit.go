@@ -1,9 +1,16 @@
 package statetransition
 
 import (
+	"fmt"
+
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
+	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -19,7 +26,6 @@ type Circuit struct {
 	// ---------------------------------------------------------------------------------------------
 	// PUBLIC INPUTS
 
-	// list of root hashes
 	RootHashBefore frontend.Variable `gnark:",public"`
 	RootHashAfter  frontend.Variable `gnark:",public"`
 	NumNewVotes    frontend.Variable `gnark:",public"`
@@ -27,9 +33,6 @@ type Circuit struct {
 
 	// ---------------------------------------------------------------------------------------------
 	// SECRET INPUTS
-
-	AggregatedProof frontend.Variable // mock, this should be a zkProof
-
 	ProcessID     state.MerkleProof
 	CensusRoot    state.MerkleProof
 	BallotMode    state.MerkleProof
@@ -38,53 +41,82 @@ type Circuit struct {
 	ResultsSub    state.MerkleTransition
 	Ballot        [VoteBatchSize]state.MerkleTransition
 	Commitment    [VoteBatchSize]state.MerkleTransition
+
+	AggregatedProof circuits.InnerProofBW6761
 }
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	circuit.VerifyAggregatedZKProof(api)
+	if err := circuit.VerifyAggregatedWitnessHash(api, HashFn); err != nil {
+		return err
+	}
+	if err := circuit.VerifyAggregatedProof(api); err != nil {
+		return err
+	}
 	circuit.VerifyMerkleProofs(api, HashFn)
 	circuit.VerifyMerkleTransitions(api, HashFn)
 	circuit.VerifyBallots(api)
 	return nil
 }
 
-func (circuit Circuit) VerifyAggregatedZKProof(api frontend.API) {
+func (circuit Circuit) AggregatedWitnessInputs() []frontend.Variable {
 	// all of the following values compose the preimage that is hashed
 	// to produce the public input needed to verify AggregatedProof.
-	// they are extracted from the MerkleProofs:
-	// ProcessID     := circuit.ProcessID.Value
-	// CensusRoot    := circuit.CensusRoot.Value
-	// BallotMode    := circuit.BallotMode.Value
-	// EncryptionKey := circuit.EncryptionKey.Value
-	// Nullifiers    := circuit.Ballot[i].NewKey
-	// Ballots       := circuit.Ballot[i].NewValue
-	// Addressess    := circuit.Commitment[i].NewKey
-	// Commitments   := circuit.Commitment[i].NewValue
+	// ProcessID
+	// CensusRoot
+	// BallotMode
+	// EncryptionKey
+	// Nullifiers
+	// Ballots
+	// Addressess
+	// Commitments
 
-	api.Println("verify AggregatedZKProof mock:", circuit.AggregatedProof) // mock
-
-	packedInputs := func() frontend.Variable {
-		for i, p := range []state.MerkleProof{
-			circuit.ProcessID,
-			circuit.CensusRoot,
-			circuit.BallotMode,
-			circuit.EncryptionKey,
-		} {
-			api.Println("packInputs mock", i, p.Value) // mock
-		}
-		for i := range circuit.Ballot {
-			api.Println("packInputs mock nullifier", i, circuit.Ballot[i].NewKey) // mock
-			api.Println("packInputs mock ballot", i, circuit.Ballot[i].NewValue)  // mock
-		}
-		for i := range circuit.Commitment {
-			api.Println("packInputs mock address", i, circuit.Commitment[i].NewKey)      // mock
-			api.Println("packInputs mock commitment", i, circuit.Commitment[i].NewValue) // mock
-		}
-		return 1 // mock, should return hash of packed inputs
+	inputs := []frontend.Variable{
+		circuit.ProcessID.Value,
+		circuit.CensusRoot.Value,
+		circuit.BallotMode.Value,
+		circuit.EncryptionKey.Value,
 	}
+	for _, mt := range circuit.Ballot {
+		inputs = append(inputs, mt.NewKey) // Nullifier
+	}
+	for _, mt := range circuit.Ballot {
+		inputs = append(inputs, mt.NewCiphertexts.Serialize()...) // Ballot
+	}
+	for _, mt := range circuit.Commitment {
+		inputs = append(inputs, mt.NewKey) // Address
+	}
+	for _, mt := range circuit.Commitment {
+		inputs = append(inputs, mt.NewValue) // Commitment
+	}
+	return inputs
+}
 
-	api.AssertIsEqual(packedInputs(), 1) // TODO: mock, should actually verify AggregatedZKProof
+func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API, hFn utils.Hasher) error {
+	api.AssertIsEqual(len(circuit.AggregatedProof.Witness.Public), 1)
+	publicInput, err := utils.PackScalarToVar(api, &circuit.AggregatedProof.Witness.Public[0])
+	if err != nil {
+		return fmt.Errorf("failed to pack scalar to var: %w", err)
+	}
+	hash, err := hFn(api, circuit.AggregatedWitnessInputs()...)
+	if err != nil {
+		return fmt.Errorf("failed to hash: %w", err)
+	}
+	api.AssertIsEqual(hash, publicInput)
+	return nil
+}
+
+func (circuit Circuit) VerifyAggregatedProof(api frontend.API) error {
+	// initialize the verifier
+	verifier, err := groth16.NewVerifier[sw_bw6761.ScalarField, sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](api)
+	if err != nil {
+		return fmt.Errorf("failed to create bw6761 verifier: %w", err)
+	}
+	// verify the proof with the hash as input and the fixed verification key
+	if err := verifier.AssertProof(circuit.AggregatedProof.VK, circuit.AggregatedProof.Proof, circuit.AggregatedProof.Witness); err != nil {
+		return fmt.Errorf("failed to verify aggregated proof: %w", err)
+	}
+	return nil
 }
 
 func (circuit Circuit) VerifyMerkleProofs(api frontend.API, hFn utils.Hasher) {
@@ -135,4 +167,47 @@ func (circuit Circuit) VerifyBallots(api frontend.API) {
 		circuit.ResultsSub.OldCiphertexts.Add(api, &circuit.ResultsSub.OldCiphertexts, overwrittenSum))
 	api.AssertIsEqual(circuit.NumNewVotes, ballotCount)
 	api.AssertIsEqual(circuit.NumOverwrites, overwrittenCount)
+}
+
+func CircuitPlaceholder() *Circuit {
+	proof, err := DummyInnerProof(0)
+	if err != nil {
+		panic(err)
+	}
+	return CircuitPlaceholderWithProof(proof)
+}
+
+func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
+	return &Circuit{
+		AggregatedProof: *proof,
+	}
+}
+
+func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
+	_, witness, proof, vk, err := dummy.Prove(
+		dummy.PlaceholderWithConstraints(0), dummy.Assignment(inputsHash),
+		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())
+	if err != nil {
+		return nil, err
+	}
+	// parse dummy proof and witness
+	dummyProof, err := groth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
+	if err != nil {
+		return nil, fmt.Errorf("dummy proof value error: %w", err)
+	}
+	dummyWitness, err := groth16.ValueOfWitness[sw_bw6761.ScalarField](witness)
+	if err != nil {
+		return nil, fmt.Errorf("dummy witness value error: %w", err)
+	}
+	// set fixed dummy vk in the placeholders
+	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
+	if err != nil {
+		return nil, fmt.Errorf("dummy vk value error: %w", err)
+	}
+
+	return &circuits.InnerProofBW6761{
+		Proof:   dummyProof,
+		Witness: dummyWitness,
+		VK:      dummyVK,
+	}, nil
 }
