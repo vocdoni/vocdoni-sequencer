@@ -111,154 +111,149 @@ func nativeMiMCHashFn(api frontend.API, data ...frontend.Variable) (frontend.Var
 	return h.Sum(), nil
 }
 
-// checkInnerInputHash hashes the circom public-private inputs and compares
-// them with the unique public input of the circom circuit. It returns an error
-// if the hash of the circom public-private inputs does not match the unique
-// public input of the circom circuit.
-func checkInnerInputHash(api frontend.API, expectedHash emulated.Element[sw_bn254.ScalarField],
-	circomInputs ...emulated.Element[sw_bn254.ScalarField],
-) error {
+func (c *VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
+	// ensure that the circom public inputs hash only contains a single public
+	// input (the hash of all the public-private inputs)
+	api.AssertIsEqual(len(c.CircomPublicInputsHash.Public), 1)
+	// group the circom public-private inputs to hash them
+	hashInputs := []emulated.Element[sw_bn254.ScalarField]{
+		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
+		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.Address, c.UserWeight,
+		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.Nullifier,
+		c.Commitment}
+	for i := 0; i < len(c.EncryptedBallot); i++ {
+		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
+			hashInputs = append(hashInputs, c.EncryptedBallot[i][j][:]...)
+		}
+	}
 	// hash the circom public-private inputs and compare them with the unique
 	// public input of the circom circuit
 	h, err := mimc7.NewMiMC(api)
 	if err != nil {
-		return fmt.Errorf("failed to create emulated MiMC hash function: %w", err)
+		api.Println("failed to create emulated MiMC hash function: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
-	h.Write(circomInputs...)
-	h.AssertSumIsEqual(expectedHash)
-	return nil
+	h.Write(hashInputs...)
+	h.AssertSumIsEqual(c.CircomPublicInputsHash.Public[0])
 }
 
-// checkInputHash hashes the circom inputs hash with the census root and
-// compares it with the inputs hash provided by the user. It returns an error
-// if the hash of the circom inputs hash does not match the inputs hash
-// provided by the user.
-func checkInputHash(api frontend.API,
-	circomInputsHash emulated.Element[sw_bn254.ScalarField],
-	censusRoot, expectedHash frontend.Variable,
-) error {
-	// convert the circom public inputs hash from element of bn254 scalar field
-	// to the current compiler field as a variable
-	innerHash, err := utils.PackScalarToVar(api, &circomInputsHash)
-	if err != nil {
-		return fmt.Errorf("failed to convert emulated to var: %w", err)
+// checkInputsHash hashes the inputs provided by the user and compares them with
+// the unique public input of the circuit. It returns an error if the hash of
+// the inputs does not match the unique public input of the circuit. The inputs
+// hash is calculated by hashing all the inputs provided by the user, including
+// the census root, except the user weight and siblings.
+func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
+	// group all, including the census root, except the user weight
+	emulatedHashInputs := []emulated.Element[sw_bn254.ScalarField]{
+		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
+		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.Address, c.ProcessId,
+		c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.Nullifier, c.Commitment}
+	for i := 0; i < len(c.EncryptedBallot); i++ {
+		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
+			emulatedHashInputs = append(emulatedHashInputs, c.EncryptedBallot[i][j][:]...)
+		}
 	}
-	// hash the circom inputs with the census root to be compared with the
-	// inputs hash provided by the user
-	inputsHash, err := nativeMiMCHashFn(api, []frontend.Variable{innerHash, censusRoot}...)
-	if err != nil {
-		return fmt.Errorf("failed to hash inputs: %w", err)
+	// convert all the emulated elements to the current compiler field
+	hashInputs := []frontend.Variable{}
+	var err error
+	for i := 0; i < len(emulatedHashInputs); i++ {
+		input, err := utils.PackScalarToVar(api, &emulatedHashInputs[i])
+		if err != nil {
+			api.Println("failed to convert emulated to var: %w", err)
+			api.AssertIsEqual(0, 1)
+		}
+		hashInputs = append(hashInputs, input)
 	}
-	api.AssertIsEqual(expectedHash, inputsHash)
-	return nil
+	// hash the inputs (including census root) and compare them with the unique
+	// public input of the circuit
+	inputsHash, err := nativeMiMCHashFn(api, append(hashInputs, c.CensusRoot)...)
+	if err != nil {
+		api.Println("failed to hash inputs: %w", err)
+		api.AssertIsEqual(0, 1)
+	}
+	api.AssertIsEqual(c.InputsHash, inputsHash)
 }
 
 // verifySigForAddress function verifies the signature provided with the public
 // key and message provided. It derives the address from the public key and
 // verifies it matches the provided address. It returns the derived address in
 // little endian format and an error if the verification fails.
-func verifySigForAddress(api frontend.API,
-	addr emulated.Element[sw_bn254.ScalarField],
-	pubKey ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr],
-	msg emulated.Element[emulated.Secp256k1Fr],
-	sig ecdsa.Signature[emulated.Secp256k1Fr],
-) (frontend.Variable, error) {
+func (c *VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	// check the signature of the circom inputs hash provided as Secp256k1
 	// emulated element
-	pubKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &msg, &sig)
+	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
 	// derive the address from the public key and check it matches the provided
 	// address
-	derivedAddr, censusAddress, err := address.DeriveAddress(api, pubKey)
+	derivedAddr, err := address.DeriveAddress(api, c.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to derive address: %w", err)
+		api.Println("failed to derive address: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
 	// convert the derived address from the scalar field of the bn254 curve to
 	// the current compiler field as a variable to compare it with the address
 	// derived from the public key and to be used in the census proof
-	address, err := utils.PackScalarToVar(api, &addr)
+	address, err := utils.PackScalarToVar(api, &c.Address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert emulated to var: %w", err)
+		api.Println("failed to convert emulated to var: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
 	api.AssertIsEqual(address, derivedAddr)
-	return censusAddress, nil
 }
 
-// circomInputs returns the circom public-private inputs that are used to hash
-// them and compare them with the unique public input of the circom circuit. It
-// asserts that the length of the flat encrypted ballot is correct and returns
-// the circom public-private inputs.
-func (c *VerifyVoteCircuit) circomInputs(api frontend.API) []emulated.Element[sw_bn254.ScalarField] {
-	// group the circom public-private inputs to hash them
-	circomPubPrivInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
-		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.Address, c.UserWeight,
-		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.Nullifier,
-		c.Commitment,
-	}
-	// flatten the encrypted ballot and append to the circom public-private
-	// inputs
-	var flatEncryptedBallot []emulated.Element[sw_bn254.ScalarField]
-	for i := 0; i < len(c.EncryptedBallot); i++ {
-		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
-			flatEncryptedBallot = append(flatEncryptedBallot, c.EncryptedBallot[i][j][:]...)
-		}
-	}
-	// check the length of the resulting flat encrypted ballot and append it
-	api.AssertIsEqual(len(flatEncryptedBallot), len(c.EncryptedBallot)*len(c.EncryptedBallot[0])*len(c.EncryptedBallot[0][0]))
-	return append(circomPubPrivInputs, flatEncryptedBallot...)
-}
-
-// checkCircomProof checks the circom proof provided by the user. It hashes the
-// circom public-private inputs and compares them with the unique public input
-// of the circom circuit. It verifies the ballot proof using the verification
-// key provided. It returns the hash of the circom public-private inputs if the
-// verification succeeds and an error if it fails.
-func (c *VerifyVoteCircuit) checkCircomProof(api frontend.API) error {
-	// check that the circom witness only contains a single public input
-	// (the hash of all the public-private inputs)
-	api.AssertIsEqual(len(c.CircomPublicInputsHash.Public), 1)
-	// verify the hash of the circom public-private inputs
-	if err := checkInnerInputHash(api, c.CircomPublicInputsHash.Public[0],
-		c.circomInputs(api)...); err != nil {
-		return fmt.Errorf("failed to check inner input hash: %w", err)
-	}
+func (c *VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	// verify the ballot proof over the bn254 curve (used by circom)
 	verifier, err := groth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
 	if err != nil {
-		return fmt.Errorf("failed to create BN254 verifier: %w", err)
+		api.Println("failed to create BN254 verifier: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
-	return verifier.AssertProof(
-		c.CircomVerificationKey, c.CircomProof, c.CircomPublicInputsHash,
-		groth16.WithCompleteArithmetic())
+	if err := verifier.AssertProof(c.CircomVerificationKey, c.CircomProof,
+		c.CircomPublicInputsHash, groth16.WithCompleteArithmetic(),
+	); err != nil {
+		api.Println("failed to verify circom proof: %w", err)
+		api.AssertIsEqual(0, 1)
+	}
 }
 
-func (c *VerifyVoteCircuit) Define(api frontend.API) error {
-	// check circom circuit stuff
-	if err := c.checkCircomProof(api); err != nil {
-		return fmt.Errorf("failed to check circom proof: %w", err)
-	}
-	// check the inputs hash
-	if err := checkInputHash(api, c.CircomPublicInputsHash.Public[0],
-		c.CensusRoot, c.InputsHash); err != nil {
-		return fmt.Errorf("failed to check input hash: %w", err)
-	}
-	// check the signature of the circom inputs hash provided as Secp256k1
-	// emulated element
-	censusAddress, err := verifySigForAddress(api, c.Address, c.PublicKey, c.Msg, c.Signature)
+func (c *VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
+	// convert user address to bytes to swap the endianness
+	bAddress, err := utils.ElemToU8(api, c.Address)
 	if err != nil {
-		return fmt.Errorf("failed to verify signature: %w", err)
+		api.Println("failed to convert element to bytes: %w", err)
+		api.AssertIsEqual(0, 1)
+	}
+	// swap the endianness of the address to le to be used in the census proof
+	address, err := utils.U8ToVar(api, bAddress[:20])
+	if err != nil {
+		api.Println("failed to convert bytes to var: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
 	// convert the user weight from the scalar field of the bn254 curve to the
 	// current compiler field as a variable to be used in the census proof
 	userWeight, err := utils.PackScalarToVar(api, &c.UserWeight)
 	if err != nil {
-		return fmt.Errorf("failed to convert emulated to var: %w", err)
+		api.Println("failed to convert emulated to var: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
 	// verify the census proof using the derived address and the user weight
 	// provided as leaf key-value, adn the root and siblings provided
-	if err := arbo.CheckInclusionProof(api, nativeMiMCHashFn, censusAddress,
+	if err := arbo.CheckInclusionProof(api, nativeMiMCHashFn, address,
 		userWeight, c.CensusRoot, c.CensusSiblings[:]); err != nil {
-		return fmt.Errorf("failed to check census proof: %w", err)
+		api.Println("failed to check census proof: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
+}
+
+func (c *VerifyVoteCircuit) Define(api frontend.API) error {
+	// check the hash of the inputs provided by the user
+	c.checkInputsHash(api)
+	// check the hash of the circom inputs provided by the user
+	c.checkCircomInputsHash(api)
+	// verify the signature of the public inputs
+	c.verifySigForAddress(api)
+	// verify the census proof
+	c.verifyCensusProof(api)
+	// verify the ballot proof
+	c.verifyCircomProof(api)
 	return nil
 }

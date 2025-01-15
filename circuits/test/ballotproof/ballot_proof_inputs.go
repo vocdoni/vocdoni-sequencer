@@ -18,7 +18,6 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
-	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
@@ -157,16 +156,16 @@ func EncryptBallotFieldsForTest(fields []*big.Int, n int, pk ecc.Point, k *big.I
 // while the nullifier is generated using the commitment and secret value.
 func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
-		util.BigToFF(new(big.Int).SetBytes(address)),
-		util.BigToFF(new(big.Int).SetBytes(processID)),
-		util.BigToFF(new(big.Int).SetBytes(secret)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	nullifier, err := poseidon.Hash([]*big.Int{
 		commitment,
-		util.BigToFF(new(big.Int).SetBytes(secret)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -254,8 +253,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(address))
-	ffProcessID := ecc.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
+	ffAddress := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
 		big.NewInt(int64(MaxCount)),
@@ -298,7 +297,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"cipherfields":     strCipherfields,
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(secret)).String(),
+		"secret":           ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)

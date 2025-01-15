@@ -211,6 +211,12 @@ github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4 h1:aYeMlhWA
 github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4/go.mod h1:A1WU0hL7rO9oZlvp82you2uCc4T3/ySi1UNW6N6hBJs=
 github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241220102053-ba1eee831862 h1:Qu6Mv+jwFM0eSV/gYTZUYYImZsN4p3gTOSEPxqxPdM8=
 github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20241220102053-ba1eee831862/go.mod h1:SWuNIPw2nWhnyLNWnLj2c/6U/51LCGrbx/nLM5E4Lig=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250113171326-0ab4d0b45d27 h1:/rdv8NW0J+ITY7GmEI76MmMprrCmjreWHld3S6CYCLc=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250113171326-0ab4d0b45d27/go.mod h1:SWuNIPw2nWhnyLNWnLj2c/6U/51LCGrbx/nLM5E4Lig=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250115080841-cf8bbfbd057a h1:bjqA8ykEizGHaew3JYjfw7VfDQXEFadLKTtnOAO36ZQ=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250115080841-cf8bbfbd057a/go.mod h1:SWuNIPw2nWhnyLNWnLj2c/6U/51LCGrbx/nLM5E4Lig=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250115081547-ad41d1bad120 h1:Z9dfa1U48+qmohcTLLWXH7zYTACLfZ3mqaZu0Wjqndw=
+github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250115081547-ad41d1bad120/go.mod h1:SWuNIPw2nWhnyLNWnLj2c/6U/51LCGrbx/nLM5E4Lig=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=
