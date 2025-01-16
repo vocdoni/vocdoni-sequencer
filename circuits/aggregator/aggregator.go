@@ -26,13 +26,13 @@
 package aggregator
 
 import (
-	"fmt"
-
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
@@ -68,65 +68,77 @@ type AggregatorCircuit struct {
 	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-func checkInputs(api frontend.API, mode circuits.BallotMode[frontend.Variable],
-	inputsHash, processId, censusRoot frontend.Variable,
-	nullifiers, commitments, addresses []frontend.Variable,
-	encryptedBallots [][MaxFields][2][2]frontend.Variable,
-) error {
-	// group all the inputs to hash them
-	inputs := []frontend.Variable{
-		mode.MaxCount, mode.ForceUniqueness, mode.MaxValue, mode.MinValue, mode.MaxTotalCost,
-		mode.MinTotalCost, mode.CostExp, mode.CostFromWeight, mode.EncryptionPubKey[0],
-		mode.EncryptionPubKey[1], processId, censusRoot,
-	}
-	inputs = append(inputs, nullifiers...)
-	inputs = append(inputs, commitments...)
-	inputs = append(inputs, addresses...)
-	// include flattened EncryptedBallots
-	for _, voterBallots := range encryptedBallots {
-		for _, ballot := range voterBallots {
-			inputs = append(inputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
+func (c *AggregatorCircuit) checkInputsHashes(api frontend.API) {
+	// store the original field to reset it then and set the field to BLS12-377
+	originalField := api.Compiler().Field()
+	api.Compiler().Field().Set(ecc.BLS12_377.ScalarField())
+	// reset the field to the original one
+	// group common inputs
+	commonInputs := []frontend.Variable{
+		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
+		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
+		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight}
+	// iterate over each voter inputs to group the remaining ones and calculate
+	// every voter hash
+	validHashes := api.ToBinary(c.ValidVotes)
+	for i := 0; i < MaxVotes; i++ {
+		remainingInputs := []frontend.Variable{c.Addresses[i], c.Nullifiers[i], c.Commitments[i]}
+		for j := 0; j < MaxFields; j++ {
+			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][0])
+			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][1])
+			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][0])
+			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][1])
 		}
+		// instance bls12377 hash function
+		bls12377HashFn, err := mimc.NewMiMC(api)
+		if err != nil {
+			api.Println("failed to create BLS12-377 mimc hash function: %w", err)
+			api.AssertIsEqual(0, 1)
+		}
+		// hash all the inputs
+		bls12377HashFn.Write(commonInputs...)
+		bls12377HashFn.Write(remainingInputs...)
+		finalHash := api.Mul(bls12377HashFn.Sum(), validHashes[i])
+		// pack expected hash from each voter proof public inputs
+		api.AssertIsEqual(len(c.VerifyPublicInputs[i].Public), 1)
+		expectedHash, err := utils.PackScalarToVar(api, &c.VerifyPublicInputs[i].Public[0])
+		if err != nil {
+			api.Println("failed to expected inner input hash pack scalar to variable: %w", err)
+			api.AssertIsEqual(0, 1)
+		}
+		// compare the expected hash with the calculated one
+		api.AssertIsEqual(expectedHash, finalHash)
 	}
-	// hash the inputs
-	hFn, err := mimc.NewMiMC(api)
-	if err != nil {
-		return fmt.Errorf("error creating hash function: %w", err)
-	}
-	hFn.Write(inputs...)
-	// compare the hash with the provided InputsHash
-	api.AssertIsEqual(inputsHash, hFn.Sum())
-	return nil
+	api.Compiler().Field().Set(originalField)
 }
 
-func (c *AggregatorCircuit) Define(api frontend.API) error {
-	// check the inputs of the circuit
-	if err := checkInputs(api,
-		c.BallotMode, c.InputsHash, c.ProcessId, c.CensusRoot,
-		c.Nullifiers[:], c.Commitments[:], c.Addresses[:], c.EncryptedBallots[:],
-	); err != nil {
-		return fmt.Errorf("inputs check error: %w", err)
-	}
-	// initialize the verifier
+func (c *AggregatorCircuit) checkProofs(api frontend.API) {
+	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
-		return fmt.Errorf("failed to create BLS12-377 verifier: %w", err)
+		api.Println("failed to create BLS12-377 verifier: %w", err)
+		api.AssertIsEqual(0, 1)
 	}
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
 	validProofs := bits.ToBinary(api, c.ValidVotes)
-	expectedValidVotes, totalValidVotes := frontend.Variable(0), frontend.Variable(0)
 	for i := 0; i < len(c.VerifyProofs); i++ {
 		vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
 		if err != nil {
-			return fmt.Errorf("failed to switch verification key: %w", err)
+			api.Println("failed to switch verification key: %w", err)
+			api.AssertIsEqual(0, 1)
 		}
 		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			return fmt.Errorf("failed to verify proof %d: %w", i, err)
+			api.Println("failed to verify proof %d: %w", i, err)
+			api.AssertIsEqual(0, 1)
 		}
-		expectedValidVotes = api.Add(expectedValidVotes, validProofs[i])
-		totalValidVotes = api.Add(totalValidVotes, validProofs[i])
 	}
-	api.AssertIsEqual(expectedValidVotes, totalValidVotes)
+}
+
+func (c *AggregatorCircuit) Define(api frontend.API) error {
+	// check previous circuits inputs hashes
+	c.checkInputsHashes(api)
+	// check all the proofs
+	c.checkProofs(api)
 	return nil
 }

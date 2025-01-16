@@ -145,16 +145,16 @@ func (c *VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
 func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	// group all, including the census root, except the user weight
 	emulatedHashInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
-		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.Address, c.ProcessId,
-		c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.Nullifier, c.Commitment}
+		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.MaxCount,
+		c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost, c.MinTotalCost,
+		c.CostExp, c.CostFromWeight, c.Address, c.Nullifier, c.Commitment}
 	for i := 0; i < len(c.EncryptedBallot); i++ {
 		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
 			emulatedHashInputs = append(emulatedHashInputs, c.EncryptedBallot[i][j][:]...)
 		}
 	}
 	// convert all the emulated elements to the current compiler field
-	hashInputs := []frontend.Variable{}
+	hashInputs := []frontend.Variable{c.CensusRoot}
 	var err error
 	for i := 0; i < len(emulatedHashInputs); i++ {
 		input, err := utils.PackScalarToVar(api, &emulatedHashInputs[i])
@@ -166,7 +166,7 @@ func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	}
 	// hash the inputs (including census root) and compare them with the unique
 	// public input of the circuit
-	inputsHash, err := nativeMiMCHashFn(api, append(hashInputs, c.CensusRoot)...)
+	inputsHash, err := nativeMiMCHashFn(api, hashInputs...)
 	if err != nil {
 		api.Println("failed to hash inputs: %w", err)
 		api.AssertIsEqual(0, 1)

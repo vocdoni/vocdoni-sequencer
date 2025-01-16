@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc"
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	bw6761mimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -17,14 +17,14 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
-	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
+	voteverifier "github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 )
 
 // AggregateTestResults struct includes relevant data after AggregateCircuit
 // inputs generation, including the encrypted ballots in both formats: matrix
 // and plain (for hashing)
 type AggregateTestResults struct {
-	ProcessId             []byte
+	ProcessId             *big.Int
 	CensusRoot            *big.Int
 	EncryptionPubKey      [2]*big.Int
 	Nullifiers            []*big.Int
@@ -41,25 +41,25 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	*AggregateTestResults, *aggregator.AggregatorCircuit, *aggregator.AggregatorCircuit, error,
 ) {
 	// generate users accounts and census
-	vvData := []voteverifiertest.VoterTestData{}
+	vvData := []voteverifier.VoterTestData{}
 	for i := 0; i < nValidVoters; i++ {
 		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		vvData = append(vvData, voteverifiertest.VoterTestData{
+		vvData = append(vvData, voteverifier.VoterTestData{
 			PrivKey: privKey,
 			PubKey:  pubKey,
 			Address: address,
 		})
 	}
 	// generate vote verifier circuit and inputs
-	vvInputs, vvPlaceholder, vvAssigments, err := voteverifiertest.VoteVerifierInputsForTest(vvData, processId)
+	vvInputs, vvPlaceholder, vvAssigments, err := voteverifier.VoteVerifierInputsForTest(vvData, processId)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// compile vote verifier circuit
-	vvCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
+	vvCCS, err := frontend.Compile(gecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -77,12 +77,12 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 			totalPlainEncryptedBallots = append(totalPlainEncryptedBallots, b[0][0], b[0][1], b[1][0], b[1][1])
 		}
 		// parse the witness to the circuit
-		fullWitness, err := frontend.NewWitness(&vvAssigments[i], ecc.BLS12_377.ScalarField())
+		fullWitness, err := frontend.NewWitness(&vvAssigments[i], gecc.BLS12_377.ScalarField())
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		// generate the proof
-		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("err proving proof %d: %w", i, err)
 		}
@@ -96,7 +96,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -117,7 +117,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		big.NewInt(int64(ballottest.CostFromWeight)),
 		vvInputs.EncryptionPubKey[0],
 		vvInputs.EncryptionPubKey[1],
-		new(big.Int).SetBytes(vvInputs.ProcessID),
+		vvInputs.ProcessID,
 		vvInputs.CensusRoot,
 	}
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
@@ -150,17 +150,20 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		InputsHash: publicHash,
 		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
 		BallotMode: circuits.BallotMode[frontend.Variable]{
-			MaxCount:         ballottest.MaxCount,
-			ForceUniqueness:  ballottest.ForceUniqueness,
-			MaxValue:         ballottest.MaxValue,
-			MinValue:         ballottest.MinValue,
-			MaxTotalCost:     int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
-			MinTotalCost:     ballottest.MaxCount,
-			CostExp:          ballottest.CostExp,
-			CostFromWeight:   ballottest.CostFromWeight,
-			EncryptionPubKey: [2]frontend.Variable{vvInputs.EncryptionPubKey[0], vvInputs.EncryptionPubKey[1]},
+			MaxCount:        ballottest.MaxCount,
+			ForceUniqueness: ballottest.ForceUniqueness,
+			MaxValue:        ballottest.MaxValue,
+			MinValue:        ballottest.MinValue,
+			MaxTotalCost:    int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
+			MinTotalCost:    ballottest.MaxCount,
+			CostExp:         ballottest.CostExp,
+			CostFromWeight:  ballottest.CostFromWeight,
+			EncryptionPubKey: [2]frontend.Variable{
+				vvInputs.EncryptionPubKey[0],
+				vvInputs.EncryptionPubKey[1],
+			},
 		},
-		ProcessId:          new(big.Int).SetBytes(vvInputs.ProcessID),
+		ProcessId:          vvInputs.ProcessID,
 		CensusRoot:         vvInputs.CensusRoot,
 		VerifyProofs:       proofs,
 		VerifyPublicInputs: pubInputs,
@@ -169,7 +172,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	for i := 0; i < nValidVoters; i++ {
 		finalAssigments.Nullifiers[i] = vvInputs.Nullifiers[i]
 		finalAssigments.Commitments[i] = vvInputs.Commitments[i]
-		finalAssigments.Addresses[i] = new(big.Int).SetBytes(vvData[i].Address.Bytes())
+		finalAssigments.Addresses[i] = vvInputs.Addresses[i]
 		for j := 0; j < ballottest.NFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {

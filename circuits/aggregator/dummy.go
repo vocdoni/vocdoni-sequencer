@@ -28,7 +28,7 @@ func (c *dummyCircuit) Define(api frontend.API) error {
 	for i := 2; i < c.nbConstraints; i++ {
 		res = api.Mul(res, c.SecretInput)
 	}
-	api.AssertIsEqual(c.PublicInputs, res)
+	api.AssertIsEqual(c.SecretInput, res)
 	return nil
 }
 
@@ -40,5 +40,5 @@ func DummyPlaceholder(mainCircuit constraint.ConstraintSystem) *dummyCircuit {
 
 // DummyPlaceholder function returns the assigment of a dummy circtuit.
 func DummyAssigment() *dummyCircuit {
-	return &dummyCircuit{PublicInputs: 1, SecretInput: 1}
+	return &dummyCircuit{PublicInputs: 0, SecretInput: 1}
 }
