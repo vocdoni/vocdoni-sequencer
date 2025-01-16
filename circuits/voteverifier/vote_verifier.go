@@ -120,7 +120,8 @@ func (c VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
 		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost,
 		c.MinTotalCost, c.CostExp, c.CostFromWeight, c.Address, c.UserWeight,
 		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.Nullifier,
-		c.Commitment}
+		c.Commitment,
+	}
 	for i := 0; i < len(c.EncryptedBallot); i++ {
 		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
 			hashInputs = append(hashInputs, c.EncryptedBallot[i][j][:]...)
@@ -147,7 +148,8 @@ func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	emulatedHashInputs := []emulated.Element[sw_bn254.ScalarField]{
 		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.MaxCount,
 		c.ForceUniqueness, c.MaxValue, c.MinValue, c.MaxTotalCost, c.MinTotalCost,
-		c.CostExp, c.CostFromWeight, c.Address, c.Nullifier, c.Commitment}
+		c.CostExp, c.CostFromWeight, c.Address, c.Nullifier, c.Commitment,
+	}
 	for i := 0; i < len(c.EncryptedBallot); i++ {
 		for j := 0; j < len(c.EncryptedBallot[i]); j++ {
 			emulatedHashInputs = append(emulatedHashInputs, c.EncryptedBallot[i][j][:]...)

@@ -73,7 +73,8 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	inputs := []frontend.Variable{
 		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
 		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
-		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight}
+		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight,
+	}
 	inputs = append(inputs, c.Nullifiers[:]...)
 	inputs = append(inputs, c.Commitments[:]...)
 	inputs = append(inputs, c.Addresses[:]...)
@@ -102,7 +103,8 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	commonInputs := []frontend.Variable{
 		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
 		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
-		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight}
+		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight,
+	}
 	// iterate over each voter inputs to group the remaining ones and calculate
 	// every voter hash
 	validHashes := api.ToBinary(c.ValidVotes)
