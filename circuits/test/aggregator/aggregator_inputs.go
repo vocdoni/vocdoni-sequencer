@@ -107,6 +107,10 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// compute public inputs hash
 	inputs := []*big.Int{
+		vvInputs.CensusRoot,
+		vvInputs.ProcessID,
+		vvInputs.EncryptionPubKey[0],
+		vvInputs.EncryptionPubKey[1],
 		big.NewInt(int64(ballottest.MaxCount)),
 		big.NewInt(int64(ballottest.ForceUniqueness)),
 		big.NewInt(int64(ballottest.MaxValue)),
@@ -115,10 +119,6 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		big.NewInt(int64(ballottest.MaxCount)),
 		big.NewInt(int64(ballottest.CostExp)),
 		big.NewInt(int64(ballottest.CostFromWeight)),
-		vvInputs.EncryptionPubKey[0],
-		vvInputs.EncryptionPubKey[1],
-		vvInputs.ProcessID,
-		vvInputs.CensusRoot,
 	}
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, aggregator.MaxVotes)

@@ -111,7 +111,7 @@ func nativeMiMCHashFn(api frontend.API, data ...frontend.Variable) (frontend.Var
 	return h.Sum(), nil
 }
 
-func (c *VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
+func (c VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
 	// ensure that the circom public inputs hash only contains a single public
 	// input (the hash of all the public-private inputs)
 	api.AssertIsEqual(len(c.CircomPublicInputsHash.Public), 1)
@@ -142,7 +142,7 @@ func (c *VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
 // the inputs does not match the unique public input of the circuit. The inputs
 // hash is calculated by hashing all the inputs provided by the user, including
 // the census root, except the user weight and siblings.
-func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
+func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	// group all, including the census root, except the user weight
 	emulatedHashInputs := []emulated.Element[sw_bn254.ScalarField]{
 		c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1], c.MaxCount,
@@ -157,7 +157,7 @@ func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	hashInputs := []frontend.Variable{c.CensusRoot}
 	var err error
 	for i := 0; i < len(emulatedHashInputs); i++ {
-		input, err := utils.PackScalarToVar(api, &emulatedHashInputs[i])
+		input, err := utils.PackScalarToVar(api, emulatedHashInputs[i])
 		if err != nil {
 			api.Println("failed to convert emulated to var: %w", err)
 			api.AssertIsEqual(0, 1)
@@ -178,7 +178,7 @@ func (c *VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 // key and message provided. It derives the address from the public key and
 // verifies it matches the provided address. It returns the derived address in
 // little endian format and an error if the verification fails.
-func (c *VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
+func (c VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	// check the signature of the circom inputs hash provided as Secp256k1
 	// emulated element
 	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
@@ -192,7 +192,7 @@ func (c *VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	// convert the derived address from the scalar field of the bn254 curve to
 	// the current compiler field as a variable to compare it with the address
 	// derived from the public key and to be used in the census proof
-	address, err := utils.PackScalarToVar(api, &c.Address)
+	address, err := utils.PackScalarToVar(api, c.Address)
 	if err != nil {
 		api.Println("failed to convert emulated to var: %w", err)
 		api.AssertIsEqual(0, 1)
@@ -200,7 +200,7 @@ func (c *VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	api.AssertIsEqual(address, derivedAddr)
 }
 
-func (c *VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
+func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	// verify the ballot proof over the bn254 curve (used by circom)
 	verifier, err := groth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
 	if err != nil {
@@ -215,7 +215,7 @@ func (c *VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	}
 }
 
-func (c *VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
+func (c VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
 	// convert user address to bytes to swap the endianness
 	bAddress, err := utils.ElemToU8(api, c.Address)
 	if err != nil {
@@ -230,7 +230,7 @@ func (c *VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
 	}
 	// convert the user weight from the scalar field of the bn254 curve to the
 	// current compiler field as a variable to be used in the census proof
-	userWeight, err := utils.PackScalarToVar(api, &c.UserWeight)
+	userWeight, err := utils.PackScalarToVar(api, c.UserWeight)
 	if err != nil {
 		api.Println("failed to convert emulated to var: %w", err)
 		api.AssertIsEqual(0, 1)
@@ -244,7 +244,7 @@ func (c *VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
 	}
 }
 
-func (c *VerifyVoteCircuit) Define(api frontend.API) error {
+func (c VerifyVoteCircuit) Define(api frontend.API) error {
 	// check the hash of the inputs provided by the user
 	c.checkInputsHash(api)
 	// check the hash of the circom inputs provided by the user

@@ -68,11 +68,36 @@ type AggregatorCircuit struct {
 	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-func (c *AggregatorCircuit) checkInputsHashes(api frontend.API) {
+func (c AggregatorCircuit) checkInputHash(api frontend.API) {
+	// group common inputs
+	inputs := []frontend.Variable{
+		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
+		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
+		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight}
+	inputs = append(inputs, c.Nullifiers[:]...)
+	inputs = append(inputs, c.Commitments[:]...)
+	inputs = append(inputs, c.Addresses[:]...)
+	// include flattened EncryptedBallots
+	for _, voterBallots := range c.EncryptedBallots {
+		for _, ballot := range voterBallots {
+			inputs = append(inputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
+		}
+	}
+	// hash the inputs
+	hFn, err := mimc.NewMiMC(api)
+	if err != nil {
+		api.Println("failed to create native mimc hash function: %w", err)
+		api.AssertIsEqual(0, 1)
+	}
+	hFn.Write(inputs...)
+	// compare the hash with the provided InputsHash
+	api.AssertIsEqual(c.InputsHash, hFn.Sum())
+}
+
+func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	// store the original field to reset it then and set the field to BLS12-377
 	originalField := api.Compiler().Field()
 	api.Compiler().Field().Set(ecc.BLS12_377.ScalarField())
-	// reset the field to the original one
 	// group common inputs
 	commonInputs := []frontend.Variable{
 		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
@@ -101,7 +126,7 @@ func (c *AggregatorCircuit) checkInputsHashes(api frontend.API) {
 		finalHash := api.Mul(bls12377HashFn.Sum(), validHashes[i])
 		// pack expected hash from each voter proof public inputs
 		api.AssertIsEqual(len(c.VerifyPublicInputs[i].Public), 1)
-		expectedHash, err := utils.PackScalarToVar(api, &c.VerifyPublicInputs[i].Public[0])
+		expectedHash, err := utils.PackScalarToVar(api, c.VerifyPublicInputs[i].Public[0])
 		if err != nil {
 			api.Println("failed to expected inner input hash pack scalar to variable: %w", err)
 			api.AssertIsEqual(0, 1)
@@ -109,10 +134,11 @@ func (c *AggregatorCircuit) checkInputsHashes(api frontend.API) {
 		// compare the expected hash with the calculated one
 		api.AssertIsEqual(expectedHash, finalHash)
 	}
+	// reset the field to the original one
 	api.Compiler().Field().Set(originalField)
 }
 
-func (c *AggregatorCircuit) checkProofs(api frontend.API) {
+func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
@@ -135,9 +161,11 @@ func (c *AggregatorCircuit) checkProofs(api frontend.API) {
 	}
 }
 
-func (c *AggregatorCircuit) Define(api frontend.API) error {
-	// check previous circuits inputs hashes
-	c.checkInputsHashes(api)
+func (c AggregatorCircuit) Define(api frontend.API) error {
+	// check the inputs hash
+	c.checkInputHash(api)
+	// check inner circuits inputs hashes
+	c.checkInnerInputsHashes(api)
 	// check all the proofs
 	c.checkProofs(api)
 	return nil
