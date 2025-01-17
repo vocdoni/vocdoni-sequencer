@@ -68,6 +68,13 @@ type AggregatorCircuit struct {
 	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
+// checkInputHash circuit method checks the hash of the public-private inputs
+// of the circuit with the provided InputsHash. The hash is calculated using
+// the native MiMC hash function (using the same field as the circuit). As
+// circuit method, it does not return any value, but it assert that the hashes
+// are equal. The hash includes the census root, process id, encryption public
+// key, the ballot mode params, the nullifiers, commitments, addresses and the
+// encrypted ballots.
 func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	// group common inputs
 	inputs := []frontend.Variable{
@@ -95,6 +102,11 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	api.AssertIsEqual(c.InputsHash, hFn.Sum())
 }
 
+// checkInnerInputsHashes circuit method checks the hash of the public inputs
+// of each voter proof with the provided VerifyPublicInputs. The hash is
+// calculated using the MiMC hash function in the same field of the proofs. As
+// circuit method, it does not return any value, but it assert that the hashes
+// are equal. Each hash includes the common inputs and the voter inputs.
 func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	// store the original field to reset it then and set the field to BLS12-377
 	originalField := api.Compiler().Field()
@@ -140,6 +152,12 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	api.Compiler().Field().Set(originalField)
 }
 
+// checkProofs circuit method verifies each voter proof with the provided
+// verification keys and public inputs. The verification keys should contain
+// the dummy circuit and the main circuit verification keys in that particular
+// order. The dummy circuit verification key is used to verify the proofs that
+// are not from valid voters. As circuit method, it does not return any value,
+// but it assert that all the proofs are valid.
 func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
