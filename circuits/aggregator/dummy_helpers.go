@@ -37,27 +37,29 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assigments *AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int) error {
+func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int) (
+	AggregatorCircuit, AggregatorCircuit, error,
+) {
+	dummyPlaceholder, dummyAssigment := DummyPlaceholder(main), DummyAssigment()
 	// compile the dummy circuit for the main
-	dummyCCS, pubWitness, proof, vk, err := compileAndVerifyCircuit(
-		DummyPlaceholder(main), DummyAssigment(),
-		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
+	dummyCCS, pubWitness, proof, vk, err := compileAndVerifyCircuit(&dummyPlaceholder,
+		&dummyAssigment, ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
 	if err != nil {
-		return err
+		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
 	// set fixed dummy vk in the placeholders
 	placeholder.VerificationKeys[0], err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	if err != nil {
-		return fmt.Errorf("fix dummy vk error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("fix dummy vk error: %w", err)
 	}
 	// parse dummy proof and witness
 	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 	if err != nil {
-		return fmt.Errorf("dummy proof value error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy proof value error: %w", err)
 	}
 	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
 	if err != nil {
-		return fmt.Errorf("dummy witness value error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy witness value error: %w", err)
 	}
 	// set some dummy values in others assigments variables
 	dummyValue := frontend.Variable(0)
@@ -80,7 +82,7 @@ func FillWithDummyFixed(placeholder, assigments *AggregatorCircuit, main constra
 			assigments.VerifyPublicInputs[i] = dummyWitness
 		}
 	}
-	return nil
+	return placeholder, assigments, nil
 }
 
 func compileAndVerifyCircuit(placeholder, assigment frontend.Circuit, outer *big.Int, field *big.Int) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {

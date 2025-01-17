@@ -1,4 +1,4 @@
-package voteverifier
+package voteverifiertest
 
 import (
 	"fmt"

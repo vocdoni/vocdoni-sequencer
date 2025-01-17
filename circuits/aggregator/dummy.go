@@ -13,7 +13,7 @@ type dummyCircuit struct {
 	PublicInputs  frontend.Variable `gnark:",public"`
 }
 
-func (c *dummyCircuit) Define(api frontend.API) error {
+func (c dummyCircuit) Define(api frontend.API) error {
 	cmtr, ok := api.(frontend.Committer)
 	if !ok {
 		return errors.New("api is not a commiter")
@@ -34,11 +34,11 @@ func (c *dummyCircuit) Define(api frontend.API) error {
 
 // DummyPlaceholder function returns the placeholder of a dummy circtuit for
 // the constraint.ConstraintSystem provided.
-func DummyPlaceholder(mainCircuit constraint.ConstraintSystem) *dummyCircuit {
-	return &dummyCircuit{nbConstraints: mainCircuit.GetNbConstraints()}
+func DummyPlaceholder(mainCircuit constraint.ConstraintSystem) dummyCircuit {
+	return dummyCircuit{nbConstraints: mainCircuit.GetNbConstraints()}
 }
 
 // DummyPlaceholder function returns the assigment of a dummy circtuit.
-func DummyAssigment() *dummyCircuit {
-	return &dummyCircuit{PublicInputs: 0, SecretInput: 1}
+func DummyAssigment() dummyCircuit {
+	return dummyCircuit{PublicInputs: 0, SecretInput: 1}
 }
