@@ -164,10 +164,10 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
 				CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
 				CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
-				EncryptionPubKey: [2]emulated.Element[sw_bn254.ScalarField]{
-					emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyX),
-					emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyY),
-				},
+			},
+			EncryptionPubKey: [2]emulated.Element[sw_bn254.ScalarField]{
+				emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyX),
+				emulated.ValueOf[sw_bn254.ScalarField](encryptionKeyY),
 			},
 			Address:         emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
 			UserWeight:      emulated.ValueOf[sw_bn254.ScalarField](ballottest.Weight),

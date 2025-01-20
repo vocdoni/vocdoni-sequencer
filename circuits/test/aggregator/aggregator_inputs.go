@@ -154,10 +154,10 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 			MinTotalCost:    ballottest.MaxCount,
 			CostExp:         ballottest.CostExp,
 			CostFromWeight:  ballottest.CostFromWeight,
-			EncryptionPubKey: [2]frontend.Variable{
-				vvInputs.EncryptionPubKey[0],
-				vvInputs.EncryptionPubKey[1],
-			},
+		},
+		EncryptionPubKey: [2]frontend.Variable{
+			vvInputs.EncryptionPubKey[0],
+			vvInputs.EncryptionPubKey[1],
 		},
 		ProcessId:          vvInputs.ProcessID,
 		CensusRoot:         vvInputs.CensusRoot,

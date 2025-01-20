@@ -53,8 +53,9 @@ type AggregatorCircuit struct {
 	// in the same process.
 	circuits.BallotMode[frontend.Variable]
 	// Other common inputs
-	ProcessId  frontend.Variable // Part of InputsHash
-	CensusRoot frontend.Variable // Part of InputsHash
+	EncryptionPubKey [2]frontend.Variable // Part of InputsHash
+	ProcessId        frontend.Variable    // Part of InputsHash
+	CensusRoot       frontend.Variable    // Part of InputsHash
 	// Voter inputs
 	Nullifiers       [MaxVotes]frontend.Variable                  // Part of InputsHash
 	Commitments      [MaxVotes]frontend.Variable                  // Part of InputsHash
@@ -77,11 +78,8 @@ type AggregatorCircuit struct {
 // encrypted ballots.
 func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	// group common inputs
-	inputs := []frontend.Variable{
-		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
-		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
-		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight,
-	}
+	inputs := []frontend.Variable{c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
+	inputs = append(inputs, c.BallotMode.List()...)
 	inputs = append(inputs, c.Nullifiers[:]...)
 	inputs = append(inputs, c.Commitments[:]...)
 	inputs = append(inputs, c.Addresses[:]...)
@@ -94,7 +92,7 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	// hash the inputs
 	hFn, err := mimc.NewMiMC(api)
 	if err != nil {
-		api.Println("failed to create native mimc hash function: %w", err)
+		api.Println("failed to create native mimc hash function: ", err)
 		api.AssertIsEqual(0, 1)
 	}
 	hFn.Write(inputs...)
@@ -112,11 +110,8 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	originalField := api.Compiler().Field()
 	api.Compiler().Field().Set(ecc.BLS12_377.ScalarField())
 	// group common inputs
-	commonInputs := []frontend.Variable{
-		c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1],
-		c.MaxCount, c.ForceUniqueness, c.MaxValue, c.MinValue,
-		c.MaxTotalCost, c.MinTotalCost, c.CostExp, c.CostFromWeight,
-	}
+	commonInputs := []frontend.Variable{c.CensusRoot, c.ProcessId, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
+	commonInputs = append(commonInputs, c.BallotMode.List()...)
 	// iterate over each voter inputs to group the remaining ones and calculate
 	// every voter hash
 	validHashes := api.ToBinary(c.ValidVotes)
@@ -131,7 +126,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		// instance bls12377 hash function
 		bls12377HashFn, err := mimc.NewMiMC(api)
 		if err != nil {
-			api.Println("failed to create BLS12-377 mimc hash function: %w", err)
+			api.Println("failed to create BLS12-377 mimc hash function: ", err)
 			api.AssertIsEqual(0, 1)
 		}
 		// hash all the inputs
@@ -142,7 +137,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		api.AssertIsEqual(len(c.VerifyPublicInputs[i].Public), 1)
 		expectedHash, err := utils.PackScalarToVar(api, c.VerifyPublicInputs[i].Public[0])
 		if err != nil {
-			api.Println("failed to expected inner input hash pack scalar to variable: %w", err)
+			api.Println("failed to expected inner input hash pack scalar to variable: ", err)
 			api.AssertIsEqual(0, 1)
 		}
 		// compare the expected hash with the calculated one
@@ -162,7 +157,7 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
-		api.Println("failed to create BLS12-377 verifier: %w", err)
+		api.Println("failed to create BLS12-377 verifier: ", err)
 		api.AssertIsEqual(0, 1)
 	}
 	// verify each proof with the provided public inputs and the fixed
@@ -171,11 +166,11 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	for i := 0; i < len(c.VerifyProofs); i++ {
 		vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
 		if err != nil {
-			api.Println("failed to switch verification key: %w", err)
+			api.Println("failed to switch verification key: ", err)
 			api.AssertIsEqual(0, 1)
 		}
 		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			api.Println("failed to verify proof %d: %w", i, err)
+			api.Println("failed to verify proof: ", i, err)
 			api.AssertIsEqual(0, 1)
 		}
 	}
