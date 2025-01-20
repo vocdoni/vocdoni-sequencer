@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
@@ -162,4 +163,91 @@ func (o *State) OverwriteCount() int {
 
 func (o *State) Votes() []*Vote {
 	return o.votes
+}
+
+func (o *State) PaddedVotes() []*Vote {
+	v := slices.Clone(o.votes)
+	for len(v) < VoteBatchSize {
+		v = append(v, &Vote{
+			Nullifier:  []byte{0x00},
+			Ballot:     elgamal.NewCiphertexts(Curve),
+			Address:    []byte{0x00},
+			Commitment: big.NewInt(0),
+		})
+	}
+	return v
+}
+
+func (o *State) ProcessID() []byte {
+	_, v, err := o.tree.Get(KeyProcessID)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func (o *State) CensusRoot() []byte {
+	_, v, err := o.tree.Get(KeyCensusRoot)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func (o *State) BallotMode() []byte {
+	_, v, err := o.tree.Get(KeyBallotMode)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func (o *State) EncryptionKey() []byte {
+	_, v, err := o.tree.Get(KeyEncryptionKey)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func (o *State) AggregatedWitnessInputs() [][]byte {
+	// all of the following values compose the preimage that is hashed
+	// to produce the public input needed to verify AggregatedProof.
+	// ProcessID
+	// CensusRoot
+	// BallotMode
+	// EncryptionKey
+	// Nullifiers
+	// Ballots
+	// Addressess
+	// Commitments
+
+	inputs := [][]byte{
+		o.ProcessID(),
+		o.CensusRoot(),
+		o.BallotMode(),
+		o.EncryptionKey(),
+	}
+	votes := o.PaddedVotes()
+	for _, v := range votes {
+		inputs = append(inputs, v.Nullifier)
+	}
+	for _, v := range votes {
+		inputs = append(inputs, v.Ballot.Serialize())
+	}
+	for _, v := range votes {
+		inputs = append(inputs, v.Address)
+	}
+	for _, v := range votes {
+		inputs = append(inputs, arbo.BigIntToBytes(HashFunc.Len(), v.Commitment))
+	}
+	return inputs
+}
+
+func (o *State) AggregatedWitnessHash() ([]byte, error) {
+	hash, err := HashFunc.Hash(o.AggregatedWitnessInputs()...)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
 }

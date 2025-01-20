@@ -29,8 +29,9 @@ func TestCircuitCompile(t *testing.T) {
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
-	_, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &statetransition.Circuit{})
-	if err != nil {
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		statetransition.CircuitPlaceholder(),
+	); err != nil {
 		panic(err)
 	}
 }
@@ -55,13 +56,23 @@ func TestCircuitProve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndBatch(); err != nil { // expected result: 16+17=33
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
+	{
+		inputsHash, err := s.AggregatedWitnessHash()
+		if err != nil {
+			t.Fatal(err)
+		}
+		proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+		if err != nil {
+			t.Fatal(err)
+		}
+		witness.AggregatedProof = *proof
+	}
 	assert := test.NewAssert(t)
-
 	assert.ProverSucceeded(
-		&statetransition.Circuit{},
+		statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
@@ -88,12 +99,19 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	// expected results:
-	// ResultsAdd: 16+17+10+100 = 143
-	// ResultsSub: 16 = 16
-	// Final: 16+17-16+10+100 = 127
+	{
+		inputsHash, err := s.AggregatedWitnessHash()
+		if err != nil {
+			t.Fatal(err)
+		}
+		proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+		if err != nil {
+			t.Fatal(err)
+		}
+		witness.AggregatedProof = *proof
+	}
 	assert.ProverSucceeded(
-		&statetransition.Circuit{},
+		statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
@@ -141,6 +159,140 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 	}
 }
 
+type CircuitAggregatedWitness struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
+	if err := circuit.VerifyAggregatedWitnessHash(api, statetransition.HashFn); err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestCircuitAggregatedWitnessCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitAggregatedWitnessProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	s := newMockState(t)
+
+	if err := s.StartBatch(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
+		t.Fatal(err)
+	}
+
+	witness, err := GenerateWitnesses(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.EndBatch(); err != nil {
+		t.Fatal(err)
+	}
+
+	inputsHash, err := s.AggregatedWitnessHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	witness.AggregatedProof = *proof
+
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+}
+
+type CircuitAggregatedProof struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
+	if err := circuit.VerifyAggregatedProof(api); err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestCircuitAggregatedProofCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitAggregatedProof{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitAggregatedProofProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	s := newMockState(t)
+
+	if err := s.StartBatch(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
+		t.Fatal(err)
+	}
+
+	witness, err := GenerateWitnesses(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.EndBatch(); err != nil {
+		t.Fatal(err)
+	}
+
+	inputsHash, err := s.AggregatedWitnessHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	witness.AggregatedProof = *proof
+
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitAggregatedProof{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+}
+
 type CircuitBallots struct {
 	statetransition.Circuit
 }
@@ -157,8 +309,9 @@ func TestCircuitBallotsCompile(t *testing.T) {
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
-	_, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &CircuitBallots{})
-	if err != nil {
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitBallots{*statetransition.CircuitPlaceholder()},
+	); err != nil {
 		panic(err)
 	}
 }
@@ -182,13 +335,23 @@ func TestCircuitBallotsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.EndBatch(); err != nil { // expected result: 16+17=33
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	assert := test.NewAssert(t)
 
+	inputsHash, err := s.AggregatedWitnessHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	witness.AggregatedProof = *proof
+
+	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
-		&CircuitBallots{},
+		&CircuitBallots{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
@@ -211,8 +374,9 @@ func TestCircuitMerkleTransitionsCompile(t *testing.T) {
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
-	_, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &CircuitMerkleTransitions{})
-	if err != nil {
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholder()},
+	); err != nil {
 		panic(err)
 	}
 }
@@ -241,10 +405,19 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert := test.NewAssert(t)
+	inputsHash, err := s.AggregatedWitnessHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	witness.AggregatedProof = *proof
 
+	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
-		&CircuitMerkleTransitions{},
+		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
