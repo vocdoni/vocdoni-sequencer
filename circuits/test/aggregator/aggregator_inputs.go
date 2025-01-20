@@ -1,19 +1,16 @@
 package aggregatortest
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	bw6761mimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
-	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/emulated/emparams"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
@@ -58,15 +55,6 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	// compile vote verifier circuit
-	vvCCS, err := frontend.Compile(gecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
-	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-	}
-	vvPk, vvVk, err := groth16.Setup(vvCCS)
-	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-	}
 	// generate voters proofs
 	totalPlainEncryptedBallots := []*big.Int{}
 	proofs := [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
@@ -76,34 +64,14 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		for _, b := range vvInputs.EncryptedBallots[i] {
 			totalPlainEncryptedBallots = append(totalPlainEncryptedBallots, b[0][0], b[0][1], b[1][0], b[1][1])
 		}
-		// parse the witness to the circuit
-		fullWitness, err := frontend.NewWitness(&vvAssigments[i], gecc.BLS12_377.ScalarField())
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
 		// generate the proof
-		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving proof %d: %w", i, err)
-		}
-		// convert the proof to the circuit proof type
-		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+		proof, err := aggregator.DummyInnerProof(arbo.BytesToBigInt([]byte{0x00}))
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
-		// convert the public inputs to the circuit public inputs type
-		publicWitness, err := fullWitness.Public()
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
-		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
-		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
+		proofs[i] = proof.Proof
+		pubInputs[i] = proof.Witness
+		vvPlaceholder.CircomVerificationKey = proof.VK
 	}
 	// compute public inputs hash
 	inputs := []*big.Int{

@@ -188,9 +188,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				R: emulated.ValueOf[emulated.Secp256k1Fr](rSign),
 				S: emulated.ValueOf[emulated.Secp256k1Fr](sSign),
 			},
-			// circom proof
-			CircomProof:            voterProof.Proof.Proof,
-			CircomPublicInputsHash: voterProof.Proof.PublicInputs,
 		})
 	}
 
@@ -202,6 +199,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			Nullifiers:       nullifiers,
 			Commitments:      commitments,
 			EncryptedBallots: encryptedBallots,
+			InputsHash:       inputsHash,
 		}, voteverifier.VerifyVoteCircuit{
 			CircomVerificationKey:  circomPlaceholder.Vk,
 			CircomProof:            circomPlaceholder.Proof,
