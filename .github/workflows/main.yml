@@ -16,7 +16,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Print github env vars
+      - name: Print Github env vars
         run: |
           echo github.event_name: ${{ github.event_name }}
           echo github.ref: ${{ github.ref }}
@@ -87,6 +87,22 @@ jobs:
     runs-on: [self-hosted, z]
     env:
       LOG_PANIC_ON_INVALIDCHARS: true # check that log lines contain no invalid chars
+    services:
+      geth:
+        image: ethereum/client-go:latest
+        ports:
+          - 8545:8545
+          - 30303:30303
+        options: >-
+          --name geth-dev
+          --entrypoint geth
+          --dev 
+          --http 
+          --http.addr 0.0.0.0 
+          --http.port 8545 
+          --http.api eth,net,web3 
+          --ipcdisable 
+          --allow-insecure-unlock
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -129,6 +145,19 @@ jobs:
             echo "RUN_CIRCUIT_TESTS=false" >> "$GITHUB_ENV"
             echo "No changes under /circuits."
           fi
+      
+      # Step to wait for geth to be ready
+      - name: Wait for Geth to be Ready
+        run: |
+          echo "Waiting for Geth to be ready..."
+          for i in {1..10}; do
+            if curl -s http://localhost:8545; then
+              echo "Geth is ready"
+              break
+            fi
+            echo "Waiting..."
+            sleep 2
+          done
 
       - run: mkdir -p "$PWD/gocoverage-unit/"
 

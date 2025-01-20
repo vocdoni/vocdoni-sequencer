@@ -47,14 +47,12 @@ func NewContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
-	organizations, err := bindings.NewOrganizationRegistry(addresses.OrganizationRegistry, cli)
+
+	organizations, process, err := instantiateContrats(addresses, cli)
 	if err != nil {
-		return nil, fmt.Errorf("failed to bind organization registry: %w", err)
+		return nil, fmt.Errorf("failed to instantiate contracts: %w", err)
 	}
-	process, err := bindings.NewProcessRegistry(addresses.ProcessRegistry, cli)
-	if err != nil {
-		return nil, fmt.Errorf("failed to bind process registry: %w", err)
-	}
+
 	return &Contracts{
 		organizations:  organizations,
 		processes:      process,
@@ -63,6 +61,74 @@ func NewContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
 		cli:            cli,
 		knownProcesses: make(map[string]struct{}),
 	}, nil
+}
+
+// deployContracts deploys the contracts in a given chain.
+func deployContracts(
+	cli *rpc.Client,
+	privKey *ecdsa.PrivateKey,
+	chainID *big.Int,
+) (*Addresses, error) {
+	auth, err := bind.NewKeyedTransactorWithChainID(privKey, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authorized transactor: %v", err)
+	}
+
+	// organization registry
+	orgABI, err := bindings.OrganizationRegistryMetaData.GetAbi()
+	if err != nil || orgABI == nil {
+		return nil, fmt.Errorf("failed to get organitzation registry abi: %w", err)
+	}
+	orgAddress, orgTx, _, err := bind.DeployContract(
+		auth,
+		*orgABI,
+		common.FromHex(bindings.OrganizationRegistryBin),
+		cli,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy new organization registry contract: %v", err)
+	}
+	log.Infow("Contract pending deploy", "address", orgAddress.Hex())
+	log.Infow("Transaction waiting to be mined", "hash", orgTx.Hash().Hex())
+
+	// process registry
+	procABI, err := bindings.OrganizationRegistryMetaData.GetAbi()
+	if err != nil || procABI == nil {
+		return nil, fmt.Errorf("failed to get organitzation registry abi: %w", err)
+	}
+	procAddress, procTx, _, err := bind.DeployContract(
+		auth,
+		*procABI,
+		common.FromHex(bindings.ProcessRegistryBin),
+		cli,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy new process registry contract: %v", err)
+	}
+	log.Infow("Contract pending deploy", "address", procAddress.Hex())
+	log.Infow("Transaction waiting to be mined", "hash", procTx.Hash().Hex())
+
+	return &Addresses{
+		OrganizationRegistry: orgAddress,
+		ProcessRegistry:      procAddress,
+	}, nil
+}
+
+// instantiateContrats creates the bindings to the contracts with the given addresses.
+func instantiateContrats(addresses *Addresses, cli *rpc.Client) (
+	*bindings.OrganizationRegistry,
+	*bindings.ProcessRegistry,
+	error,
+) {
+	organizations, err := bindings.NewOrganizationRegistry(addresses.OrganizationRegistry, cli)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to bind organization registry: %w", err)
+	}
+	process, err := bindings.NewProcessRegistry(addresses.ProcessRegistry, cli)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to bind process registry: %w", err)
+	}
+	return organizations, process, nil
 }
 
 // AddWeb3Endpoint adds a new web3 endpoint to the pool.
@@ -110,11 +176,5 @@ func (c *Contracts) authTransactOpts() (*bind.TransactOpts, error) {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
 	auth.Nonce = new(big.Int).SetUint64(nonce)
-	// set the gas tip cap
-	if auth.GasTipCap, err = c.cli.SuggestGasTipCap(ctx); err != nil {
-		return nil, fmt.Errorf("failed to get gas tip cap: %w", err)
-	}
-	// set the gas limit
-	auth.GasLimit = 10000000
 	return auth, nil
 }
