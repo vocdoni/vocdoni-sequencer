@@ -32,7 +32,6 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/mimc"
-	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -64,11 +63,7 @@ type AggregatorCircuit struct {
 	Addresses        [MaxVotes]frontend.Variable                  // Part of InputsHash
 	EncryptedBallots [MaxVotes][MaxFields][2][2]frontend.Variable // Part of InputsHash
 	// VerifyCircuit proofs
-	VerifyProofs       [MaxVotes]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	VerifyPublicInputs [MaxVotes]groth16.Witness[sw_bls12377.ScalarField]
-	// VerificationKeys should contain the dummy circuit and the main circuit
-	// verification keys in that particular order
-	VerificationKeys [2]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
+	InnerProofs [MaxVotes]circuits.InnerProofBLS12377
 }
 
 // checkInputHash circuit method checks the hash of the public-private inputs
@@ -142,8 +137,8 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		bls12377HashFn.Write(remainingInputs...)
 		finalHash := api.Mul(bls12377HashFn.Sum(), validHashes[i])
 		// pack expected hash from each voter proof public inputs
-		api.AssertIsEqual(len(c.VerifyPublicInputs[i].Public), 1)
-		expectedHash, err := utils.PackScalarToVar(api, c.VerifyPublicInputs[i].Public[0])
+		api.AssertIsEqual(len(c.InnerProofs[i].Witness.Public), 1)
+		expectedHash, err := utils.PackScalarToVar(api, c.InnerProofs[i].Witness.Public[0])
 		if err != nil {
 			api.Println("failed to expected inner input hash pack scalar to variable: %w", err)
 			api.AssertIsEqual(0, 1)
@@ -170,25 +165,27 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	}
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
-	validProofs := bits.ToBinary(api, c.ValidVotes)
-	for i := 0; i < len(c.VerifyProofs); i++ {
-		vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
-		if err != nil {
-			api.Println("failed to switch verification key: %w", err)
-			api.AssertIsEqual(0, 1)
-		}
-		if err := verifier.AssertProof(vk, c.VerifyProofs[i], c.VerifyPublicInputs[i]); err != nil {
-			api.Println("failed to verify proof %d: %w", i, err)
+	// validProofs := bits.ToBinary(api, c.ValidVotes)
+	for i, proof := range c.InnerProofs {
+		// api.Println("validProofs", validProofs)
+		// vk, err := verifier.SwitchVerificationKey(validProofs[i], c.VerificationKeys[:])
+		// api.Println("switched key %d, %d", validProofs[i], len(vk.G1.K))
+		// if err != nil {
+		// 	api.Println("failed to switch verification key: %w", err)
+		// 	api.AssertIsEqual(0, 1)
+		// }
+		if err := verifier.AssertProof(proof.VK, proof.Proof, proof.Witness); err != nil {
+			api.Println("failed to verify proof", i, err)
 			api.AssertIsEqual(0, 1)
 		}
 	}
 }
 
 func (c AggregatorCircuit) Define(api frontend.API) error {
-	// check the inputs hash
-	c.checkInputHash(api)
-	// check inner circuits inputs hashes
-	c.checkInnerInputsHashes(api)
+	// // check the inputs hash
+	// c.checkInputHash(api)
+	// // check inner circuits inputs hashes
+	// c.checkInnerInputsHashes(api)
 	// check all the proofs
 	c.checkProofs(api)
 	return nil
@@ -204,12 +201,8 @@ func CircuitPlaceholder() *AggregatorCircuit {
 
 func CircuitPlaceholderWithProof(proof *circuits.InnerProofBLS12377) *AggregatorCircuit {
 	c := &AggregatorCircuit{}
-	for i := range c.VerifyProofs {
-		c.VerifyProofs[i] = proof.Proof
-		c.VerifyPublicInputs[i] = proof.Witness
-	}
-	for i := range c.VerificationKeys {
-		c.VerificationKeys[i] = proof.VK
+	for i := range c.InnerProofs {
+		c.InnerProofs[i] = *proof
 	}
 	return c
 }

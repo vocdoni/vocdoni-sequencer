@@ -41,7 +41,7 @@ func TestCircuitProve(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
-	_, placeholder, assigments, err := aggregatortest.AggregarorInputsForTest(processId, 3)
+	_, placeholder, assigments, err := aggregatortest.AggregarorInputsForTest(processId, 10)
 	c.Assert(err, qt.IsNil)
 	c.Logf("inputs generation tooks %s", time.Since(now).String())
 	// proving

@@ -199,7 +199,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			Nullifiers:       nullifiers,
 			Commitments:      commitments,
 			EncryptedBallots: encryptedBallots,
-			InputsHash:       inputsHash,
+			// InputsHash:       inputsHash,
 		}, voteverifier.VerifyVoteCircuit{
 			CircomVerificationKey:  circomPlaceholder.Vk,
 			CircomProof:            circomPlaceholder.Proof,
