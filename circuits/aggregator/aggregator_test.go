@@ -26,7 +26,8 @@ func TestCircuitCompile(t *testing.T) {
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
-	_, err := frontend.Compile(ecc.BW6_761.ScalarField(), r1cs.NewBuilder, &aggregator.AggregatorCircuit{})
+	_, err := frontend.Compile(ecc.BW6_761.ScalarField(), r1cs.NewBuilder,
+		aggregator.CircuitPlaceholder())
 	if err != nil {
 		panic(err)
 	}

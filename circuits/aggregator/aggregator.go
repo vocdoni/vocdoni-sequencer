@@ -26,6 +26,8 @@
 package aggregator
 
 import (
+	"fmt"
+
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
@@ -34,6 +36,7 @@ import (
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 )
 
 const (
@@ -189,4 +192,53 @@ func (c AggregatorCircuit) Define(api frontend.API) error {
 	// check all the proofs
 	c.checkProofs(api)
 	return nil
+}
+
+func CircuitPlaceholder() *AggregatorCircuit {
+	proof, err := DummyInnerProof(0)
+	if err != nil {
+		panic(err)
+	}
+	return CircuitPlaceholderWithProof(proof)
+}
+
+func CircuitPlaceholderWithProof(proof *circuits.InnerProofBLS12377) *AggregatorCircuit {
+	c := &AggregatorCircuit{}
+	for i := range c.VerifyProofs {
+		c.VerifyProofs[i] = proof.Proof
+		c.VerifyPublicInputs[i] = proof.Witness
+	}
+	for i := range c.VerificationKeys {
+		c.VerificationKeys[i] = proof.VK
+	}
+	return c
+}
+
+func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBLS12377, error) {
+	_, witness, proof, vk, err := dummy.Prove(
+		dummy.PlaceholderWithConstraints(0), dummy.Assignment(inputsHash),
+		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
+	if err != nil {
+		return nil, err
+	}
+	// parse dummy proof and witness
+	dummyProof, err := groth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+	if err != nil {
+		return nil, fmt.Errorf("dummy proof value error: %w", err)
+	}
+	dummyWitness, err := groth16.ValueOfWitness[sw_bls12377.ScalarField](witness)
+	if err != nil {
+		return nil, fmt.Errorf("dummy witness value error: %w", err)
+	}
+	// set fixed dummy vk in the placeholders
+	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	if err != nil {
+		return nil, fmt.Errorf("dummy vk value error: %w", err)
+	}
+
+	return &circuits.InnerProofBLS12377{
+		Proof:   dummyProof,
+		Witness: dummyWitness,
+		VK:      dummyVK,
+	}, nil
 }
