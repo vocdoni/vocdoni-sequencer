@@ -26,3 +26,7 @@ func (b BallotMode[T]) List() []T {
 		b.CostFromWeight,
 	}
 }
+
+func (bm BallotMode[T]) Bytes() []byte {
+	return []byte{0x00}
+}

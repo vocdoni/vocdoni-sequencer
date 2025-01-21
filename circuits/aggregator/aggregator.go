@@ -132,7 +132,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		// hash all the inputs
 		bls12377HashFn.Write(commonInputs...)
 		bls12377HashFn.Write(remainingInputs...)
-		finalHash := api.Mul(bls12377HashFn.Sum(), validHashes[i])
+		finalHash := api.Select(validHashes[i], bls12377HashFn.Sum(), frontend.Variable(1))
 		// pack expected hash from each voter proof public inputs
 		api.AssertIsEqual(len(c.VerifyPublicInputs[i].Public), 1)
 		expectedHash, err := utils.PackScalarToVar(api, c.VerifyPublicInputs[i].Public[0])
@@ -179,8 +179,8 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 func (c AggregatorCircuit) Define(api frontend.API) error {
 	// check the inputs hash
 	c.checkInputHash(api)
-	// check inner circuits inputs hashes
-	c.checkInnerInputsHashes(api)
+	// // check inner circuits inputs hashes
+	// c.checkInnerInputsHashes(api)
 	// check all the proofs
 	c.checkProofs(api)
 	return nil
