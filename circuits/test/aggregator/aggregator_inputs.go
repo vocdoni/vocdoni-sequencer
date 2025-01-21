@@ -12,7 +12,6 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/math/emulated/emparams"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
@@ -69,8 +68,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// generate voters proofs
 	totalPlainEncryptedBallots := []*big.Int{}
-	proofs := [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
-	pubInputs := [aggregator.MaxVotes]stdgroth16.Witness[emparams.BLS12377Fr]{}
+	proofs := [aggregator.MaxVotes]circuits.InnerProofBLS12377{}
 	for i := range vvAssigments {
 		// flat encrypted ballots
 		for _, b := range vvInputs.EncryptedBallots[i] {
@@ -87,7 +85,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving proof %d: %w", i, err)
 		}
 		// convert the proof to the circuit proof type
-		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+		proofs[i].Proof, err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
@@ -100,7 +98,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
-		pubInputs[i], err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
+		proofs[i].Witness, err = stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](publicWitness)
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
@@ -159,10 +157,9 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 			vvInputs.EncryptionPubKey[0],
 			vvInputs.EncryptionPubKey[1],
 		},
-		ProcessId:          vvInputs.ProcessID,
-		CensusRoot:         vvInputs.CensusRoot,
-		VerifyProofs:       proofs,
-		VerifyPublicInputs: pubInputs,
+		ProcessId:  vvInputs.ProcessID,
+		CensusRoot: vvInputs.CensusRoot,
+		Proofs:     proofs,
 	}
 	// set voters final witness stuff
 	for i := 0; i < nValidVoters; i++ {
@@ -177,18 +174,16 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 			}
 		}
 	}
-	// create final placeholder
-	finalPlaceholder := aggregator.AggregatorCircuit{
-		VerifyPublicInputs: [aggregator.MaxVotes]stdgroth16.Witness[sw_bls12377.ScalarField]{},
-		VerifyProofs:       [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
-		VerificationKeys:   [2]stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{},
-	}
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
 	if err != nil {
 		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	finalPlaceholder.VerificationKeys[1] = fixedVk
+	// create final placeholder
+	finalPlaceholder := aggregator.AggregatorCircuit{
+		Proofs:              [aggregator.MaxVotes]circuits.InnerProofBLS12377{},
+		BaseVerificationKey: fixedVk,
+	}
 	// fill placeholder and witness with dummy circuits
 	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters)
 	if err != nil {

@@ -45,7 +45,7 @@ func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constrai
 		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
 	// set fixed dummy vk in the placeholders
-	placeholder.VerificationKeys[0], err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	placeholder.DummyVerificationKey, err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	if err != nil {
 		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("fix dummy vk error: %w", err)
 	}
@@ -67,16 +67,16 @@ func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constrai
 		}
 	}
 	// fill placeholders and assigments dummy values
-	for i := range assigments.VerifyProofs {
-		placeholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
-		placeholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
+	for i := range assigments.Proofs {
+		placeholder.Proofs[i].Proof = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
+		placeholder.Proofs[i].Witness = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
 		if i >= fromIdx {
 			assigments.Nullifiers[i] = dummyValue
 			assigments.Commitments[i] = dummyValue
 			assigments.Addresses[i] = dummyValue
 			assigments.EncryptedBallots[i] = dummyEncryptedBallots
-			assigments.VerifyProofs[i] = dummyProof
-			assigments.VerifyPublicInputs[i] = dummyWitness
+			assigments.Proofs[i].Proof = dummyProof
+			assigments.Proofs[i].Witness = dummyWitness
 		}
 	}
 	return placeholder, assigments, nil
