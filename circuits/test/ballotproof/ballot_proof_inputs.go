@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -18,9 +17,7 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
-	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/circom2gnark/parser"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
@@ -157,16 +154,16 @@ func EncryptBallotFieldsForTest(fields []*big.Int, n int, pk ecc.Point, k *big.I
 // while the nullifier is generated using the commitment and secret value.
 func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
-		util.BigToFF(new(big.Int).SetBytes(address)),
-		util.BigToFF(new(big.Int).SetBytes(processID)),
-		util.BigToFF(new(big.Int).SetBytes(secret)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	nullifier, err := poseidon.Hash([]*big.Int{
 		commitment,
-		util.BigToFF(new(big.Int).SetBytes(secret)),
+		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -254,8 +251,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(address))
-	ffProcessID := ecc.BigToFF(arbo.BN254BaseField, new(big.Int).SetBytes(processId))
+	ffAddress := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{
 		big.NewInt(int64(MaxCount)),
@@ -279,41 +276,6 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	// init circom inputs
-	circomInputs := map[string]any{
-		"fields":           circuits.BigIntArrayToStringArray(fields, NFields),
-		"max_count":        fmt.Sprint(MaxCount),
-		"force_uniqueness": fmt.Sprint(ForceUniqueness),
-		"max_value":        fmt.Sprint(MaxValue),
-		"min_value":        fmt.Sprint(MinValue),
-		"max_total_cost":   fmt.Sprint(int(math.Pow(float64(MaxValue), float64(CostExp))) * MaxCount),
-		"min_total_cost":   fmt.Sprint(MaxCount),
-		"cost_exp":         fmt.Sprint(CostExp),
-		"cost_from_weight": fmt.Sprint(CostFromWeight),
-		"address":          ffAddress.String(),
-		"weight":           fmt.Sprint(Weight),
-		"process_id":       ffProcessID.String(),
-		"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
-		"k":                k.String(),
-		"cipherfields":     strCipherfields,
-		"nullifier":        nullifier.String(),
-		"commitment":       commitment.String(),
-		"secret":           ecc.BigToFF(gecc.BN254.BaseField(), new(big.Int).SetBytes(secret)).String(),
-		"inputs_hash":      circomInputsHash.String(),
-	}
-	bCircomInputs, err := json.Marshal(circomInputs)
-	if err != nil {
-		return nil, err
-	}
-	// create circom proof and public signals
-	circomProof, pubSignals, err := CompileAndGenerateProofForTest(bCircomInputs)
-	if err != nil {
-		return nil, err
-	}
-	proof, err := circuits.Circom2GnarkProof(TestCircomVerificationKey, circomProof, pubSignals)
-	if err != nil {
-		return nil, err
-	}
 	return &VoterProofResult{
 		ProcessID:           ffProcessID,
 		Address:             ffAddress,
@@ -321,7 +283,6 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		Commitment:          commitment,
 		EncryptedFields:     cipherfields,
 		PlainEcryptedFields: plainCipherfields,
-		Proof:               proof,
 		InputsHash:          circomInputsHash,
 	}, nil
 }
