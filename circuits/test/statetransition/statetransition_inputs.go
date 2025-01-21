@@ -26,7 +26,7 @@ import (
 // StateTransitionTestResults struct includes relevant data after StateTransitionCircuit
 // inputs generation
 type StateTransitionTestResults struct {
-	ProcessId             []byte
+	ProcessId             *big.Int
 	CensusRoot            *big.Int
 	EncryptionPubKey      [2]*big.Int
 	Nullifiers            []*big.Int

@@ -35,27 +35,28 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assigments *AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int) error {
-	// compile the dummy circuit for the main
+func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int) (
+	AggregatorCircuit, AggregatorCircuit, error,
+) {
 	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
 		dummy.Placeholder(main), dummy.Assignment(1),
 		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
 	if err != nil {
-		return err
+		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
 	// set fixed dummy vk in the placeholders
-	placeholder.VerificationKeys[0], err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	placeholder.DummyVerificationKey, err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
 	if err != nil {
-		return fmt.Errorf("fix dummy vk error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("fix dummy vk error: %w", err)
 	}
 	// parse dummy proof and witness
 	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 	if err != nil {
-		return fmt.Errorf("dummy proof value error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy proof value error: %w", err)
 	}
 	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
 	if err != nil {
-		return fmt.Errorf("dummy witness value error: %w", err)
+		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy witness value error: %w", err)
 	}
 	// set some dummy values in others assigments variables
 	dummyValue := frontend.Variable(0)
@@ -66,17 +67,17 @@ func FillWithDummyFixed(placeholder, assigments *AggregatorCircuit, main constra
 		}
 	}
 	// fill placeholders and assigments dummy values
-	for i := range assigments.VerifyProofs {
-		placeholder.VerifyProofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
-		placeholder.VerifyPublicInputs[i] = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
+	for i := range assigments.Proofs {
+		placeholder.Proofs[i].Proof = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
+		placeholder.Proofs[i].Witness = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
 		if i >= fromIdx {
 			assigments.Nullifiers[i] = dummyValue
 			assigments.Commitments[i] = dummyValue
 			assigments.Addresses[i] = dummyValue
 			assigments.EncryptedBallots[i] = dummyEncryptedBallots
-			assigments.VerifyProofs[i] = dummyProof
-			assigments.VerifyPublicInputs[i] = dummyWitness
+			assigments.Proofs[i].Proof = dummyProof
+			assigments.Proofs[i].Witness = dummyWitness
 		}
 	}
-	return nil
+	return placeholder, assigments, nil
 }

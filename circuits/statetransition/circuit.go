@@ -94,7 +94,7 @@ func (circuit Circuit) AggregatedWitnessInputs() []frontend.Variable {
 
 func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API, hFn utils.Hasher) error {
 	api.AssertIsEqual(len(circuit.AggregatedProof.Witness.Public), 1)
-	publicInput, err := utils.PackScalarToVar(api, &circuit.AggregatedProof.Witness.Public[0])
+	publicInput, err := utils.PackScalarToVar(api, circuit.AggregatedProof.Witness.Public[0])
 	if err != nil {
 		return fmt.Errorf("failed to pack scalar to var: %w", err)
 	}
