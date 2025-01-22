@@ -2,6 +2,7 @@ services:
   geth-genesis:
     image: "ethereum/client-go:latest"
     command: --datadir=/chain init /files/genesis.json
+    #command: --dev dumpgenesis
     volumes:
       - ./files:/files
       - geth:/chain
@@ -18,6 +19,7 @@ services:
       - --ws.addr=0.0.0.0
       - --ws.origins=*
       - --datadir=/chain
+      - --dev.period=2
       - --allow-insecure-unlock
       - --dev
       - --ipcdisable
