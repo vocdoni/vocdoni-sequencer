@@ -1,4 +1,4 @@
-package aggregator
+package dummy
 
 import (
 	"testing"
@@ -28,7 +28,7 @@ func TestSameCircuitsInfo(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	mainVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](mainCCS)
 
-	dummyCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, DummyPlaceholder(mainCCS))
+	dummyCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, Placeholder(mainCCS))
 	c.Assert(err, qt.IsNil)
 	dummyVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](dummyCCS)
 

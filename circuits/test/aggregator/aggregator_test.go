@@ -27,7 +27,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	// proving
 	now = time.Now()
 	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(placeholder, assigments,
+	assert.SolvingSucceeded(&placeholder, &assigments,
 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	c.Logf("proving tooks %s", time.Since(now).String())
