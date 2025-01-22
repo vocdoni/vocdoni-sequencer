@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	bindings "github.com/vocdoni/contracts-z/golang-types"
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3/rpc"
 )
 
@@ -28,13 +29,14 @@ type Addresses struct {
 
 // Contracts contains the bindings to the deployed contracts.
 type Contracts struct {
-	ChainID       uint64
-	organizations *bindings.OrganizationRegistry
-	processes     *bindings.ProcessRegistry
-	web3pool      *rpc.Web3Pool
-	cli           *rpc.Client
-	privKey       *ecdsa.PrivateKey
-	address       common.Address
+	ChainID            uint64
+	ContractsAddresses *Addresses
+	organizations      *bindings.OrganizationRegistry
+	processes          *bindings.ProcessRegistry
+	web3pool           *rpc.Web3Pool
+	cli                *rpc.Client
+	privKey            *ecdsa.PrivateKey
+	address            common.Address
 
 	knownProcesses        map[string]struct{}
 	lastWatchProcessBlock uint64
@@ -42,8 +44,8 @@ type Contracts struct {
 	lastWatchOrgBlock     uint64
 }
 
-// NewContracts creates a new Contracts instance with the given web3 endpoint.
-func NewContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
+// LoadContracts creates a new Contracts instance with the given web3 endpoint.
+func LoadContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
 	w3pool := rpc.NewWeb3Pool()
 	chainID, err := w3pool.AddEndpoint(web3rpc)
 	if err != nil {
@@ -62,6 +64,7 @@ func NewContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
 		return nil, fmt.Errorf("failed to bind process registry: %w", err)
 	}
 	return &Contracts{
+		ContractsAddresses: addresses,
 		organizations:      organizations,
 		processes:          process,
 		ChainID:            chainID,
@@ -70,6 +73,90 @@ func NewContracts(addresses *Addresses, web3rpc string) (*Contracts, error) {
 		knownProcesses:     make(map[string]struct{}),
 		knownOrganizations: make(map[string]struct{}),
 	}, nil
+}
+
+// DeployContracts deploys new contracts and returns the bindings.
+func DeployContracts(web3rpc, privkey string) (*Contracts, error) {
+	w3pool := rpc.NewWeb3Pool()
+	chainID, err := w3pool.AddEndpoint(web3rpc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add web3 endpoint: %w", err)
+	}
+	cli, err := w3pool.Client(chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+	c := &Contracts{
+		ChainID:            chainID,
+		web3pool:           w3pool,
+		cli:                cli,
+		knownProcesses:     make(map[string]struct{}),
+		knownOrganizations: make(map[string]struct{}),
+		ContractsAddresses: &Addresses{},
+	}
+	c.SetAccountPrivateKey(privkey)
+
+	opts, err := c.authTransactOpts()
+	if err != nil {
+		return nil, err
+	}
+	addr, tx, orgBindings, err := bindings.DeployOrganizationRegistry(opts, cli)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy organization registry: %w", err)
+	}
+	if err := c.WaitTx(tx.Hash(), web3QueryTimeout); err != nil {
+		return nil, err
+	}
+	c.organizations = orgBindings
+	c.ContractsAddresses.OrganizationRegistry = addr
+	log.Infow("deployed OrganizationRegistry", "address", addr, "tx", tx.Hash().Hex())
+
+	opts, err = c.authTransactOpts()
+	if err != nil {
+		return nil, err
+	}
+	c.ContractsAddresses.ProcessRegistry, tx, c.processes, err = bindings.DeployProcessRegistry(opts, cli)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy process registry: %w", err)
+	}
+	if err := c.WaitTx(tx.Hash(), web3QueryTimeout); err != nil {
+		return nil, err
+	}
+	log.Infow("deployed ProcessRegistry", "address", c.ContractsAddresses.ProcessRegistry, "tx", tx.Hash().Hex())
+
+	return c, nil
+}
+
+// CheckTxStatus checks the status of a transaction given its hash.
+// Returns true if the transaction was successful, false otherwise.
+func (c *Contracts) CheckTxStatus(txHash common.Hash) (bool, error) {
+	ethcli, err := c.cli.EthClient()
+	if err != nil {
+		return false, fmt.Errorf("failed to get eth client: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), web3QueryTimeout)
+	defer cancel()
+	receipt, err := ethcli.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to get transaction receipt: %w", err)
+	}
+	return receipt.Status == 1, nil
+}
+
+// WaitTx waits for a transaction to be mined.
+func (c *Contracts) WaitTx(txHash common.Hash, timeOut time.Duration) error {
+	for {
+		select {
+		case <-time.After(timeOut):
+			return fmt.Errorf("timeout waiting for tx %s", txHash.Hex())
+		default:
+			status, _ := c.CheckTxStatus(txHash)
+			if status {
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
 
 // AddWeb3Endpoint adds a new web3 endpoint to the pool.
@@ -116,11 +203,5 @@ func (c *Contracts) authTransactOpts() (*bind.TransactOpts, error) {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
 	auth.Nonce = new(big.Int).SetUint64(nonce)
-	// set the gas tip cap
-	if auth.GasTipCap, err = c.cli.SuggestGasTipCap(ctx); err != nil {
-		return nil, fmt.Errorf("failed to get gas tip cap: %w", err)
-	}
-	// set the gas limit
-	auth.GasLimit = 10000000
 	return auth, nil
 }

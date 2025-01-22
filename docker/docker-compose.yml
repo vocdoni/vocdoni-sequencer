@@ -1,0 +1,35 @@
+services:
+  geth-genesis:
+    image: "ethereum/client-go:latest"
+    command: --datadir=/chain init /files/genesis.json
+    volumes:
+      - ./files:/files
+      - geth:/chain
+
+  geth:
+    image: "ethereum/client-go:latest"
+    command:
+      - --http
+      - --http.api=eth,net,web3
+      - --http.addr=0.0.0.0
+      - --http.corsdomain=*
+      - --ws
+      - --ws.api=eth,net,web3
+      - --ws.addr=0.0.0.0
+      - --ws.origins=*
+      - --datadir=/chain
+      - --allow-insecure-unlock
+      - --dev
+      - --ipcdisable
+    ports:
+      - 8551:8551
+      - 8545:8545
+      - 8546:8546
+    depends_on:
+      geth-genesis:
+        condition: service_completed_successfully
+    volumes:
+      - geth:/chain
+
+volumes:
+  geth: {}

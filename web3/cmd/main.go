@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/big"
 	"time"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
@@ -28,27 +29,49 @@ var rpcs = []string{
 	"wss://sepolia.gateway.tenderly.co",
 }
 
+const (
+	sepoliaProcessRegistry = "0x3d0b39c0239329955b9F0E8791dF9Aa84133c861"
+	sepoliaOrgRegistry     = "0xd512481d0Fa6d975f9B186a9f6e59ea8E12D2C2b"
+)
+
 func main() {
 	privKey := flag.String("privkey", "", "private key to use for the Ethereum account")
+	sepolia := flag.Bool("sepolia", false, "use sepolia dev deployment")
+	w3rpc := flag.String("w3rpc", "http://localhost:8545", "web3 rpc endpoint")
+
 	flag.Parse()
 	log.Init("debug", "stdout", nil)
-	contracts, err := web3.NewContracts(&web3.Addresses{
-		OrganizationRegistry: common.HexToAddress("0x3d0b39c0239329955b9F0E8791dF9Aa84133c861"),
-		ProcessRegistry:      common.HexToAddress("0xd512481d0Fa6d975f9B186a9f6e59ea8E12D2C2b"),
-	}, rpcs[0])
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Infow("contracts initialized", "chainId", contracts.ChainID)
 
-	for i := 1; i < len(rpcs); i++ {
-		if err := contracts.AddWeb3Endpoint(rpcs[i]); err != nil {
-			log.Warnw("failed to add endpoint", "rpc", rpcs[i], "err", err)
+	var err error
+	contracts := &web3.Contracts{}
+
+	if *sepolia {
+		contracts, err = web3.LoadContracts(&web3.Addresses{
+			OrganizationRegistry: common.HexToAddress(sepoliaOrgRegistry),
+			ProcessRegistry:      common.HexToAddress(sepoliaProcessRegistry),
+		}, rpcs[0])
+		if err != nil {
+			log.Fatal(err)
 		}
-	}
 
-	if err := contracts.SetAccountPrivateKey(*privKey); err != nil {
-		log.Fatal(err)
+		for i := 1; i < len(rpcs); i++ {
+			if err := contracts.AddWeb3Endpoint(rpcs[i]); err != nil {
+				log.Warnw("failed to add endpoint", "rpc", rpcs[i], "err", err)
+			}
+		}
+
+		if err := contracts.SetAccountPrivateKey(*privKey); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Infow("contracts initialized", "chainId", contracts.ChainID)
+
+	} else {
+		contracts, err = web3.DeployContracts(*w3rpc, *privKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Infow("contracts deployed", "chainId", contracts.ChainID)
 	}
 
 	ctx := context.Background()
