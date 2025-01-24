@@ -79,10 +79,9 @@ type Census struct {
 }
 
 type OrganizationInfo struct {
-	ID           common.Address `json:"id,omitempty"`
-	Name         string         `json:"name"`
-	MetadataURI  string         `json:"metadataURI"`
-	ProcessCount uint32         `json:"processCount"`
+	ID          common.Address `json:"id,omitempty"`
+	Name        string         `json:"name"`
+	MetadataURI string         `json:"metadataURI"`
 }
 
 func (o *OrganizationInfo) String() string {

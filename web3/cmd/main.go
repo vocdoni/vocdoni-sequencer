@@ -109,7 +109,7 @@ func main() {
 
 	time.Sleep(20 * time.Second)
 
-	orgAddr := common.HexToAddress(util.RandomHex(20))
+	orgAddr := contracts.AccountAddress()
 	if _, err := contracts.CreateOrganization(orgAddr, &types.OrganizationInfo{
 		Name:        fmt.Sprintf("Vocdoni test %x", orgAddr[:4]),
 		MetadataURI: "https://vocdoni.io",

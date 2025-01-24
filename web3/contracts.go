@@ -5,12 +5,13 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	bindings "github.com/vocdoni/contracts-z/golang-types"
+	bindings "github.com/vocdoni/contracts-z/golang-types/non-proxy"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3/rpc"
 )
@@ -115,7 +116,7 @@ func DeployContracts(web3rpc, privkey string) (*Contracts, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.ContractsAddresses.ProcessRegistry, tx, c.processes, err = bindings.DeployProcessRegistry(opts, cli)
+	c.ContractsAddresses.ProcessRegistry, tx, c.processes, err = bindings.DeployProcessRegistry(opts, cli, strconv.Itoa(int(chainID)), c.ContractsAddresses.OrganizationRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy process registry: %w", err)
 	}

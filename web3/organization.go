@@ -28,15 +28,14 @@ func (c *Contracts) CreateOrganization(address common.Address, orgInfo *types.Or
 // Organization returns the organization with the given address from the OrganizationRegistry contract.
 func (c *Contracts) Organization(address common.Address) (*types.OrganizationInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), web3QueryTimeout)
-	nonce, name, uri, err := c.organizations.GetOrganization(&bind.CallOpts{Context: ctx}, address)
+	name, uri, err := c.organizations.GetOrganization(&bind.CallOpts{Context: ctx}, address)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organization: %w", err)
 	}
 	return &types.OrganizationInfo{
-		Name:         name,
-		MetadataURI:  uri,
-		ProcessCount: nonce,
+		Name:        name,
+		MetadataURI: uri,
 	}, nil
 }
 
