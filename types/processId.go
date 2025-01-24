@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,6 +57,5 @@ func (p *ProcessID) UnmarshalBinary(data []byte) error {
 
 // String returns a human readable representation of process ID
 func (p *ProcessID) String() string {
-	return fmt.Sprintf("[chain:%d/addr:%s/nonce:%d]",
-		p.ChainID, p.Address.Hex(), p.Nonce)
+	return hex.EncodeToString(p.Marshal())
 }
