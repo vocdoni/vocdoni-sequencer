@@ -23,6 +23,7 @@ import (
 // VoteVerifierTestResults struct includes relevant data after VerifyVoteCircuit
 // inputs generation
 type VoteVerifierTestResults struct {
+	InputsHashes     []*big.Int
 	EncryptionPubKey [2]*big.Int
 	Addresses        []*big.Int
 	ProcessID        *big.Int
@@ -77,7 +78,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// circuits assigments, voters data and proofs
 	var assigments []voteverifier.VerifyVoteCircuit
-	addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}
+	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}
 	encryptedBallots := [][ballottest.NFields][2][2]*big.Int{}
 	var finalProcessID *big.Int
 	for i, voter := range votersData {
@@ -142,9 +143,11 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		if err != nil {
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
+		inputsHashes = append(inputsHashes, inputsHash)
 		// compose circuit placeholders
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
-			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
+			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
+			InputsHash: inputsHash,
 			// circom inputs
 			BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
 				MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
@@ -186,6 +189,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	}
 
 	return VoteVerifierTestResults{
+			InputsHashes:     inputsHashes,
 			EncryptionPubKey: [2]*big.Int{encryptionKeyX, encryptionKeyY},
 			Addresses:        addresses,
 			ProcessID:        finalProcessID,

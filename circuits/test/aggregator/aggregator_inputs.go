@@ -6,13 +6,14 @@ import (
 	"math/big"
 
 	gecc "github.com/consensys/gnark-crypto/ecc"
-	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
-	bw6761mimc "github.com/consensys/gnark-crypto/ecc/bw6-761/fr/mimc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
+	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
@@ -102,11 +103,15 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
+		// log.Println("original limbs", proofs[i].Witness.Public[0].Limbs)
+		// fixedHash := emulated.ValueOf[sw_bn254.ScalarField](vvInputs.InputsHashes[i])
+		// log.Println("fixed limbs", fixedHash.Limbs)
+		// proofs[i].Witness.Public[0].Limbs = fixedHash.Limbs
 	}
 	// compute public inputs hash
-	inputs := []*big.Int{
-		vvInputs.CensusRoot,
+	hashInputs := []*big.Int{
 		vvInputs.ProcessID,
+		vvInputs.CensusRoot,
 		vvInputs.EncryptionPubKey[0],
 		vvInputs.EncryptionPubKey[1],
 		big.NewInt(int64(ballottest.MaxCount)),
@@ -124,52 +129,46 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, aggregator.MaxVotes)
 	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, aggregator.MaxVotes*ballottest.NFields*4)
 	// append voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	inputs = append(inputs, nullifiers...)
-	inputs = append(inputs, commitments...)
-	inputs = append(inputs, addresses...)
-	inputs = append(inputs, plainEncryptedBallots...)
+	hashInputs = append(hashInputs, nullifiers...)
+	hashInputs = append(hashInputs, commitments...)
+	hashInputs = append(hashInputs, addresses...)
+	hashInputs = append(hashInputs, plainEncryptedBallots...)
 	// hash the inputs to generate the inputs hash
-	var buf [fr_bw6761.Bytes]byte
-	aggregatorHashFn := bw6761mimc.NewMiMC()
-	for _, input := range inputs {
-		input.FillBytes(buf[:])
-		_, err := aggregatorHashFn.Write(buf[:])
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
+	inputsHash, err := mimc7.Hash(hashInputs, nil)
+	if err != nil {
+		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	publicHash := new(big.Int).SetBytes(aggregatorHashFn.Sum(nil))
 	// init final assigments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
-		InputsHash: publicHash,
+		InputsHash: inputsHash,
 		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
-		BallotMode: circuits.BallotMode[frontend.Variable]{
-			MaxCount:        ballottest.MaxCount,
-			ForceUniqueness: ballottest.ForceUniqueness,
-			MaxValue:        ballottest.MaxValue,
-			MinValue:        ballottest.MinValue,
-			MaxTotalCost:    int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
-			MinTotalCost:    ballottest.MaxCount,
-			CostExp:         ballottest.CostExp,
-			CostFromWeight:  ballottest.CostFromWeight,
+		BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+			MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+			ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballottest.ForceUniqueness),
+			MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxValue),
+			MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MinValue),
+			MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount),
+			MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+			CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
+			CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
 		},
-		EncryptionPubKey: [2]frontend.Variable{
-			vvInputs.EncryptionPubKey[0],
-			vvInputs.EncryptionPubKey[1],
+		EncryptionPubKey: [2]emulated.Element[sw_bn254.ScalarField]{
+			emulated.ValueOf[sw_bn254.ScalarField](vvInputs.EncryptionPubKey[0]),
+			emulated.ValueOf[sw_bn254.ScalarField](vvInputs.EncryptionPubKey[1]),
 		},
-		ProcessId:  vvInputs.ProcessID,
-		CensusRoot: vvInputs.CensusRoot,
+		ProcessId:  emulated.ValueOf[sw_bn254.ScalarField](vvInputs.ProcessID),
+		CensusRoot: emulated.ValueOf[sw_bn254.ScalarField](vvInputs.CensusRoot),
 		Proofs:     proofs,
 	}
 	// set voters final witness stuff
 	for i := 0; i < nValidVoters; i++ {
-		finalAssigments.Nullifiers[i] = vvInputs.Nullifiers[i]
-		finalAssigments.Commitments[i] = vvInputs.Commitments[i]
-		finalAssigments.Addresses[i] = vvInputs.Addresses[i]
+		finalAssigments.Nullifiers[i] = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Nullifiers[i])
+		finalAssigments.Commitments[i] = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Commitments[i])
+		finalAssigments.Addresses[i] = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Addresses[i])
 		for j := 0; j < ballottest.NFields; j++ {
 			for n := 0; n < 2; n++ {
 				for m := 0; m < 2; m++ {
-					finalAssigments.EncryptedBallots[i][j][n][m] = vvInputs.EncryptedBallots[i][j][n][m]
+					finalAssigments.EncryptedBallots[i][j][n][m] = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.EncryptedBallots[i][j][n][m])
 				}
 			}
 		}

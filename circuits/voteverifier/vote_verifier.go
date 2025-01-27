@@ -70,7 +70,8 @@ import (
 
 type VerifyVoteCircuit struct {
 	// Single public input that is the hash of all the public inputs
-	InputsHash emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
+	// InputsHash emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
+	InputsHash frontend.Variable `gnark:",public"`
 	// The following variables are priv-public inputs, so should be hashed
 	// and compared with the InputsHash or CircomPublicInputsHash. All the
 	// variables should be hashed in the same order as they are defined here.
@@ -185,7 +186,11 @@ func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 		api.AssertIsEqual(0, 1)
 	}
 	h.Write(hashInputs...)
-	h.AssertSumIsEqual(c.InputsHash)
+	finalHash, err := utils.PackScalarToVar(api, h.Sum())
+	if err != nil {
+		circuits.FrontendError(api, "failed to pack scalar to variable", err)
+	}
+	api.AssertIsEqual(c.InputsHash, finalHash)
 }
 
 // verifySigForAddress circuit method verifies the signature provided with the
