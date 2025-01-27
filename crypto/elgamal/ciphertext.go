@@ -14,18 +14,15 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 )
 
-// MaxFields represents how many Ballot are grouped
-const MaxFields = 8
-
 // sizes in bytes needed to serialize a Ballot
 const (
 	sizeCoord      = 32
 	sizePoint      = 2 * sizeCoord
 	SizeCiphertext = 2 * sizePoint
-	SizeBallot     = MaxFields * SizeCiphertext
+	SizeBallot     = circuits.FieldsPerBallot * SizeCiphertext
 )
 
-type Ballot [MaxFields]*Ciphertext
+type Ballot [circuits.FieldsPerBallot]*Ciphertext
 
 func NewBallot(curve ecc.Point) *Ballot {
 	z := &Ballot{}
@@ -37,7 +34,7 @@ func NewBallot(curve ecc.Point) *Ballot {
 
 // Encrypt encrypts a message using the public key provided as elliptic curve point.
 // The randomness k can be provided or nil to generate a new one.
-func (z *Ballot) Encrypt(message [MaxFields]*big.Int, publicKey ecc.Point, k *big.Int) (*Ballot, error) {
+func (z *Ballot) Encrypt(message [circuits.FieldsPerBallot]*big.Int, publicKey ecc.Point, k *big.Int) (*Ballot, error) {
 	for i := range z {
 		if _, err := z[i].Encrypt(message[i], publicKey, k); err != nil {
 			return nil, err

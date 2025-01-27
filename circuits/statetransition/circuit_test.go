@@ -13,6 +13,7 @@ import (
 	"github.com/consensys/gnark/logger"
 	"github.com/consensys/gnark/test"
 	"github.com/rs/zerolog"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	statetransitiontest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
@@ -127,7 +128,7 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
 	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
 	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
-	for name, mts := range map[string][statetransition.VoteBatchSize]statetransition.MerkleTransition{
+	for name, mts := range map[string][circuits.VotesPerBatch]statetransition.MerkleTransition{
 		"Ballot":     witness.Ballot,
 		"Commitment": witness.Commitment,
 	} {
@@ -443,11 +444,13 @@ func newMockState(t *testing.T) *state.State {
 const (
 	mockNullifiersOffset = 100
 	mockAddressesOffset  = 200
+	// maxKeyLen is ceil(maxLevels/8)
+	maxKeyLen = (circuits.StateProofMaxLevels + 7) / 8
 )
 
 // newMockVote creates a new vote
 func newMockVote(index, amount int64) *state.Vote {
-	nullifier := arbo.BigIntToBytes(state.MaxKeyLen,
+	nullifier := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockNullifiersOffset))) // mock
 
 	// generate a public mocked key
@@ -456,7 +459,7 @@ func newMockVote(index, amount int64) *state.Vote {
 		panic(fmt.Errorf("error generating public key: %v", err))
 	}
 
-	fields := [elgamal.MaxFields]*big.Int{}
+	fields := [circuits.FieldsPerBallot]*big.Int{}
 	for i := range fields {
 		fields[i] = big.NewInt(int64(amount + int64(i)))
 	}
@@ -466,7 +469,7 @@ func newMockVote(index, amount int64) *state.Vote {
 		panic(fmt.Errorf("error encrypting: %v", err))
 	}
 
-	address := arbo.BigIntToBytes(state.MaxKeyLen,
+	address := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockAddressesOffset))) // mock
 	commitment := big.NewInt(amount + 256)
 

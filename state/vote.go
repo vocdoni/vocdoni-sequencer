@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
 
@@ -21,7 +22,7 @@ func (o *State) AddVote(v *Vote) error {
 	if o.dbTx == nil {
 		return fmt.Errorf("need to StartBatch() first")
 	}
-	if len(o.votes) >= VoteBatchSize {
+	if len(o.votes) >= circuits.VotesPerBatch {
 		return fmt.Errorf("too many votes for this batch")
 	}
 

@@ -21,7 +21,7 @@ import (
 type MerkleProof struct {
 	// Key + Value hashed through Siblings path, should produce Root hash
 	Root     frontend.Variable
-	Siblings [circuits.MaxLevels]frontend.Variable
+	Siblings [circuits.StateProofMaxLevels]frontend.Variable
 	Key      frontend.Variable
 	Value    frontend.Variable
 	Fnc      frontend.Variable // 0: inclusion, 1: non inclusion
@@ -38,9 +38,9 @@ func GenMerkleProof(o *state.State, k []byte) (MerkleProof, error) {
 
 // MerkleProofFromArboProof converts an ArboProof into a MerkleProof
 func MerkleProofFromArboProof(p *state.ArboProof) MerkleProof {
-	padSiblings := func(unpackedSiblings [][]byte) [circuits.MaxLevels]frontend.Variable {
-		paddedSiblings := [circuits.MaxLevels]frontend.Variable{}
-		for i := range circuits.MaxLevels {
+	padSiblings := func(unpackedSiblings [][]byte) [circuits.StateProofMaxLevels]frontend.Variable {
+		paddedSiblings := [circuits.StateProofMaxLevels]frontend.Variable{}
+		for i := range circuits.StateProofMaxLevels {
 			if i < len(unpackedSiblings) {
 				paddedSiblings[i] = arbo.BytesToBigInt(unpackedSiblings[i])
 			} else {
@@ -84,7 +84,7 @@ func (mp *MerkleProof) String() string {
 type MerkleTransition struct {
 	// NewKey + NewValue hashed through Siblings path, should produce NewRoot hash
 	NewRoot  frontend.Variable
-	Siblings [circuits.MaxLevels]frontend.Variable
+	Siblings [circuits.StateProofMaxLevels]frontend.Variable
 	NewKey   frontend.Variable
 	NewValue frontend.Variable
 

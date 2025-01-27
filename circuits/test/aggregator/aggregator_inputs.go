@@ -70,7 +70,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// generate voters proofs
 	totalPlainEncryptedBallots := []*big.Int{}
-	proofs := [aggregator.MaxVotes]circuits.InnerProofBLS12377{}
+	proofs := [circuits.VotesPerBatch]circuits.InnerProofBLS12377{}
 	for i := range vvAssigments {
 		// flat encrypted ballots
 		for _, b := range vvInputs.EncryptedBallots {
@@ -127,10 +127,10 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int) (
 		big.NewInt(int64(ballottest.CostFromWeight)),
 	)
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, aggregator.MaxVotes)
-	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, aggregator.MaxVotes)
-	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, aggregator.MaxVotes)
-	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, aggregator.MaxVotes*ballottest.NFields*4)
+	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
+	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
+	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, circuits.VotesPerBatch)
+	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 	// append voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	hashInputs = append(hashInputs, nullifiers...)
 	hashInputs = append(hashInputs, commitments...)
@@ -176,7 +176,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int) (
 	}
 	// create final placeholder
 	finalPlaceholder := aggregator.AggregatorCircuit{
-		Proofs:              [aggregator.MaxVotes]circuits.InnerProofBLS12377{},
+		Proofs:              [circuits.VotesPerBatch]circuits.InnerProofBLS12377{},
 		BaseVerificationKey: fixedVk,
 	}
 	// fill placeholder and witness with dummy circuits

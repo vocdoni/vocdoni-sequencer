@@ -33,11 +33,6 @@ func MiMC7Hasher(api frontend.API, data ...emulated.Element[sw_bn254.ScalarField
 	return h.Sum(), nil
 }
 
-const (
-	// votes that were processed in AggregatedProof
-	VoteBatchSize = 10
-)
-
 type Circuit struct {
 	// ---------------------------------------------------------------------------------------------
 	// PUBLIC INPUTS
@@ -50,7 +45,7 @@ type Circuit struct {
 	// ---------------------------------------------------------------------------------------------
 	// SECRET INPUTS
 	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
-	Votes   [VoteBatchSize]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
+	Votes   [circuits.VotesPerBatch]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
 
 	ProcessIDProof     MerkleProof
 	CensusRootProof    MerkleProof
@@ -58,8 +53,8 @@ type Circuit struct {
 	EncryptionKeyProof MerkleProof
 	ResultsAdd         MerkleTransition
 	ResultsSub         MerkleTransition
-	Ballot             [VoteBatchSize]MerkleTransition
-	Commitment         [VoteBatchSize]MerkleTransition
+	Ballot             [circuits.VotesPerBatch]MerkleTransition
+	Commitment         [circuits.VotesPerBatch]MerkleTransition
 
 	AggregatedProof circuits.InnerProofBW6761
 }

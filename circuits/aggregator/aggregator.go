@@ -37,11 +37,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
-const (
-	MaxVotes  = 10
-	MaxFields = 8
-)
-
 type AggregatorCircuit struct {
 	InputsHash frontend.Variable `gnark:",public"`
 	ValidVotes frontend.Variable `gnark:",public"`
@@ -50,12 +45,12 @@ type AggregatorCircuit struct {
 	// same order as they are defined here.
 
 	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
-	Votes   [MaxVotes]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
+	Votes   [circuits.VotesPerBatch]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
 
 	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
 	// real vk and dummy is used for no valid proofs in the scenario where there
 	// are less valid votes than MaxVotes)
-	Proofs               [MaxVotes]circuits.InnerProofBLS12377
+	Proofs               [circuits.VotesPerBatch]circuits.InnerProofBLS12377
 	BaseVerificationKey  groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
@@ -94,7 +89,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	}
 	// iterate over each voter to calculate every voter hash
 	validHashes := api.ToBinary(c.ValidVotes)
-	for i := 0; i < MaxVotes; i++ {
+	for i := 0; i < circuits.VotesPerBatch; i++ {
 		// ensure the proof is valid (it has a single public input, the
 		// expected hash)
 		api.AssertIsEqual(len(c.Proofs[i].Witness.Public), 1)

@@ -28,8 +28,6 @@ import (
 
 const (
 	// default process config
-	NLevels         = 160
-	NFields         = 8
 	MaxCount        = 5
 	ForceUniqueness = 0
 	MaxValue        = 16
@@ -95,8 +93,8 @@ func GenEncryptionKeyForTest() ecc.Point {
 // GenBallotFieldsForTest generates a list of n random fields between min and max
 // values. If unique is true, the fields will be unique.
 // The items between n and NFields are padded with big.Int(0)
-func GenBallotFieldsForTest(n, max, min int, unique bool) [NFields]*big.Int {
-	fields := [NFields]*big.Int{}
+func GenBallotFieldsForTest(n, max, min int, unique bool) [circuits.FieldsPerBallot]*big.Int {
+	fields := [circuits.FieldsPerBallot]*big.Int{}
 	for i := 0; i < len(fields); i++ {
 		fields[i] = big.NewInt(0)
 	}
@@ -126,7 +124,7 @@ func GenBallotFieldsForTest(n, max, min int, unique bool) [NFields]*big.Int {
 // that represent the encrypted field. The function also returns a list of the
 // plain cipher fields (x and y values of c1 and c2) that simplify the process
 // of hashing the inputs for the circuit.
-func EncryptBallotFieldsForTest(fields [NFields]*big.Int, n int, pk ecc.Point, k *big.Int) (*elgamal.Ballot, []*big.Int) {
+func EncryptBallotFieldsForTest(fields [circuits.FieldsPerBallot]*big.Int, n int, pk ecc.Point, k *big.Int) (*elgamal.Ballot, []*big.Int) {
 	z, err := elgamal.NewBallot(pk).Encrypt(fields, pk, k)
 	if err != nil {
 		panic(err)
@@ -225,7 +223,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ballot, plainBallot := EncryptBallotFieldsForTest(fields, NFields, encryptionKey, k)
+	ballot, plainBallot := EncryptBallotFieldsForTest(fields, circuits.FieldsPerBallot, encryptionKey, k)
 	// generate and store voter nullifier and commitments
 	secret := util.RandomBytes(16)
 	commitment, nullifier, err := GenCommitmentAndNullifierForTest(address, processId, secret)
@@ -259,7 +257,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	}
 	// init circom inputs
 	circomInputs := map[string]any{
-		"fields":           circuits.BigIntArrayToStringArray(fields[:], NFields),
+		"fields":           circuits.BigIntArrayToStringArray(fields[:], circuits.FieldsPerBallot),
 		"max_count":        fmt.Sprint(MaxCount),
 		"force_uniqueness": fmt.Sprint(ForceUniqueness),
 		"max_value":        fmt.Sprint(MaxValue),

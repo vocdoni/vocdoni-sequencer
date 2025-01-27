@@ -99,9 +99,7 @@ type Vote[T any] struct {
 	Commitment T
 }
 
-const MaxFields = 8
-
-type Ballot [MaxFields]elgamal.Ciphertext
+type Ballot [FieldsPerBallot]elgamal.Ciphertext
 
 func NewBallot() *Ballot {
 	z := &Ballot{}

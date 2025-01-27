@@ -6,19 +6,11 @@ import (
 	"slices"
 
 	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
-)
-
-const (
-	// size of the inclusion proofs
-	MaxLevels = 160
-	// MaxKeyLen is ceil(maxLevels/8)
-	MaxKeyLen = (MaxLevels + 7) / 8
-	// votes that were processed in AggregatedProof
-	VoteBatchSize = 10
 )
 
 var (
@@ -59,7 +51,7 @@ type State struct {
 func New(db db.Database, processId []byte) (*State, error) {
 	pdb := prefixeddb.NewPrefixedDatabase(db, processId)
 	tree, err := arbo.NewTree(arbo.Config{
-		Database: pdb, MaxLevels: MaxLevels,
+		Database: pdb, MaxLevels: circuits.StateProofMaxLevels,
 		HashFunction: HashFunc,
 	})
 	if err != nil {
@@ -171,7 +163,7 @@ func (o *State) Votes() []*Vote {
 
 func (o *State) PaddedVotes() []*Vote {
 	v := slices.Clone(o.votes)
-	for len(v) < VoteBatchSize {
+	for len(v) < circuits.VotesPerBatch {
 		v = append(v, &Vote{
 			Nullifier:  []byte{0x00},
 			Ballot:     elgamal.NewBallot(Curve),

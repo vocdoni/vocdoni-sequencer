@@ -15,7 +15,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	aggregatortest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/aggregator"
-	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"go.vocdoni.io/dvote/db/metadb"
@@ -84,10 +83,10 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	}
 
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.MaxVotes)
-	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.MaxVotes)
-	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.MaxVotes)
-	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.MaxVotes*ballottest.NFields*4)
+	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
+	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.VotesPerBatch)
+	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
+	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
 	// init final assigments stuff
 	s := newState(
