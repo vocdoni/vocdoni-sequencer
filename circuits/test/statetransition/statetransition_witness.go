@@ -42,16 +42,16 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	}
 
 	// first get MerkleProofs, since they need to belong to RootHashBefore, i.e. before MerkleTransitions
-	if witness.ProcessID, err = o.GenMerkleProof(state.KeyProcessID); err != nil {
+	if witness.ProcessIDProof, err = o.GenMerkleProof(state.KeyProcessID); err != nil {
 		return nil, err
 	}
-	if witness.CensusRoot, err = o.GenMerkleProof(state.KeyCensusRoot); err != nil {
+	if witness.CensusRootProof, err = o.GenMerkleProof(state.KeyCensusRoot); err != nil {
 		return nil, err
 	}
-	if witness.BallotMode, err = o.GenMerkleProof(state.KeyBallotMode); err != nil {
+	if witness.BallotModeProof, err = o.GenMerkleProof(state.KeyBallotMode); err != nil {
 		return nil, err
 	}
-	if witness.EncryptionKey, err = o.GenMerkleProof(state.KeyEncryptionKey); err != nil {
+	if witness.EncryptionKeyProof, err = o.GenMerkleProof(state.KeyEncryptionKey); err != nil {
 		return nil, err
 	}
 

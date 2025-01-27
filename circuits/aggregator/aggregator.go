@@ -49,19 +49,9 @@ type AggregatorCircuit struct {
 	// compared with the InputsHash. All the variables should be hashed in the
 	// same order as they are defined here.
 
-	// BallotMode is a struct that contains the common inputs for all the
-	// voters. The values of this struct should be the same for all the voters
-	// in the same process.
-	circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]
-	// Other common inputs
-	EncryptionPubKey [2]emulated.Element[sw_bn254.ScalarField] // Part of InputsHash
-	ProcessId        emulated.Element[sw_bn254.ScalarField]    // Part of InputsHash
-	CensusRoot       emulated.Element[sw_bn254.ScalarField]    // Part of InputsHash
-	// Voter inputs
-	Nullifiers       [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	Commitments      [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	Addresses        [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	EncryptedBallots [MaxVotes][MaxFields][2][2]emulated.Element[sw_bn254.ScalarField] // Part of InputsHash
+	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
+	Votes   [MaxVotes]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
+
 	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
 	// real vk and dummy is used for no valid proofs in the scenario where there
 	// are less valid votes than MaxVotes)
@@ -78,25 +68,12 @@ type AggregatorCircuit struct {
 // key, the ballot mode params, the nullifiers, commitments, addresses and the
 // encrypted ballots.
 func (c AggregatorCircuit) checkInputHash(api frontend.API) {
-	// group common inputs
-	hashInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.ProcessId, c.CensusRoot, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
-	hashInputs = append(hashInputs, c.BallotMode.List()...)
-	hashInputs = append(hashInputs, c.Nullifiers[:]...)
-	hashInputs = append(hashInputs, c.Commitments[:]...)
-	hashInputs = append(hashInputs, c.Addresses[:]...)
-	// include flattened EncryptedBallots
-	for _, voterBallots := range c.EncryptedBallots {
-		for _, ballot := range voterBallots {
-			hashInputs = append(hashInputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
-		}
-	}
 	// hash the inputs
 	h, err := mimc7.NewMiMC(api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
 	}
-	h.Write(hashInputs...)
+	h.Write(circuits.AggregatedWitnessInputs(api, c.Process, c.Votes[:])...)
 	finalHash, err := utils.PackScalarToVar(api, h.Sum())
 	if err != nil {
 		circuits.FrontendError(api, "failed to pack scalar to variable", err)
@@ -115,28 +92,14 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
 	}
-	// group common inputs
-	commonInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.ProcessId, c.CensusRoot, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
-	commonInputs = append(commonInputs, c.BallotMode.List()...)
-	// iterate over each voter inputs to group the remaining ones and calculate
-	// every voter hash
+	// iterate over each voter to calculate every voter hash
 	validHashes := api.ToBinary(c.ValidVotes)
 	for i := 0; i < MaxVotes; i++ {
 		// ensure the proof is valid (it has a single public input, the
 		// expected hash)
 		api.AssertIsEqual(len(c.Proofs[i].Witness.Public), 1)
-		// group remaining inputs
-		remainingInputs := []emulated.Element[sw_bn254.ScalarField]{c.Addresses[i], c.Nullifiers[i], c.Commitments[i]}
-		for j := 0; j < MaxFields; j++ {
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][0])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][1])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][0])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][1])
-		}
 		// calculate the hash
-		hashFn.Write(commonInputs...)
-		hashFn.Write(remainingInputs...)
+		hashFn.Write(circuits.VoteVerifierInputs(api, c.Process, c.Votes[i])...)
 		resultHash := hashFn.Sum()
 		calculatedHash, err := utils.PackScalarToVar(api, resultHash)
 		if err != nil {

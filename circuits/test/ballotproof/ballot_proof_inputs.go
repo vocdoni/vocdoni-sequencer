@@ -94,8 +94,12 @@ func GenEncryptionKeyForTest() ecc.Point {
 
 // GenBallotFieldsForTest generates a list of n random fields between min and max
 // values. If unique is true, the fields will be unique.
-func GenBallotFieldsForTest(n, max, min int, unique bool) []*big.Int {
-	fields := []*big.Int{}
+// The items between n and NFields are padded with big.Int(0)
+func GenBallotFieldsForTest(n, max, min int, unique bool) [NFields]*big.Int {
+	fields := [NFields]*big.Int{}
+	for i := 0; i < len(fields); i++ {
+		fields[i] = big.NewInt(0)
+	}
 	stored := map[string]bool{}
 	for i := 0; i < n; i++ {
 		for {
@@ -108,7 +112,7 @@ func GenBallotFieldsForTest(n, max, min int, unique bool) []*big.Int {
 			// if it should be unique and it's already stored, skip it,
 			// otherwise add it to the list of fields and continue
 			if !unique || !stored[field.String()] {
-				fields = append(fields, field)
+				fields[i] = field
 				stored[field.String()] = true
 				break
 			}
@@ -122,8 +126,11 @@ func GenBallotFieldsForTest(n, max, min int, unique bool) []*big.Int {
 // that represent the encrypted field. The function also returns a list of the
 // plain cipher fields (x and y values of c1 and c2) that simplify the process
 // of hashing the inputs for the circuit.
-func EncryptBallotFieldsForTest(fields []*big.Int, n int, pk ecc.Point, k *big.Int) ([][][]string, []*big.Int) {
-	cipherfields := make([][][]string, n)
+func EncryptBallotFieldsForTest(fields [NFields]*big.Int, n int, pk ecc.Point, k *big.Int) (*elgamal.Ballot, []*big.Int) {
+	z, err := elgamal.NewBallot(pk).Encrypt(fields, pk, k)
+	if err != nil {
+		panic(err)
+	}
 	plainCipherfields := []*big.Int{}
 	for i := 0; i < n; i++ {
 		if i < len(fields) {
@@ -133,20 +140,13 @@ func EncryptBallotFieldsForTest(fields []*big.Int, n int, pk ecc.Point, k *big.I
 			}
 			c1X, c1Y := c1.Point()
 			c2X, c2Y := c2.Point()
-			cipherfields[i] = [][]string{
-				{c1X.String(), c1Y.String()},
-				{c2X.String(), c2Y.String()},
-			}
 			plainCipherfields = append(plainCipherfields, c1X, c1Y, c2X, c2Y)
 		} else {
-			cipherfields[i] = [][]string{
-				{"0", "0"},
-				{"0", "0"},
-			}
 			plainCipherfields = append(plainCipherfields, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0))
 		}
 	}
-	return cipherfields, plainCipherfields
+
+	return z, plainCipherfields
 }
 
 // GenCommitmentAndNullifierForTest generates a commitment and nullifier for the
@@ -204,7 +204,7 @@ type VoterProofResult struct {
 	Address             *big.Int
 	Nullifier           *big.Int
 	Commitment          *big.Int
-	EncryptedFields     [NFields][2][2]*big.Int
+	EncryptedFields     *elgamal.Ballot
 	PlainEcryptedFields []*big.Int
 	Proof               *parser.GnarkRecursionProof
 	InputsHash          *big.Int
@@ -225,28 +225,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	strCipherfields, plainCipherfields := EncryptBallotFieldsForTest(fields, NFields, encryptionKey, k)
-	// encode the cipherfields in big.Int's
-	cipherfields := [NFields][2][2]*big.Int{}
-	for i := 0; i < NFields; i++ {
-		var ok bool
-		cipherfields[i][0][0], ok = new(big.Int).SetString(strCipherfields[i][0][0], 10)
-		if !ok {
-			return nil, fmt.Errorf("error decoding encrypted field coordenate")
-		}
-		cipherfields[i][0][1], ok = new(big.Int).SetString(strCipherfields[i][0][1], 10)
-		if !ok {
-			return nil, fmt.Errorf("error decoding encrypted field coordenate")
-		}
-		cipherfields[i][1][0], ok = new(big.Int).SetString(strCipherfields[i][1][0], 10)
-		if !ok {
-			return nil, fmt.Errorf("error decoding encrypted field coordenate")
-		}
-		cipherfields[i][1][1], ok = new(big.Int).SetString(strCipherfields[i][1][1], 10)
-		if !ok {
-			return nil, fmt.Errorf("error decoding encrypted field coordenate")
-		}
-	}
+	ballot, plainBallot := EncryptBallotFieldsForTest(fields, NFields, encryptionKey, k)
 	// generate and store voter nullifier and commitments
 	secret := util.RandomBytes(16)
 	commitment, nullifier, err := GenCommitmentAndNullifierForTest(address, processId, secret)
@@ -273,14 +252,14 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		nullifier,
 		commitment,
 	}
-	bigCircomInputs = append(bigCircomInputs, plainCipherfields...)
+	bigCircomInputs = append(bigCircomInputs, plainBallot...)
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	if err != nil {
 		return nil, err
 	}
 	// init circom inputs
 	circomInputs := map[string]any{
-		"fields":           circuits.BigIntArrayToStringArray(fields, NFields),
+		"fields":           circuits.BigIntArrayToStringArray(fields[:], NFields),
 		"max_count":        fmt.Sprint(MaxCount),
 		"force_uniqueness": fmt.Sprint(ForceUniqueness),
 		"max_value":        fmt.Sprint(MaxValue),
@@ -294,7 +273,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"process_id":       ffProcessID.String(),
 		"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
 		"k":                k.String(),
-		"cipherfields":     strCipherfields,
+		"cipherfields":     ballot,
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
 		"secret":           ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
@@ -318,8 +297,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		Address:             ffAddress,
 		Nullifier:           nullifier,
 		Commitment:          commitment,
-		EncryptedFields:     cipherfields,
-		PlainEcryptedFields: plainCipherfields,
+		EncryptedFields:     ballot,
+		PlainEcryptedFields: plainBallot,
 		Proof:               proof,
 		InputsHash:          circomInputsHash,
 	}, nil

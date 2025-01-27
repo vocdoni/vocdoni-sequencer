@@ -164,7 +164,7 @@ type CircuitAggregatedWitness struct {
 }
 
 func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api, statetransition.HashFn); err != nil {
+	if err := circuit.VerifyAggregatedWitnessHash(api); err != nil {
 		return err
 	}
 	return nil
@@ -459,12 +459,12 @@ func newMockVote(index, amount int64) *state.Vote {
 		panic(fmt.Errorf("error generating public key: %v", err))
 	}
 
-	ballot, err := elgamal.NewCiphertexts(publicKey).Encrypt(
-		[elgamal.NumCiphertexts]*big.Int{
-			big.NewInt(int64(amount)),
-			big.NewInt(int64(amount + 1)),
-		},
-		publicKey, nil)
+	fields := [elgamal.MaxFields]*big.Int{}
+	for i := range fields {
+		fields[i] = big.NewInt(int64(amount + int64(i)))
+	}
+
+	ballot, err := elgamal.NewBallot(publicKey).Encrypt(fields, publicKey, nil)
 	if err != nil {
 		panic(fmt.Errorf("error encrypting: %v", err))
 	}

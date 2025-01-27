@@ -8,11 +8,11 @@ import (
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/vocdoni/arbo"
-	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 
 	garbo "github.com/vocdoni/gnark-crypto-primitives/tree/arbo"
 	"github.com/vocdoni/gnark-crypto-primitives/tree/smt"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -155,8 +155,8 @@ type MerkleTransition struct {
 	// TODO: replace Is*ElGamal by a check on len(Ciphertext) or something?
 	IsOldElGamal   frontend.Variable
 	IsNewElGamal   frontend.Variable
-	OldCiphertexts gelgamal.Ciphertexts
-	NewCiphertexts gelgamal.Ciphertexts
+	OldCiphertexts circuits.Ballot
+	NewCiphertexts circuits.Ballot
 }
 
 // MerkleTransitionFromArboProofPair generates a MerkleTransition based on the pair of proofs passed
@@ -199,8 +199,8 @@ func MerkleTransitionFromArboProofPair(before, after *ArboProof) MerkleTransitio
 		Fnc1:           fnc1,
 		IsOldElGamal:   0,
 		IsNewElGamal:   0,
-		OldCiphertexts: *gelgamal.NewCiphertexts(),
-		NewCiphertexts: *gelgamal.NewCiphertexts(),
+		OldCiphertexts: *circuits.NewBallot(),
+		NewCiphertexts: *circuits.NewBallot(),
 	}
 }
 
@@ -213,7 +213,7 @@ func (o *State) MerkleTransitionFromAddOrUpdate(k []byte, v []byte) (MerkleTrans
 	}
 	mp := MerkleTransitionFromArboProofPair(mpBefore, mpAfter)
 
-	oldCiphertexts, newCiphertexts := elgamal.NewCiphertexts(Curve), elgamal.NewCiphertexts(Curve)
+	oldCiphertexts, newCiphertexts := elgamal.NewBallot(Curve), elgamal.NewBallot(Curve)
 	if len(mpBefore.Value) > 32 {
 		if err := oldCiphertexts.Deserialize(mpBefore.Value); err != nil {
 			return MerkleTransition{}, err
@@ -262,11 +262,11 @@ func (mp *MerkleTransition) Verify(api frontend.API, hFn utils.Hasher, oldRoot f
 	api.AssertIsEqual(oldRoot, mp.OldRoot)
 
 	hash1Old := api.Select(mp.IsOldElGamal,
-		smt.Hash1(api, hFn, mp.OldKey, mp.OldCiphertexts.Serialize()...),
+		smt.Hash1(api, hFn, mp.OldKey, mp.OldCiphertexts.SerializeVars()...),
 		smt.Hash1(api, hFn, mp.OldKey, mp.OldValue),
 	)
 	hash1New := api.Select(mp.IsNewElGamal,
-		smt.Hash1(api, hFn, mp.NewKey, mp.NewCiphertexts.Serialize()...),
+		smt.Hash1(api, hFn, mp.NewKey, mp.NewCiphertexts.SerializeVars()...),
 		smt.Hash1(api, hFn, mp.NewKey, mp.NewValue),
 	)
 

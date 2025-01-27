@@ -10,7 +10,7 @@ import (
 // Vote describes a vote with homomorphic ballot
 type Vote struct {
 	Nullifier  []byte
-	Ballot     *elgamal.Ciphertexts
+	Ballot     *elgamal.Ballot
 	Address    []byte
 	Commitment *big.Int
 }
@@ -28,7 +28,7 @@ func (o *State) AddVote(v *Vote) error {
 	// if nullifier exists, it's a vote overwrite, need to count the overwritten vote
 	// so it's later added to circuit.ResultsSub
 	if _, value, err := o.tree.Get(v.Nullifier); err == nil {
-		oldVote := elgamal.NewCiphertexts(Curve)
+		oldVote := elgamal.NewBallot(Curve)
 		if err := oldVote.Deserialize(value); err != nil {
 			return err
 		}

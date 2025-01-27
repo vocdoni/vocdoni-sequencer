@@ -5,9 +5,11 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/vocdoni/gnark-crypto-primitives/elgamal"
+	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
@@ -15,7 +17,22 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
-var HashFn = utils.MiMCHasher
+var (
+	HashFn      = utils.MiMCHasher
+	HashFnMiMC7 = MiMC7Hasher // TODO: move this to gnark-crypto-primitives/utils
+)
+
+// MiMC7Hasher is a hash function that hashes the data provided using the
+// mimc hash function and the current compiler field. It is used to hash the
+// leaves of the census tree during the proof verification.
+func MiMC7Hasher(api frontend.API, data ...emulated.Element[sw_bn254.ScalarField]) (emulated.Element[sw_bn254.ScalarField], error) {
+	h, err := mimc7.NewMiMC(api)
+	if err != nil {
+		return emulated.Element[sw_bn254.ScalarField]{}, err
+	}
+	h.Write(data...)
+	return h.Sum(), nil
+}
 
 const (
 	// votes that were processed in AggregatedProof
@@ -33,21 +50,24 @@ type Circuit struct {
 
 	// ---------------------------------------------------------------------------------------------
 	// SECRET INPUTS
-	ProcessID     state.MerkleProof
-	CensusRoot    state.MerkleProof
-	BallotMode    state.MerkleProof
-	EncryptionKey state.MerkleProof
-	ResultsAdd    state.MerkleTransition
-	ResultsSub    state.MerkleTransition
-	Ballot        [VoteBatchSize]state.MerkleTransition
-	Commitment    [VoteBatchSize]state.MerkleTransition
+	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
+	Votes   [VoteBatchSize]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
+
+	ProcessIDProof     state.MerkleProof
+	CensusRootProof    state.MerkleProof
+	BallotModeProof    state.MerkleProof
+	EncryptionKeyProof state.MerkleProof
+	ResultsAdd         state.MerkleTransition
+	ResultsSub         state.MerkleTransition
+	Ballot             [VoteBatchSize]state.MerkleTransition
+	Commitment         [VoteBatchSize]state.MerkleTransition
 
 	AggregatedProof circuits.InnerProofBW6761
 }
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api, HashFn); err != nil {
+	if err := circuit.VerifyAggregatedWitnessHash(api); err != nil {
 		return err
 	}
 	if err := circuit.VerifyAggregatedProof(api); err != nil {
@@ -59,50 +79,21 @@ func (circuit Circuit) Define(api frontend.API) error {
 	return nil
 }
 
-func (circuit Circuit) AggregatedWitnessInputs() []frontend.Variable {
-	// all of the following values compose the preimage that is hashed
-	// to produce the public input needed to verify AggregatedProof.
-	// ProcessID
-	// CensusRoot
-	// BallotMode
-	// EncryptionKey
-	// Nullifiers
-	// Ballots
-	// Addressess
-	// Commitments
-
-	inputs := []frontend.Variable{
-		circuit.ProcessID.Value,
-		circuit.CensusRoot.Value,
-		circuit.BallotMode.Value,
-		circuit.EncryptionKey.Value,
-	}
-	for _, mt := range circuit.Ballot {
-		inputs = append(inputs, mt.NewKey) // Nullifier
-	}
-	for _, mt := range circuit.Ballot {
-		inputs = append(inputs, mt.NewCiphertexts.Serialize()...) // Ballot
-	}
-	for _, mt := range circuit.Commitment {
-		inputs = append(inputs, mt.NewKey) // Address
-	}
-	for _, mt := range circuit.Commitment {
-		inputs = append(inputs, mt.NewValue) // Commitment
-	}
-	return inputs
-}
-
-func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API, hFn utils.Hasher) error {
+func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API) error {
 	api.AssertIsEqual(len(circuit.AggregatedProof.Witness.Public), 1)
 	publicInput, err := utils.PackScalarToVar(api, circuit.AggregatedProof.Witness.Public[0])
 	if err != nil {
 		return fmt.Errorf("failed to pack scalar to var: %w", err)
 	}
-	hash, err := hFn(api, circuit.AggregatedWitnessInputs()...)
+	hash, err := HashFnMiMC7(api, circuits.AggregatedWitnessInputs(api, circuit.Process, circuit.Votes[:])...)
 	if err != nil {
 		return fmt.Errorf("failed to hash: %w", err)
 	}
-	api.AssertIsEqual(hash, publicInput)
+	hashVar, err := utils.PackScalarToVar(api, hash)
+	if err != nil {
+		circuits.FrontendError(api, "failed to pack scalar to variable", err)
+	}
+	api.AssertIsEqual(hashVar, publicInput)
 	return nil
 }
 
@@ -121,10 +112,10 @@ func (circuit Circuit) VerifyAggregatedProof(api frontend.API) error {
 
 func (circuit Circuit) VerifyMerkleProofs(api frontend.API, hFn utils.Hasher) {
 	api.Println("verify ProcessID, CensusRoot, BallotMode and EncryptionKey belong to RootHashBefore")
-	circuit.ProcessID.VerifyProof(api, hFn, circuit.RootHashBefore)
-	circuit.CensusRoot.VerifyProof(api, hFn, circuit.RootHashBefore)
-	circuit.BallotMode.VerifyProof(api, hFn, circuit.RootHashBefore)
-	circuit.EncryptionKey.VerifyProof(api, hFn, circuit.RootHashBefore)
+	circuit.ProcessIDProof.VerifyProof(api, hFn, circuit.RootHashBefore)
+	circuit.CensusRootProof.VerifyProof(api, hFn, circuit.RootHashBefore)
+	circuit.BallotModeProof.VerifyProof(api, hFn, circuit.RootHashBefore)
+	circuit.EncryptionKeyProof.VerifyProof(api, hFn, circuit.RootHashBefore)
 }
 
 func (circuit Circuit) VerifyMerkleTransitions(api frontend.API, hFn utils.Hasher) {
@@ -145,17 +136,15 @@ func (circuit Circuit) VerifyMerkleTransitions(api frontend.API, hFn utils.Hashe
 
 // VerifyBallots counts the ballots using homomorphic encrpytion
 func (circuit Circuit) VerifyBallots(api frontend.API) {
-	ballotSum, overwrittenSum, zero := elgamal.NewCiphertexts(), elgamal.NewCiphertexts(), elgamal.NewCiphertexts()
+	ballotSum, overwrittenSum, zero := circuits.NewBallot(), circuits.NewBallot(), circuits.NewBallot()
 	var ballotCount, overwrittenCount frontend.Variable = 0, 0
 
 	for _, b := range circuit.Ballot {
-		// TODO: check that Hash(NewCiphertext) matches b.NewValue
-		// and Hash(OldCiphertext) matches b.OldValue
 		ballotSum.Add(api, ballotSum,
-			elgamal.NewCiphertexts().Select(api, b.IsInsertOrUpdate(api), &b.NewCiphertexts, zero))
+			circuits.NewBallot().Select(api, b.IsInsertOrUpdate(api), &b.NewCiphertexts, zero))
 
 		overwrittenSum.Add(api, overwrittenSum,
-			elgamal.NewCiphertexts().Select(api, b.IsUpdate(api), &b.OldCiphertexts, zero))
+			circuits.NewBallot().Select(api, b.IsUpdate(api), &b.OldCiphertexts, zero))
 
 		ballotCount = api.Add(ballotCount, api.Select(b.IsInsertOrUpdate(api), 1, 0))
 		overwrittenCount = api.Add(overwrittenCount, api.Select(b.IsUpdate(api), 1, 0))

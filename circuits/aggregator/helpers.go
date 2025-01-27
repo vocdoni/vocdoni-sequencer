@@ -19,6 +19,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 )
 
@@ -136,21 +137,15 @@ func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constrai
 	}
 	// set some dummy values in others assigments variables
 	dummyValue := emulated.ValueOf[sw_bn254.ScalarField](0)
-	var dummyEncryptedBallots [MaxFields][2][2]emulated.Element[sw_bn254.ScalarField]
-	for i := 0; i < MaxFields; i++ {
-		dummyEncryptedBallots[i] = [2][2]emulated.Element[sw_bn254.ScalarField]{
-			{dummyValue, dummyValue}, {dummyValue, dummyValue},
-		}
-	}
 	// fill placeholders and assigments dummy values
 	for i := range assigments.Proofs {
 		placeholder.Proofs[i].Proof = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
 		placeholder.Proofs[i].Witness = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
 		if i >= fromIdx {
-			assigments.Nullifiers[i] = dummyValue
-			assigments.Commitments[i] = dummyValue
-			assigments.Addresses[i] = dummyValue
-			assigments.EncryptedBallots[i] = dummyEncryptedBallots
+			assigments.Votes[i].Nullifier = dummyValue
+			assigments.Votes[i].Commitment = dummyValue
+			assigments.Votes[i].Address = dummyValue
+			assigments.Votes[i].Ballot = *circuits.NewBallot()
 			assigments.Proofs[i].Proof = dummyProof
 			assigments.Proofs[i].Witness = dummyWitness
 		}

@@ -21,7 +21,7 @@ func TestAggregatorCircuit(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
-	_, placeholder, assigments, err := AggregarorInputsForTest(processId, 3)
+	_, placeholder, assigments, err := AggregatorInputsForTest(processId, 3)
 	c.Assert(err, qt.IsNil)
 	c.Logf("inputs generation tooks %s", time.Since(now).String())
 	// proving
