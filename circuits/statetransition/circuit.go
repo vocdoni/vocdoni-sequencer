@@ -67,47 +67,41 @@ type Circuit struct {
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api); err != nil {
-		return err
-	}
-	if err := circuit.VerifyAggregatedProof(api); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedWitnessHash(api)
+	circuit.VerifyAggregatedProof(api)
 	circuit.VerifyMerkleProofs(api, HashFn)
 	circuit.VerifyMerkleTransitions(api, HashFn)
 	circuit.VerifyBallots(api)
 	return nil
 }
 
-func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API) error {
+func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API) {
 	api.AssertIsEqual(len(circuit.AggregatedProof.Witness.Public), 1)
 	publicInput, err := utils.PackScalarToVar(api, circuit.AggregatedProof.Witness.Public[0])
 	if err != nil {
-		return fmt.Errorf("failed to pack scalar to var: %w", err)
+		circuits.FrontendError(api, "failed to pack scalar to var: ", err)
 	}
 	hash, err := HashFnMiMC7(api, circuits.AggregatedWitnessInputs(api, circuit.Process, circuit.Votes[:])...)
 	if err != nil {
-		return fmt.Errorf("failed to hash: %w", err)
+		circuits.FrontendError(api, "failed to hash: ", err)
 	}
 	hashVar, err := utils.PackScalarToVar(api, hash)
 	if err != nil {
 		circuits.FrontendError(api, "failed to pack scalar to variable", err)
 	}
 	api.AssertIsEqual(hashVar, publicInput)
-	return nil
 }
 
-func (circuit Circuit) VerifyAggregatedProof(api frontend.API) error {
+func (circuit Circuit) VerifyAggregatedProof(api frontend.API) {
 	// initialize the verifier
 	verifier, err := groth16.NewVerifier[sw_bw6761.ScalarField, sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](api)
 	if err != nil {
-		return fmt.Errorf("failed to create bw6761 verifier: %w", err)
+		circuits.FrontendError(api, "failed to create bw6761 verifier: ", err)
 	}
 	// verify the proof with the hash as input and the fixed verification key
 	if err := verifier.AssertProof(circuit.AggregatedProof.VK, circuit.AggregatedProof.Proof, circuit.AggregatedProof.Witness); err != nil {
-		return fmt.Errorf("failed to verify aggregated proof: %w", err)
+		circuits.FrontendError(api, "failed to verify aggregated proof: ", err)
 	}
-	return nil
 }
 
 func (circuit Circuit) VerifyMerkleProofs(api frontend.API, hFn utils.Hasher) {

@@ -164,9 +164,7 @@ type CircuitAggregatedWitness struct {
 }
 
 func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedWitnessHash(api)
 	return nil
 }
 
@@ -231,9 +229,7 @@ type CircuitAggregatedProof struct {
 }
 
 func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedProof(api); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedProof(api)
 	return nil
 }
 
