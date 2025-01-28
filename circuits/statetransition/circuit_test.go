@@ -14,6 +14,7 @@ import (
 	"github.com/consensys/gnark/test"
 	"github.com/rs/zerolog"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
+	statetransitiontest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
@@ -52,7 +53,7 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(2, 20)); err != nil { // new vote 2
 		t.Fatal(err)
 	}
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(4, 30)); err != nil { // add vote 4
 		t.Fatal(err)
 	}
-	witness, err = GenerateWitnesses(s)
+	witness, err = statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
 	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
 	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
-	for name, mts := range map[string][statetransition.VoteBatchSize]state.MerkleTransition{
+	for name, mts := range map[string][statetransition.VoteBatchSize]statetransition.MerkleTransition{
 		"Ballot":     witness.Ballot,
 		"Commitment": witness.Commitment,
 	} {
@@ -143,7 +144,7 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 		}
 	}
 
-	for name, mt := range map[string]state.MerkleTransition{
+	for name, mt := range map[string]statetransition.MerkleTransition{
 		"ResultsAdd": witness.ResultsAdd,
 		"ResultsSub": witness.ResultsSub,
 	} {
@@ -197,7 +198,7 @@ func TestCircuitAggregatedWitnessProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +263,7 @@ func TestCircuitAggregatedProofProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +327,7 @@ func TestCircuitBallotsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +393,7 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}

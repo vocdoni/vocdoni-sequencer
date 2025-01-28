@@ -8,8 +8,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
-	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
@@ -32,9 +30,6 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	var err error
 	witness := &statetransition.Circuit{}
 
-	// TODO: mock, replace by actual AggregatedProof
-	witness.AggregatedProof.Proof = groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine]{}
-
 	// RootHashBefore
 	witness.RootHashBefore, err = o.RootAsBigInt()
 	if err != nil {
@@ -42,16 +37,16 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	}
 
 	// first get MerkleProofs, since they need to belong to RootHashBefore, i.e. before MerkleTransitions
-	if witness.ProcessIDProof, err = o.GenMerkleProof(state.KeyProcessID); err != nil {
+	if witness.ProcessIDProof, err = statetransition.GenMerkleProof(o, state.KeyProcessID); err != nil {
 		return nil, err
 	}
-	if witness.CensusRootProof, err = o.GenMerkleProof(state.KeyCensusRoot); err != nil {
+	if witness.CensusRootProof, err = statetransition.GenMerkleProof(o, state.KeyCensusRoot); err != nil {
 		return nil, err
 	}
-	if witness.BallotModeProof, err = o.GenMerkleProof(state.KeyBallotMode); err != nil {
+	if witness.BallotModeProof, err = statetransition.GenMerkleProof(o, state.KeyBallotMode); err != nil {
 		return nil, err
 	}
-	if witness.EncryptionKeyProof, err = o.GenMerkleProof(state.KeyEncryptionKey); err != nil {
+	if witness.EncryptionKeyProof, err = statetransition.GenMerkleProof(o, state.KeyEncryptionKey); err != nil {
 		return nil, err
 	}
 
@@ -60,10 +55,10 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	// add Ballots
 	for i := range witness.Ballot {
 		if i < len(o.Votes()) {
-			witness.Ballot[i], err = o.MerkleTransitionFromAddOrUpdate(
+			witness.Ballot[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Nullifier, o.Votes()[i].Ballot.Serialize())
 		} else {
-			witness.Ballot[i], err = o.MerkleTransitionFromNoop()
+			witness.Ballot[i], err = statetransition.MerkleTransitionFromNoop(o)
 		}
 		if err != nil {
 			return nil, err
@@ -73,10 +68,10 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	// add Commitments
 	for i := range witness.Commitment {
 		if i < len(o.Votes()) {
-			witness.Commitment[i], err = o.MerkleTransitionFromAddOrUpdate(
+			witness.Commitment[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Address, arbo.BigIntToBytes(32, o.Votes()[i].Commitment))
 		} else {
-			witness.Commitment[i], err = o.MerkleTransitionFromNoop()
+			witness.Commitment[i], err = statetransition.MerkleTransitionFromNoop(o)
 		}
 		if err != nil {
 			return nil, err
@@ -84,14 +79,14 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	}
 
 	// update ResultsAdd
-	witness.ResultsAdd, err = o.MerkleTransitionFromAddOrUpdate(
+	witness.ResultsAdd, err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 		state.KeyResultsAdd, o.ResultsAdd.Add(o.ResultsAdd, o.BallotSum).Serialize())
 	if err != nil {
 		return nil, fmt.Errorf("ResultsAdd: %w", err)
 	}
 
 	// update ResultsSub
-	witness.ResultsSub, err = o.MerkleTransitionFromAddOrUpdate(
+	witness.ResultsSub, err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 		state.KeyResultsSub, o.ResultsSub.Add(o.ResultsSub, o.OverwriteSum).Serialize())
 	if err != nil {
 		return nil, fmt.Errorf("ResultsSub: %w", err)

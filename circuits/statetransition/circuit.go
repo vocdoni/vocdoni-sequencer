@@ -13,7 +13,6 @@ import (
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
-	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
@@ -53,14 +52,14 @@ type Circuit struct {
 	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
 	Votes   [VoteBatchSize]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
 
-	ProcessIDProof     state.MerkleProof
-	CensusRootProof    state.MerkleProof
-	BallotModeProof    state.MerkleProof
-	EncryptionKeyProof state.MerkleProof
-	ResultsAdd         state.MerkleTransition
-	ResultsSub         state.MerkleTransition
-	Ballot             [VoteBatchSize]state.MerkleTransition
-	Commitment         [VoteBatchSize]state.MerkleTransition
+	ProcessIDProof     MerkleProof
+	CensusRootProof    MerkleProof
+	BallotModeProof    MerkleProof
+	EncryptionKeyProof MerkleProof
+	ResultsAdd         MerkleTransition
+	ResultsSub         MerkleTransition
+	Ballot             [VoteBatchSize]MerkleTransition
+	Commitment         [VoteBatchSize]MerkleTransition
 
 	AggregatedProof circuits.InnerProofBW6761
 }

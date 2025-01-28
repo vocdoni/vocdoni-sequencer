@@ -145,6 +145,10 @@ func (o *State) EndBatch() error {
 	return o.dbTx.Commit()
 }
 
+func (o *State) Root() ([]byte, error) {
+	return o.tree.Root()
+}
+
 func (o *State) RootAsBigInt() (*big.Int, error) {
 	root, err := o.tree.Root()
 	if err != nil {
