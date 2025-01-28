@@ -1,10 +1,23 @@
 package circuits
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark/frontend"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 )
+
+// FrontendError function is an in-circuit function to print an error message
+// and an error trace, making the circuit fail.
+func FrontendError(api frontend.API, msg string, trace error) {
+	err := fmt.Errorf("%s", msg)
+	if err != nil {
+		err = fmt.Errorf("%w: %v", err, trace)
+	}
+	api.Println(err.Error())
+	api.AssertIsEqual(1, 0)
+}
 
 // BigIntArrayToN pads the big.Int array to n elements, if needed,
 // with zeros.

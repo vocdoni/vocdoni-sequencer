@@ -50,24 +50,6 @@ func TrimHex(s string) string {
 	return s
 }
 
-// bn254BaseField contains the Base Field of the twisted Edwards curve, whose
-// base field os the scalar field on the curve BN254. It helps to represent
-// a scalar number into the field.
-var bn254BaseField, _ = new(big.Int).SetString("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10)
-
-// BigToFF function returns the finite field representation of the big.Int
-// provided. It uses Euclidean Modulus and the BN254 curve scalar field to
-// represent the provided number.
-func BigToFF(iv *big.Int) *big.Int {
-	z := big.NewInt(0)
-	if c := iv.Cmp(bn254BaseField); c == 0 {
-		return z
-	} else if c != 1 && iv.Cmp(z) != -1 {
-		return iv
-	}
-	return z.Mod(iv, bn254BaseField)
-}
-
 func PrettyHex(v frontend.Variable) string {
 	type hasher interface {
 		HashCode() [16]byte

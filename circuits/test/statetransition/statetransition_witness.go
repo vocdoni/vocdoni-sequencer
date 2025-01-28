@@ -1,16 +1,39 @@
-package statetransition_test
+package statetransitiontest
 
 import (
 	"fmt"
+	"math"
 
+	"github.com/consensys/gnark/frontend"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
+	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 )
 
+func ballotMode() circuits.BallotMode[frontend.Variable] {
+	return circuits.BallotMode[frontend.Variable]{
+		MaxCount:        ballottest.MaxCount,
+		ForceUniqueness: ballottest.ForceUniqueness,
+		MaxValue:        ballottest.MaxValue,
+		MinValue:        ballottest.MinValue,
+		MaxTotalCost:    int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
+		MinTotalCost:    ballottest.MaxCount,
+		CostExp:         ballottest.CostExp,
+		CostFromWeight:  ballottest.CostFromWeight,
+	}
+}
+
 func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	var err error
 	witness := &statetransition.Circuit{}
+
+	// TODO: mock, replace by actual AggregatedProof
+	witness.AggregatedProof.Proof = groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine]{}
 
 	// RootHashBefore
 	witness.RootHashBefore, err = o.RootAsBigInt()
