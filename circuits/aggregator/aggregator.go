@@ -55,14 +55,14 @@ type AggregatorCircuit struct {
 	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-// checkInputHash circuit method checks the hash of the public-private inputs
+// CheckInputHash circuit method checks the hash of the public-private inputs
 // of the circuit with the provided InputsHash. The hash is calculated using
 // the native MiMC hash function (using the same field as the circuit). As
 // circuit method, it does not return any value, but it assert that the hashes
 // are equal. The hash includes the census root, process id, encryption public
 // key, the ballot mode params, the nullifiers, commitments, addresses and the
 // encrypted ballots.
-func (c AggregatorCircuit) checkInputHash(api frontend.API) {
+func (c AggregatorCircuit) CheckInputHash(api frontend.API) {
 	// hash the inputs
 	h, err := mimc7.NewMiMC(api)
 	if err != nil {
@@ -77,12 +77,12 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	api.AssertIsEqual(c.InputsHash, finalHash)
 }
 
-// checkInnerInputsHashes circuit method checks the hash of the public inputs
+// CheckInnerInputsHashes circuit method checks the hash of the public inputs
 // of each voter proof with the provided VerifyPublicInputs. The hash is
 // calculated using the MiMC hash function in the same field of the proofs. As
 // circuit method, it does not return any value, but it assert that the hashes
 // are equal. Each hash includes the common inputs and the voter inputs.
-func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
+func (c AggregatorCircuit) CheckInnerInputsHashes(api frontend.API) {
 	hashFn, err := mimc7.NewMiMC(api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
@@ -115,13 +115,13 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	}
 }
 
-// checkProofs circuit method verifies each voter proof with the provided
+// CheckProofs circuit method verifies each voter proof with the provided
 // verification keys and public inputs. The verification keys should contain
 // the dummy circuit and the main circuit verification keys in that particular
 // order. The dummy circuit verification key is used to verify the proofs that
 // are not from valid voters. As circuit method, it does not return any value,
 // but it assert that all the proofs are valid.
-func (c AggregatorCircuit) checkProofs(api frontend.API) {
+func (c AggregatorCircuit) CheckProofs(api frontend.API) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
@@ -150,10 +150,10 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 
 func (c AggregatorCircuit) Define(api frontend.API) error {
 	// check the inputs hash
-	c.checkInputHash(api)
+	c.CheckInputHash(api)
 	// check inner circuits inputs hashes
-	// c.checkInnerInputsHashes(api)
+	// c.CheckInnerInputsHashes(api)
 	// check all the proofs
-	c.checkProofs(api)
+	c.CheckProofs(api)
 	return nil
 }

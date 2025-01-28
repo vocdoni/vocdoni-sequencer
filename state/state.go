@@ -5,8 +5,11 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/iden3/go-iden3-crypto/babyjub"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/db"
@@ -198,12 +201,24 @@ func (o *State) BallotMode() []byte {
 	return v
 }
 
-func (o *State) EncryptionKey() []byte {
+func (o *State) EncryptionKey() circuits.EncryptionKey[*big.Int] {
 	_, v, err := o.tree.Get(KeyEncryptionKey)
 	if err != nil {
 		panic(err)
 	}
-	return v
+	// mock
+	fmt.Println(v)
+	ek := GenEncryptionKeyForTest()
+	ekX, ekY := ek.Point()
+	return circuits.EncryptionKey[*big.Int]{PubKey: [2]*big.Int{ekX, ekY}}
+}
+
+// mock
+func GenEncryptionKeyForTest() ecc.Point {
+	privkey := babyjub.NewRandPrivKey()
+
+	x, y := privkey.Public().X, privkey.Public().Y
+	return new(bjj.BJJ).SetPoint(x, y)
 }
 
 func (o *State) AggregatedWitnessInputs() [][]byte {
@@ -222,7 +237,7 @@ func (o *State) AggregatedWitnessInputs() [][]byte {
 		o.ProcessID(),
 		o.CensusRoot(),
 		o.BallotMode(),
-		o.EncryptionKey(),
+		o.EncryptionKey().Bytes(),
 	}
 	votes := o.PaddedVotes()
 	for _, v := range votes {

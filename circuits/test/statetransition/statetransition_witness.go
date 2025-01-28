@@ -5,6 +5,8 @@ import (
 	"math"
 
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 
@@ -23,6 +25,19 @@ func ballotMode() circuits.BallotMode[frontend.Variable] {
 		MinTotalCost:    ballottest.MaxCount,
 		CostExp:         ballottest.CostExp,
 		CostFromWeight:  ballottest.CostFromWeight,
+	}
+}
+
+func ballotModeEmulated() circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]] {
+	return circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+		MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+		ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballottest.ForceUniqueness),
+		MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxValue),
+		MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MinValue),
+		MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount),
+		MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+		CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
+		CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
 	}
 }
 
@@ -50,6 +65,14 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		return nil, err
 	}
 
+	// mock
+	witness.Process = circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
+		ID:            emulated.ValueOf[sw_bn254.ScalarField](witness.ProcessIDProof.Value),
+		CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](witness.CensusRootProof.Value),
+		BallotMode:    ballotModeEmulated(),
+		EncryptionKey: o.EncryptionKey().AsEmulatedElementBN254(),
+	}
+
 	// now build ordered chain of MerkleTransitions
 
 	// add Ballots
@@ -57,8 +80,12 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		if i < len(o.Votes()) {
 			witness.Ballot[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Nullifier, o.Votes()[i].Ballot.Serialize())
+			witness.Votes[i].Nullifier = emulated.ValueOf[sw_bn254.ScalarField](witness.Ballot[i].NewKey) // mock
+			witness.Votes[i].Ballot = witness.Ballot[i].NewCiphertexts                                    // mock
 		} else {
 			witness.Ballot[i], err = statetransition.MerkleTransitionFromNoop(o)
+			witness.Votes[i].Nullifier = emulated.ValueOf[sw_bn254.ScalarField](witness.Ballot[i].NewKey) // mock
+			witness.Votes[i].Ballot = witness.Ballot[i].NewCiphertexts                                    // mock
 		}
 		if err != nil {
 			return nil, err
@@ -70,8 +97,13 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		if i < len(o.Votes()) {
 			witness.Commitment[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Address, arbo.BigIntToBytes(32, o.Votes()[i].Commitment))
+			witness.Votes[i].Address = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewKey)      // mock
+			witness.Votes[i].Commitment = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewValue) // mock
+
 		} else {
 			witness.Commitment[i], err = statetransition.MerkleTransitionFromNoop(o)
+			witness.Votes[i].Address = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewKey)      // mock
+			witness.Votes[i].Commitment = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewValue) // mock
 		}
 		if err != nil {
 			return nil, err
