@@ -76,8 +76,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		processId = util.RandomBytes(20)
 	}
 	ek := ballottest.GenEncryptionKeyForTest()
-	ekX, ekY := ek.Point()
-	encryptionKey := circuits.EncryptionKey[*big.Int]{PubKey: [2]*big.Int{ekX, ekY}}
+	encryptionKey := circuits.EncryptionKeyFromECCPoint(ek)
 	// circuits assigments, voters data and proofs
 	var assigments []voteverifier.VerifyVoteCircuit
 	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}

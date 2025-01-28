@@ -76,10 +76,10 @@ func VoteVerifierInputs(api frontend.API,
 //	Addressess
 //	Commitments
 func AggregatedWitnessInputs(api frontend.API,
-	process Process[emulated.Element[sw_bn254.ScalarField]],
-	votes []Vote[emulated.Element[sw_bn254.ScalarField]],
-) []emulated.Element[sw_bn254.ScalarField] {
-	inputs := []emulated.Element[sw_bn254.ScalarField]{}
+	process Process[frontend.Variable],
+	votes []Vote[frontend.Variable],
+) []frontend.Variable {
+	inputs := []frontend.Variable{}
 	inputs = append(inputs, process.ID)
 	inputs = append(inputs, process.CensusRoot)
 	inputs = append(inputs, process.BallotMode.Serialize()...)
@@ -88,7 +88,7 @@ func AggregatedWitnessInputs(api frontend.API,
 		inputs = append(inputs, v.Nullifier)
 	}
 	for _, v := range votes {
-		inputs = append(inputs, v.Ballot.Serialize(api)...)
+		inputs = append(inputs, v.Ballot.SerializeVars()...)
 	}
 	for _, v := range votes {
 		inputs = append(inputs, v.Address)

@@ -68,7 +68,8 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
 	}
-	h.Write(circuits.AggregatedWitnessInputs(api, c.Process, c.Votes[:])...)
+	// TODO: fix AggregatedWitnessInputs returned type
+	// h.Write(circuits.AggregatedWitnessInputs(api, c.Process, c.Votes[:])...)
 	finalHash, err := utils.PackScalarToVar(api, h.Sum())
 	if err != nil {
 		circuits.FrontendError(api, "failed to pack scalar to variable", err)

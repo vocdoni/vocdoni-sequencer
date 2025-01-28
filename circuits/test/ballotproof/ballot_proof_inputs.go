@@ -271,7 +271,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"process_id":       ffProcessID.String(),
 		"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
 		"k":                k.String(),
-		"cipherfields":     ballot,
+		"cipherfields":     circuits.BigIntArrayToStringArray(ballot.BigInts(), 8*4),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
 		"secret":           ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),

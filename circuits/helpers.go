@@ -49,8 +49,16 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 // representation.
 func BigIntToMIMCHash(input, base *big.Int) []byte {
 	hash := ecc.BigToFF(base, input).Bytes()
-	for len(hash) < 32 {
+	for len(hash) < SerializedFieldSize {
 		hash = append([]byte{0}, hash...)
 	}
 	return hash
+}
+
+// BoolToBigInt returns 1 when b is true or 0 otherwise
+func BoolToBigInt(b bool) *big.Int {
+	if b {
+		return big.NewInt(1)
+	}
+	return big.NewInt(0)
 }
