@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/vocdoni/arbo/memdb"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
@@ -60,13 +61,9 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 	defer st.Close()
 
-	ballotmode, err := p.BallotMode.Marshal()
-	if err != nil {
-		ErrGenericInternalServerError.Withf("could not marshal ballot mode: %v", err).Write(w)
-		return
-	}
-
-	if err := st.Initialize(p.CensusRoot, ballotmode, publicKey.Marshal()); err != nil {
+	if err := st.Initialize(p.CensusRoot,
+		circuits.BallotModeFromBM(p.BallotMode).Bytes(),
+		circuits.EncryptionKeyFromECCPoint(publicKey).Bytes()); err != nil {
 		ErrGenericInternalServerError.Withf("could not initialize state: %v", err).Write(w)
 		return
 	}

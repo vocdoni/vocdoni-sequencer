@@ -2,7 +2,6 @@ package aggregatortest
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	gecc "github.com/consensys/gnark-crypto/ecc"
@@ -116,16 +115,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int) (
 		vvInputs.CensusRoot,
 	)
 	hashInputs = append(hashInputs, vvInputs.EncryptionPubKey.Serialize()...)
-	hashInputs = append(hashInputs,
-		big.NewInt(int64(ballottest.MaxCount)),
-		big.NewInt(int64(ballottest.ForceUniqueness)),
-		big.NewInt(int64(ballottest.MaxValue)),
-		big.NewInt(int64(ballottest.MinValue)),
-		big.NewInt(int64(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp)))*int64(ballottest.MaxCount)),
-		big.NewInt(int64(ballottest.MaxCount)),
-		big.NewInt(int64(ballottest.CostExp)),
-		big.NewInt(int64(ballottest.CostFromWeight)),
-	)
+	hashInputs = append(hashInputs, circuits.MockBallotMode().Serialize()...)
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
 	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
@@ -146,18 +136,9 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int) (
 		InputsHash: inputsHash,
 		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
 		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
-			ID:         emulated.ValueOf[sw_bn254.ScalarField](vvInputs.ProcessID),
-			CensusRoot: emulated.ValueOf[sw_bn254.ScalarField](vvInputs.CensusRoot),
-			BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
-				MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
-				ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballottest.ForceUniqueness),
-				MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxValue),
-				MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MinValue),
-				MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount),
-				MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
-				CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
-				CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
-			},
+			ID:            emulated.ValueOf[sw_bn254.ScalarField](vvInputs.ProcessID),
+			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.CensusRoot),
+			BallotMode:    circuits.MockBallotModeEmulated(),
 			EncryptionKey: vvInputs.EncryptionPubKey.AsEmulatedElementBN254(),
 		},
 		Proofs: proofs,

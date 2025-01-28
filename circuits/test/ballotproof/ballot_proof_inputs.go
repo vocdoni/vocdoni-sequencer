@@ -26,17 +26,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
-const (
-	// default process config
-	MaxCount        = 5
-	ForceUniqueness = 0
-	MaxValue        = 16
-	MinValue        = 0
-	CostExp         = 2
-	CostFromWeight  = 0
-	Weight          = 10
-)
-
 //go:embed circom_assets/ballot_proof.wasm
 var TestCircomCircuit []byte
 
@@ -217,7 +206,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	// get encryption key coords
 	encryptionKeyX, encryptionKeyY := encryptionKey.Point()
 	// generate random fields
-	fields := GenBallotFieldsForTest(MaxCount, MaxValue, MinValue, ForceUniqueness > 0)
+	fields := GenBallotFieldsForTest(circuits.MockMaxCount, circuits.MockMaxValue, circuits.MockMinValue, circuits.MockForceUniqueness > 0)
 	// encrypt the fields
 	k, err := elgamal.RandK()
 	if err != nil {
@@ -233,23 +222,17 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	ffAddress := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
 	ffProcessID := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
-	bigCircomInputs := []*big.Int{
-		big.NewInt(int64(MaxCount)),
-		big.NewInt(int64(ForceUniqueness)),
-		big.NewInt(int64(MaxValue)),
-		big.NewInt(int64(MinValue)),
-		big.NewInt(int64(math.Pow(float64(MaxValue), float64(CostExp))) * int64(MaxCount)),
-		big.NewInt(int64(MaxCount)),
-		big.NewInt(int64(CostExp)),
-		big.NewInt(int64(CostFromWeight)),
+	bigCircomInputs := []*big.Int{}
+	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
+	bigCircomInputs = append(bigCircomInputs,
 		ffAddress,
-		big.NewInt(int64(Weight)),
+		big.NewInt(int64(circuits.MockWeight)),
 		ffProcessID,
 		encryptionKeyX,
 		encryptionKeyY,
 		nullifier,
 		commitment,
-	}
+	)
 	bigCircomInputs = append(bigCircomInputs, plainBallot...)
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	if err != nil {
@@ -258,20 +241,20 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	// init circom inputs
 	circomInputs := map[string]any{
 		"fields":           circuits.BigIntArrayToStringArray(fields[:], circuits.FieldsPerBallot),
-		"max_count":        fmt.Sprint(MaxCount),
-		"force_uniqueness": fmt.Sprint(ForceUniqueness),
-		"max_value":        fmt.Sprint(MaxValue),
-		"min_value":        fmt.Sprint(MinValue),
-		"max_total_cost":   fmt.Sprint(int(math.Pow(float64(MaxValue), float64(CostExp))) * MaxCount),
-		"min_total_cost":   fmt.Sprint(MaxCount),
-		"cost_exp":         fmt.Sprint(CostExp),
-		"cost_from_weight": fmt.Sprint(CostFromWeight),
+		"max_count":        fmt.Sprint(circuits.MockMaxCount),
+		"force_uniqueness": fmt.Sprint(circuits.MockForceUniqueness),
+		"max_value":        fmt.Sprint(circuits.MockMaxValue),
+		"min_value":        fmt.Sprint(circuits.MockMinValue),
+		"max_total_cost":   fmt.Sprint(int(math.Pow(float64(circuits.MockMaxValue), float64(circuits.MockCostExp))) * circuits.MockMaxCount),
+		"min_total_cost":   fmt.Sprint(circuits.MockMaxCount),
+		"cost_exp":         fmt.Sprint(circuits.MockCostExp),
+		"cost_from_weight": fmt.Sprint(circuits.MockCostFromWeight),
 		"address":          ffAddress.String(),
-		"weight":           fmt.Sprint(Weight),
+		"weight":           fmt.Sprint(circuits.MockWeight),
 		"process_id":       ffProcessID.String(),
 		"pk":               []string{encryptionKeyX.String(), encryptionKeyY.String()},
 		"k":                k.String(),
-		"cipherfields":     ballot,
+		"cipherfields":     circuits.BigIntArrayToStringArray(ballot.BigInts(), circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
 		"secret":           ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),

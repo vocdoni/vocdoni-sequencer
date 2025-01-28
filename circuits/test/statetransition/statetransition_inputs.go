@@ -92,7 +92,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	s := newState(
 		processId,
 		agInputs.CensusRoot.Bytes(),
-		ballotMode().Bytes(),
+		circuits.MockBallotMode().Bytes(),
 		agInputs.EncryptionPubKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {

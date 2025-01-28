@@ -98,3 +98,40 @@ func AggregatedWitnessInputs(api frontend.API,
 	}
 	return inputs
 }
+
+// AggregatedWitnessInputsAsVars returns all values that are hashed
+// to produce the public input needed to verify AggregatedProof,
+// in a predefined order:
+//
+//	ProcessID
+//	CensusRoot
+//	BallotMode
+//	EncryptionKey
+//	Nullifiers
+//	Ballots
+//	Addressess
+//	Commitments
+func AggregatedWitnessInputsAsVars(api frontend.API,
+	process Process[frontend.Variable],
+	votes []Vote[frontend.Variable],
+) []frontend.Variable {
+	// TODO: dedup AggregatedWitnessInputs and AggregatedWitnessInputsAsVars somehow
+	inputs := []frontend.Variable{}
+	inputs = append(inputs, process.ID)
+	inputs = append(inputs, process.CensusRoot)
+	inputs = append(inputs, process.BallotMode.Serialize()...)
+	inputs = append(inputs, process.EncryptionKey.Serialize()...)
+	for _, v := range votes {
+		inputs = append(inputs, v.Nullifier)
+	}
+	for _, v := range votes {
+		inputs = append(inputs, v.Ballot.SerializeVars()...)
+	}
+	for _, v := range votes {
+		inputs = append(inputs, v.Address)
+	}
+	for _, v := range votes {
+		inputs = append(inputs, v.Commitment)
+	}
+	return inputs
+}

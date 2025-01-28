@@ -37,13 +37,35 @@ type State struct {
 	dbTx      db.WriteTx
 
 	// TODO: unexport these, add ArboProofs and only export those via a method
-	ResultsAdd     *elgamal.Ballot
-	ResultsSub     *elgamal.Ballot
-	BallotSum      *elgamal.Ballot
-	OverwriteSum   *elgamal.Ballot
-	ballotCount    int
-	overwriteCount int
-	votes          []*Vote
+	OldResultsAdd      *elgamal.Ballot
+	OldResultsSub      *elgamal.Ballot
+	NewResultsAdd      *elgamal.Ballot
+	NewResultsSub      *elgamal.Ballot
+	BallotSum          *elgamal.Ballot
+	OverwriteSum       *elgamal.Ballot
+	overwrittenBallots []*elgamal.Ballot
+	ballotCount        int
+	overwriteCount     int
+	votes              []*Vote
+
+	// Transition Witness
+	RootHashBefore *big.Int
+	Process        circuits.Process[*big.Int]
+	ProcessProofs  ProcessProofs
+	VotesProofs    VotesProofs
+}
+type ProcessProofs struct {
+	ID            *ArboProof
+	CensusRoot    *ArboProof
+	BallotMode    *ArboProof
+	EncryptionKey *ArboProof
+}
+
+type VotesProofs struct {
+	ResultsAdd *ArboTransition
+	ResultsSub *ArboTransition
+	Ballot     [circuits.VotesPerBatch]*ArboTransition
+	Commitment [circuits.VotesPerBatch]*ArboTransition
 }
 
 // New creates or opens a State stored in the passed database.
@@ -87,6 +109,19 @@ func (o *State) Initialize(censusRoot, ballotMode, encryptionKey []byte) error {
 	if err := o.tree.Add(KeyResultsSub, elgamal.NewBallot(Curve).Serialize()); err != nil {
 		return err
 	}
+
+	o.Process.ID = arbo.BytesToBigInt(o.processID)
+	o.Process.CensusRoot = arbo.BytesToBigInt(censusRoot)
+	var err error
+	o.Process.BallotMode, err = circuits.DeserializeBallotMode(ballotMode)
+	if err != nil {
+		return err
+	}
+	o.Process.EncryptionKey, err = circuits.DeserializeEncryptionKey(encryptionKey)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -99,20 +134,25 @@ func (o *State) Close() error {
 // and creates a new write transaction in the db
 func (o *State) StartBatch() error {
 	o.dbTx = o.db.WriteTx()
-	if o.ResultsAdd == nil {
-		o.ResultsAdd = elgamal.NewBallot(Curve)
+	if o.OldResultsAdd == nil {
+		o.OldResultsAdd = elgamal.NewBallot(Curve)
 	}
-	if o.ResultsSub == nil {
-		o.ResultsSub = elgamal.NewBallot(Curve)
+	if o.OldResultsSub == nil {
+		o.OldResultsSub = elgamal.NewBallot(Curve)
 	}
-
+	if o.NewResultsAdd == nil {
+		o.NewResultsAdd = elgamal.NewBallot(Curve)
+	}
+	if o.NewResultsSub == nil {
+		o.NewResultsSub = elgamal.NewBallot(Curve)
+	}
 	{
 		_, v, err := o.tree.Get(KeyResultsAdd)
 		if err != nil {
 			return err
 		}
-		if err := o.ResultsAdd.Deserialize(v); err != nil {
-			return fmt.Errorf("ResultsAdd: %w", err)
+		if err := o.OldResultsAdd.Deserialize(v); err != nil {
+			return fmt.Errorf("OldResultsAdd: %w", err)
 		}
 	}
 	{
@@ -120,8 +160,8 @@ func (o *State) StartBatch() error {
 		if err != nil {
 			return err
 		}
-		if err := o.ResultsSub.Deserialize(v); err != nil {
-			return fmt.Errorf("ResultsSub: %w", err)
+		if err := o.OldResultsSub.Deserialize(v); err != nil {
+			return fmt.Errorf("OldResultsSub: %w", err)
 		}
 	}
 
@@ -129,11 +169,77 @@ func (o *State) StartBatch() error {
 	o.OverwriteSum = elgamal.NewBallot(Curve)
 	o.ballotCount = 0
 	o.overwriteCount = 0
+	o.overwrittenBallots = []*elgamal.Ballot{}
 	o.votes = []*Vote{}
 	return nil
 }
 
 func (o *State) EndBatch() error {
+	var err error
+	// RootHashBefore
+	o.RootHashBefore, err = o.RootAsBigInt()
+	if err != nil {
+		return err
+	}
+
+	// first get MerkleProofs, since they need to belong to RootHashBefore, i.e. before MerkleTransitions
+	if o.ProcessProofs.ID, err = o.GenArboProof(KeyProcessID); err != nil {
+		return err
+	}
+	if o.ProcessProofs.CensusRoot, err = o.GenArboProof(KeyCensusRoot); err != nil {
+		return err
+	}
+	if o.ProcessProofs.BallotMode, err = o.GenArboProof(KeyBallotMode); err != nil {
+		return err
+	}
+	if o.ProcessProofs.EncryptionKey, err = o.GenArboProof(KeyEncryptionKey); err != nil {
+		return err
+	}
+
+	// now build ordered chain of MerkleTransitions
+
+	// add Ballots
+	for i := range o.VotesProofs.Ballot {
+		if i < len(o.Votes()) {
+			o.VotesProofs.Ballot[i], err = ArboTransitionFromAddOrUpdate(o,
+				o.Votes()[i].Nullifier, o.Votes()[i].Ballot.Serialize())
+		} else {
+			o.VotesProofs.Ballot[i], err = ArboTransitionFromNoop(o)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// add Commitments
+	for i := range o.VotesProofs.Commitment {
+		if i < len(o.Votes()) {
+			o.VotesProofs.Commitment[i], err = ArboTransitionFromAddOrUpdate(o,
+				o.Votes()[i].Address, arbo.BigIntToBytes(circuits.SerializedFieldSize, o.Votes()[i].Commitment))
+		} else {
+			o.VotesProofs.Commitment[i], err = ArboTransitionFromNoop(o)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// update ResultsAdd
+	o.NewResultsAdd = o.NewResultsAdd.Add(o.OldResultsAdd, o.BallotSum)
+	o.VotesProofs.ResultsAdd, err = ArboTransitionFromAddOrUpdate(o,
+		KeyResultsAdd, o.NewResultsAdd.Serialize())
+	if err != nil {
+		return fmt.Errorf("ResultsAdd: %w", err)
+	}
+
+	// update ResultsSub
+	o.NewResultsSub = o.NewResultsSub.Add(o.OldResultsSub, o.OverwriteSum)
+	o.VotesProofs.ResultsSub, err = ArboTransitionFromAddOrUpdate(o,
+		KeyResultsSub, o.NewResultsSub.Serialize())
+	if err != nil {
+		return fmt.Errorf("ResultsSub: %w", err)
+	}
+
 	return o.dbTx.Commit()
 }
 
@@ -159,6 +265,14 @@ func (o *State) OverwriteCount() int {
 
 func (o *State) Votes() []*Vote {
 	return o.votes
+}
+
+func (o *State) OverwrittenBallots() []*elgamal.Ballot {
+	v := slices.Clone(o.overwrittenBallots)
+	for len(v) < circuits.VotesPerBatch {
+		v = append(v, elgamal.NewBallot(Curve))
+	}
+	return v
 }
 
 func (o *State) PaddedVotes() []*Vote {
@@ -190,20 +304,28 @@ func (o *State) CensusRoot() []byte {
 	return v
 }
 
-func (o *State) BallotMode() []byte {
+func (o *State) BallotMode() circuits.BallotMode[*big.Int] {
 	_, v, err := o.tree.Get(KeyBallotMode)
 	if err != nil {
 		panic(err)
 	}
-	return v
+	bm, err := circuits.DeserializeBallotMode(v)
+	if err != nil {
+		panic(err)
+	}
+	return bm
 }
 
-func (o *State) EncryptionKey() []byte {
+func (o *State) EncryptionKey() circuits.EncryptionKey[*big.Int] {
 	_, v, err := o.tree.Get(KeyEncryptionKey)
 	if err != nil {
 		panic(err)
 	}
-	return v
+	ek, err := circuits.DeserializeEncryptionKey(v)
+	if err != nil {
+		panic(err)
+	}
+	return ek
 }
 
 func (o *State) AggregatedWitnessInputs() [][]byte {
@@ -221,8 +343,8 @@ func (o *State) AggregatedWitnessInputs() [][]byte {
 	inputs := [][]byte{
 		o.ProcessID(),
 		o.CensusRoot(),
-		o.BallotMode(),
-		o.EncryptionKey(),
+		o.BallotMode().Bytes(),
+		o.EncryptionKey().Bytes(),
 	}
 	votes := o.PaddedVotes()
 	for _, v := range votes {
