@@ -172,10 +172,12 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
 	validProofs := bits.ToBinary(api, c.ValidVotes)
+
 	for i := 0; i < len(c.Proofs); i++ {
-		api.Println("proof", i)
-		for j, limb := range c.Proofs[i].Witness.Public[0].Limbs {
-			api.Println("hash limb", j, limb)
+		for j := 0; j < len(c.Proofs[i].Witness.Public); j++ {
+			for k, limb := range c.Proofs[i].Witness.Public[j].Limbs {
+				api.Println("proof hash limb", j, k, limb)
+			}
 		}
 		vk, err := verifier.SwitchVerificationKey(validProofs[i], []groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{
 			c.DummyVerificationKey,

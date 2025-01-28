@@ -2,6 +2,7 @@ package aggregatortest
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 
@@ -103,10 +104,11 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int) (
 		if err != nil {
 			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
-		// log.Println("original limbs", proofs[i].Witness.Public[0].Limbs)
-		// fixedHash := emulated.ValueOf[sw_bn254.ScalarField](vvInputs.InputsHashes[i])
-		// log.Println("fixed limbs", fixedHash.Limbs)
-		// proofs[i].Witness.Public[0].Limbs = fixedHash.Limbs
+		for j, public := range proofs[i].Witness.Public {
+			log.Printf("proof %d public %d: %v", i, j, public.Limbs)
+		}
+		bn254InputsHash := emulated.ValueOf[sw_bn254.ScalarField](vvInputs.InputsHashes[i])
+		log.Println("emulated bn254 inputs hash", bn254InputsHash.Limbs)
 	}
 	// compute public inputs hash
 	hashInputs := []*big.Int{
