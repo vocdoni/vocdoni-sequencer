@@ -28,6 +28,19 @@ func ballotMode() circuits.BallotMode[frontend.Variable] {
 	}
 }
 
+func ballotModeEmulated() circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]] {
+	return circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+		MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+		ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballottest.ForceUniqueness),
+		MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxValue),
+		MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MinValue),
+		MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount),
+		MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
+		CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
+		CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
+	}
+}
+
 func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	var err error
 	witness := &statetransition.Circuit{}
@@ -50,6 +63,14 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	}
 	if witness.EncryptionKeyProof, err = statetransition.GenMerkleProof(o, state.KeyEncryptionKey); err != nil {
 		return nil, err
+	}
+
+	// mock
+	witness.Process = circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
+		ID:            emulated.ValueOf[sw_bn254.ScalarField](witness.ProcessIDProof.Value),
+		CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](witness.CensusRootProof.Value),
+		BallotMode:    ballotModeEmulated(),
+		EncryptionKey: o.EncryptionKey().AsEmulatedElementBN254(),
 	}
 
 	// now build ordered chain of MerkleTransitions
