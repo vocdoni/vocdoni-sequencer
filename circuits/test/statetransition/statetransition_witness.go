@@ -5,6 +5,8 @@ import (
 	"math"
 
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 
@@ -57,8 +59,12 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		if i < len(o.Votes()) {
 			witness.Ballot[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Nullifier, o.Votes()[i].Ballot.Serialize())
+			witness.Votes[i].Nullifier = emulated.ValueOf[sw_bn254.ScalarField](witness.Ballot[i].NewKey) // mock
+			witness.Votes[i].Ballot = witness.Ballot[i].NewCiphertexts                                    // mock
 		} else {
 			witness.Ballot[i], err = statetransition.MerkleTransitionFromNoop(o)
+			witness.Votes[i].Nullifier = emulated.ValueOf[sw_bn254.ScalarField](witness.Ballot[i].NewKey) // mock
+			witness.Votes[i].Ballot = witness.Ballot[i].NewCiphertexts                                    // mock
 		}
 		if err != nil {
 			return nil, err
@@ -70,8 +76,13 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		if i < len(o.Votes()) {
 			witness.Commitment[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
 				o.Votes()[i].Address, arbo.BigIntToBytes(32, o.Votes()[i].Commitment))
+			witness.Votes[i].Address = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewKey)      // mock
+			witness.Votes[i].Commitment = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewValue) // mock
+
 		} else {
 			witness.Commitment[i], err = statetransition.MerkleTransitionFromNoop(o)
+			witness.Votes[i].Address = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewKey)      // mock
+			witness.Votes[i].Commitment = emulated.ValueOf[sw_bn254.ScalarField](witness.Commitment[i].NewValue) // mock
 		}
 		if err != nil {
 			return nil, err
