@@ -3,6 +3,7 @@ package voteverifiertest
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 
@@ -144,10 +145,11 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
 		inputsHashes = append(inputsHashes, inputsHash)
+		log.Println("original vote verifier emulated inputs hash", emulated.ValueOf[sw_bn254.ScalarField](inputsHash))
 		// compose circuit placeholders
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
-			InputsHash: inputsHash,
+			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
 			BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
 				MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),

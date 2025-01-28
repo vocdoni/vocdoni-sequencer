@@ -5,12 +5,14 @@ import (
 
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/math/emulated"
 )
 
 type Circuit struct {
 	nbConstraints int
-	SecretInput   frontend.Variable `gnark:",secret"`
-	PublicInputs  frontend.Variable `gnark:",public"`
+	SecretInput   frontend.Variable                      `gnark:",secret"`
+	PublicInput   emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
 }
 
 func (c *Circuit) Define(api frontend.API) error {
@@ -18,17 +20,16 @@ func (c *Circuit) Define(api frontend.API) error {
 	if !ok {
 		return errors.New("api is not a commiter")
 	}
-	secret, err := cmtr.Commit(c.SecretInput)
+	public, err := cmtr.Commit(c.PublicInput.Limbs...)
 	if err != nil {
 		return err
 	}
-	api.AssertIsDifferent(secret, 0)
+	api.AssertIsDifferent(public, 0)
 
 	res := api.Mul(c.SecretInput, c.SecretInput)
 	for i := 2; i < c.nbConstraints; i++ {
 		res = api.Mul(res, c.SecretInput)
 	}
-	api.AssertIsEqual(c.PublicInputs, c.PublicInputs)
 	return nil
 }
 
@@ -46,5 +47,8 @@ func PlaceholderWithConstraints(nbConstraints int) *Circuit {
 
 // Assignment returns the assignment of a dummy circuit.
 func Assignment(publicInput frontend.Variable) *Circuit {
-	return &Circuit{PublicInputs: publicInput, SecretInput: 1}
+	return &Circuit{
+		PublicInput: emulated.ValueOf[sw_bn254.ScalarField](publicInput),
+		SecretInput: 1,
+	}
 }
