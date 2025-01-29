@@ -95,7 +95,9 @@ func DeployContracts(web3rpc, privkey string) (*Contracts, error) {
 		knownOrganizations: make(map[string]struct{}),
 		ContractsAddresses: &Addresses{},
 	}
-	c.SetAccountPrivateKey(privkey)
+	if err := c.SetAccountPrivateKey(privkey); err != nil {
+		return nil, err
+	}
 
 	opts, err := c.authTransactOpts()
 	if err != nil {
@@ -174,6 +176,7 @@ func (c *Contracts) SetAccountPrivateKey(hexPrivKey string) error {
 		return fmt.Errorf("failed to parse private key: %w", err)
 	}
 	c.address = crypto.PubkeyToAddress(c.privKey.PublicKey)
+	log.Debugw("set ethereum account", "address", c.address.Hex())
 	return nil
 }
 

@@ -38,16 +38,12 @@ const (
 	// foundTxErrMessage is the error message when a transaction is found but it
 	// is not supported.
 	foundTxErrMessage = "transaction type not supported"
-	// chainAddressFormat is the format to represent a chain address string.
-	chainAddressFormat = "%s:%s"
 )
 
 var (
 	// notFoundTxRgx is a regular expression to match the error message when a
 	// transaction is not found.
 	notFoundTxRgx = regexp.MustCompile(`not\s[be\s|]*found`)
-	// chainAddressRgx is a regular expression to match the chain address format.
-	chainAddressRgx = regexp.MustCompile(`^(.+):(.+)$`)
 )
 
 // Web3Pool struct contains a map of chainID-[]*Web3Endpoint, where

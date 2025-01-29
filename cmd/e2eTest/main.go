@@ -32,10 +32,12 @@ var rpcs = []string{
 const (
 	sepoliaProcessRegistry = "0x3d0b39c0239329955b9F0E8791dF9Aa84133c861"
 	sepoliaOrgRegistry     = "0xd512481d0Fa6d975f9B186a9f6e59ea8E12D2C2b"
+
+	testLocalAccountPrivKey = "0cebebc37477f513cd8f946ffced46e368aa4f9430250ce4507851edbba86b20" // defined in docker/files/genesis.json
 )
 
 func main() {
-	privKey := flag.String("privkey", "", "private key to use for the Ethereum account")
+	privKey := flag.String("privkey", testLocalAccountPrivKey, "private key to use for the Ethereum account")
 	sepolia := flag.Bool("sepolia", false, "use sepolia dev deployment")
 	w3rpc := flag.String("w3rpc", "http://localhost:8545", "web3 rpc endpoint")
 
@@ -110,11 +112,17 @@ func main() {
 	time.Sleep(20 * time.Second)
 
 	orgAddr := contracts.AccountAddress()
-	if _, err := contracts.CreateOrganization(orgAddr, &types.OrganizationInfo{
+	txHash, err := contracts.CreateOrganization(orgAddr, &types.OrganizationInfo{
 		Name:        fmt.Sprintf("Vocdoni test %x", orgAddr[:4]),
 		MetadataURI: "https://vocdoni.io",
-	}); err != nil {
+	})
+	if err != nil {
 		log.Errorw(err, "failed to create organization")
+		return
+	}
+
+	if err := contracts.WaitTx(txHash, time.Second*30); err != nil {
+		log.Errorw(err, "failed to wait for tx")
 		return
 	}
 

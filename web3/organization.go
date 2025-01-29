@@ -12,17 +12,16 @@ import (
 )
 
 // CreateOrganization creates a new organization in the OrganizationRegistry contract.
-func (c *Contracts) CreateOrganization(address common.Address, orgInfo *types.OrganizationInfo) (*common.Hash, error) {
+func (c *Contracts) CreateOrganization(address common.Address, orgInfo *types.OrganizationInfo) (common.Hash, error) {
 	txOpts, err := c.authTransactOpts()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create transact options: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to create transact options: %w", err)
 	}
 	tx, err := c.organizations.CreateOrganization(txOpts, address, orgInfo.Name, orgInfo.MetadataURI, []common.Address{c.address})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create organization: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to create organization: %w", err)
 	}
-	hash := tx.Hash()
-	return &hash, nil
+	return tx.Hash(), nil
 }
 
 // Organization returns the organization with the given address from the OrganizationRegistry contract.
