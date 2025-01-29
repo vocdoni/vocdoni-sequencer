@@ -6,19 +6,11 @@ import (
 	"slices"
 
 	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
-)
-
-const (
-	// size of the inclusion proofs
-	MaxLevels = 160
-	// MaxKeyLen is ceil(maxLevels/8)
-	MaxKeyLen = (MaxLevels + 7) / 8
-	// votes that were processed in AggregatedProof
-	VoteBatchSize = 10
 )
 
 var (
@@ -45,10 +37,10 @@ type State struct {
 	dbTx      db.WriteTx
 
 	// TODO: unexport these, add ArboProofs and only export those via a method
-	ResultsAdd     *elgamal.Ciphertexts
-	ResultsSub     *elgamal.Ciphertexts
-	BallotSum      *elgamal.Ciphertexts
-	OverwriteSum   *elgamal.Ciphertexts
+	ResultsAdd     *elgamal.Ballot
+	ResultsSub     *elgamal.Ballot
+	BallotSum      *elgamal.Ballot
+	OverwriteSum   *elgamal.Ballot
 	ballotCount    int
 	overwriteCount int
 	votes          []*Vote
@@ -59,7 +51,7 @@ type State struct {
 func New(db db.Database, processId []byte) (*State, error) {
 	pdb := prefixeddb.NewPrefixedDatabase(db, processId)
 	tree, err := arbo.NewTree(arbo.Config{
-		Database: pdb, MaxLevels: MaxLevels,
+		Database: pdb, MaxLevels: circuits.StateProofMaxLevels,
 		HashFunction: HashFunc,
 	})
 	if err != nil {
@@ -89,10 +81,10 @@ func (o *State) Initialize(censusRoot, ballotMode, encryptionKey []byte) error {
 	if err := o.tree.Add(KeyEncryptionKey, encryptionKey); err != nil {
 		return err
 	}
-	if err := o.tree.Add(KeyResultsAdd, elgamal.NewCiphertexts(Curve).Serialize()); err != nil {
+	if err := o.tree.Add(KeyResultsAdd, elgamal.NewBallot(Curve).Serialize()); err != nil {
 		return err
 	}
-	if err := o.tree.Add(KeyResultsSub, elgamal.NewCiphertexts(Curve).Serialize()); err != nil {
+	if err := o.tree.Add(KeyResultsSub, elgamal.NewBallot(Curve).Serialize()); err != nil {
 		return err
 	}
 	return nil
@@ -108,10 +100,10 @@ func (o *State) Close() error {
 func (o *State) StartBatch() error {
 	o.dbTx = o.db.WriteTx()
 	if o.ResultsAdd == nil {
-		o.ResultsAdd = elgamal.NewCiphertexts(Curve)
+		o.ResultsAdd = elgamal.NewBallot(Curve)
 	}
 	if o.ResultsSub == nil {
-		o.ResultsSub = elgamal.NewCiphertexts(Curve)
+		o.ResultsSub = elgamal.NewBallot(Curve)
 	}
 
 	{
@@ -133,8 +125,8 @@ func (o *State) StartBatch() error {
 		}
 	}
 
-	o.BallotSum = elgamal.NewCiphertexts(Curve)
-	o.OverwriteSum = elgamal.NewCiphertexts(Curve)
+	o.BallotSum = elgamal.NewBallot(Curve)
+	o.OverwriteSum = elgamal.NewBallot(Curve)
 	o.ballotCount = 0
 	o.overwriteCount = 0
 	o.votes = []*Vote{}
@@ -143,6 +135,10 @@ func (o *State) StartBatch() error {
 
 func (o *State) EndBatch() error {
 	return o.dbTx.Commit()
+}
+
+func (o *State) Root() ([]byte, error) {
+	return o.tree.Root()
 }
 
 func (o *State) RootAsBigInt() (*big.Int, error) {
@@ -167,10 +163,10 @@ func (o *State) Votes() []*Vote {
 
 func (o *State) PaddedVotes() []*Vote {
 	v := slices.Clone(o.votes)
-	for len(v) < VoteBatchSize {
+	for len(v) < circuits.VotesPerBatch {
 		v = append(v, &Vote{
 			Nullifier:  []byte{0x00},
-			Ballot:     elgamal.NewCiphertexts(Curve),
+			Ballot:     elgamal.NewBallot(Curve),
 			Address:    []byte{0x00},
 			Commitment: big.NewInt(0),
 		})

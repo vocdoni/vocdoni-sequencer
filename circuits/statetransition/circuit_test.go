@@ -13,7 +13,9 @@ import (
 	"github.com/consensys/gnark/logger"
 	"github.com/consensys/gnark/test"
 	"github.com/rs/zerolog"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
+	statetransitiontest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
@@ -52,7 +54,7 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(2, 20)); err != nil { // new vote 2
 		t.Fatal(err)
 	}
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(4, 30)); err != nil { // add vote 4
 		t.Fatal(err)
 	}
-	witness, err = GenerateWitnesses(s)
+	witness, err = statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +128,7 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
 	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
 	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
-	for name, mts := range map[string][statetransition.VoteBatchSize]state.MerkleTransition{
+	for name, mts := range map[string][circuits.VotesPerBatch]statetransition.MerkleTransition{
 		"Ballot":     witness.Ballot,
 		"Commitment": witness.Commitment,
 	} {
@@ -143,7 +145,7 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 		}
 	}
 
-	for name, mt := range map[string]state.MerkleTransition{
+	for name, mt := range map[string]statetransition.MerkleTransition{
 		"ResultsAdd": witness.ResultsAdd,
 		"ResultsSub": witness.ResultsSub,
 	} {
@@ -164,9 +166,7 @@ type CircuitAggregatedWitness struct {
 }
 
 func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api, statetransition.HashFn); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedWitnessHash(api)
 	return nil
 }
 
@@ -199,7 +199,7 @@ func TestCircuitAggregatedWitnessProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,9 +231,7 @@ type CircuitAggregatedProof struct {
 }
 
 func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedProof(api); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedProof(api)
 	return nil
 }
 
@@ -266,7 +264,7 @@ func TestCircuitAggregatedProofProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +328,7 @@ func TestCircuitBallotsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +394,7 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitnesses(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,11 +444,13 @@ func newMockState(t *testing.T) *state.State {
 const (
 	mockNullifiersOffset = 100
 	mockAddressesOffset  = 200
+	// maxKeyLen is ceil(maxLevels/8)
+	maxKeyLen = (circuits.StateProofMaxLevels + 7) / 8
 )
 
 // newMockVote creates a new vote
 func newMockVote(index, amount int64) *state.Vote {
-	nullifier := arbo.BigIntToBytes(state.MaxKeyLen,
+	nullifier := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockNullifiersOffset))) // mock
 
 	// generate a public mocked key
@@ -459,17 +459,17 @@ func newMockVote(index, amount int64) *state.Vote {
 		panic(fmt.Errorf("error generating public key: %v", err))
 	}
 
-	ballot, err := elgamal.NewCiphertexts(publicKey).Encrypt(
-		[elgamal.NumCiphertexts]*big.Int{
-			big.NewInt(int64(amount)),
-			big.NewInt(int64(amount + 1)),
-		},
-		publicKey, nil)
+	fields := [circuits.FieldsPerBallot]*big.Int{}
+	for i := range fields {
+		fields[i] = big.NewInt(int64(amount + int64(i)))
+	}
+
+	ballot, err := elgamal.NewBallot(publicKey).Encrypt(fields, publicKey, nil)
 	if err != nil {
 		panic(fmt.Errorf("error encrypting: %v", err))
 	}
 
-	address := arbo.BigIntToBytes(state.MaxKeyLen,
+	address := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockAddressesOffset))) // mock
 	commitment := big.NewInt(amount + 256)
 

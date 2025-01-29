@@ -1,7 +1,6 @@
 package statetransitiontest
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"os"
@@ -14,10 +13,8 @@ import (
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	aggregatortest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/aggregator"
-	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"go.vocdoni.io/dvote/db/metadb"
@@ -28,11 +25,11 @@ import (
 type StateTransitionTestResults struct {
 	ProcessId             *big.Int
 	CensusRoot            *big.Int
-	EncryptionPubKey      [2]*big.Int
+	EncryptionPubKey      circuits.EncryptionKey[*big.Int]
 	Nullifiers            []*big.Int
 	Commitments           []*big.Int
 	Addresses             []*big.Int
-	EncryptedBallots      [][ballottest.NFields][2][2]*big.Int
+	EncryptedBallots      []elgamal.Ballot
 	PlainEncryptedBallots []*big.Int
 }
 
@@ -43,7 +40,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregarorInputsForTest(processId, nValidVoters)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -86,17 +83,17 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	}
 
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, aggregator.MaxVotes)
-	commitments := circuits.BigIntArrayToN(agInputs.Commitments, aggregator.MaxVotes)
-	addresses := circuits.BigIntArrayToN(agInputs.Addresses, aggregator.MaxVotes)
-	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, aggregator.MaxVotes*ballottest.NFields*4)
+	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
+	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.VotesPerBatch)
+	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
+	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
 	// init final assigments stuff
 	s := newState(
 		processId,
 		agInputs.CensusRoot.Bytes(),
 		ballotMode().Bytes(),
-		pubkeyToBytes(agInputs.EncryptionPubKey))
+		agInputs.EncryptionPubKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {
 		return nil, nil, nil, err
@@ -104,7 +101,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	for i := range agInputs.EncryptedBallots {
 		if err := s.AddVote(&state.Vote{
 			Nullifier:  arbo.BigIntToBytes(32, agInputs.Nullifiers[i]),
-			Ballot:     toBallot(agInputs.EncryptedBallots[i]),
+			Ballot:     &agInputs.EncryptedBallots[i],
 			Address:    arbo.BigIntToBytes(32, agInputs.Addresses[i]),
 			Commitment: agInputs.Commitments[i],
 		}); err != nil {
@@ -169,20 +166,4 @@ func newState(processId, censusRoot, ballotMode, encryptionKey []byte) *state.St
 	}
 
 	return s
-}
-
-func toBallot(x [8][2][2]*big.Int) *elgamal.Ciphertexts {
-	z := elgamal.NewCiphertexts(state.Curve)
-	for i := range x {
-		z[i].C1.SetPoint(x[i][0][0], x[i][0][1])
-		z[i].C2.SetPoint(x[i][1][0], x[i][1][1])
-	}
-	return z
-}
-
-func pubkeyToBytes(pubkey [2]*big.Int) []byte {
-	buf := bytes.Buffer{}
-	buf.Write(arbo.BigIntToBytes(32, pubkey[0]))
-	buf.Write(arbo.BigIntToBytes(32, pubkey[1]))
-	return buf.Bytes()
 }
