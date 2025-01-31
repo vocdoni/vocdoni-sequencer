@@ -40,11 +40,9 @@ const (
 	foundTxErrMessage = "transaction type not supported"
 )
 
-var (
-	// notFoundTxRgx is a regular expression to match the error message when a
-	// transaction is not found.
-	notFoundTxRgx = regexp.MustCompile(`not\s[be\s|]*found`)
-)
+// notFoundTxRgx is a regular expression to match the error message when a
+// transaction is not found.
+var notFoundTxRgx = regexp.MustCompile(`not\s[be\s|]*found`)
 
 // Web3Pool struct contains a map of chainID-[]*Web3Endpoint, where
 // the key is the chainID and the value is a list of Web3Endpoint. It also
