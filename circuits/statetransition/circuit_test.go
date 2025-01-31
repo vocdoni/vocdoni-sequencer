@@ -121,46 +121,6 @@ func TestCircuitProve(t *testing.T) {
 	debugLog(t, witness)
 }
 
-func debugLog(t *testing.T, witness *statetransition.Circuit) {
-	// js, _ := json.MarshalIndent(witness, "", "  ")
-	// fmt.Printf("\n\n%s\n\n", js)
-	t.Log("public: RootHashBefore", util.PrettyHex(witness.RootHashBefore))
-	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
-	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
-	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
-	for name, mts := range map[string][circuits.VotesPerBatch]statetransition.MerkleTransition{
-		"Ballot":     witness.Ballot,
-		"Commitment": witness.Commitment,
-	} {
-		for _, mt := range mts {
-			t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
-				"value", mt.OldValue, "->", mt.NewValue,
-			)
-			for i := range mt.OldCiphertexts {
-				t.Log(name, i, "elgamal.C1.X", mt.OldCiphertexts[i].C1.X, "->", mt.NewCiphertexts[i].C1.X)
-				t.Log(name, i, "elgamal.C1.Y", mt.OldCiphertexts[i].C1.Y, "->", mt.NewCiphertexts[i].C1.Y)
-				t.Log(name, i, "elgamal.C2.X", mt.OldCiphertexts[i].C2.X, "->", mt.NewCiphertexts[i].C2.X)
-				t.Log(name, i, "elgamal.C2.Y", mt.OldCiphertexts[i].C2.Y, "->", mt.NewCiphertexts[i].C2.Y)
-			}
-		}
-	}
-
-	for name, mt := range map[string]statetransition.MerkleTransition{
-		"ResultsAdd": witness.ResultsAdd,
-		"ResultsSub": witness.ResultsSub,
-	} {
-		t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
-			"value", mt.OldValue, "->", mt.NewValue,
-		)
-		for i := range mt.OldCiphertexts {
-			t.Log(name, i, "elgamal.C1.X", mt.OldCiphertexts[i].C1.X, "->", mt.NewCiphertexts[i].C1.X)
-			t.Log(name, i, "elgamal.C1.Y", mt.OldCiphertexts[i].C1.Y, "->", mt.NewCiphertexts[i].C1.Y)
-			t.Log(name, i, "elgamal.C2.X", mt.OldCiphertexts[i].C2.X, "->", mt.NewCiphertexts[i].C2.X)
-			t.Log(name, i, "elgamal.C2.Y", mt.OldCiphertexts[i].C2.Y, "->", mt.NewCiphertexts[i].C2.Y)
-		}
-	}
-}
-
 type CircuitAggregatedWitness struct {
 	statetransition.Circuit
 }
@@ -271,6 +231,43 @@ func TestCircuitBallotsProve(t *testing.T) {
 		test.WithBackends(backend.GROTH16))
 }
 
+type CircuitMerkleProofs struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitMerkleProofs) Define(api frontend.API) error {
+	circuit.VerifyMerkleProofs(api, statetransition.HashFn)
+	return nil
+}
+
+func TestCircuitMerkleProofsCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitMerkleProofs{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitMerkleProofsProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	witness := newMockWitness(t)
+	debugLog(t, witness)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitMerkleProofs{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+}
+
 type CircuitMerkleTransitions struct {
 	statetransition.Circuit
 }
@@ -303,6 +300,45 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+
+	debugLog(t, witness)
+}
+
+type CircuitLeafHashes struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitLeafHashes) Define(api frontend.API) error {
+	circuit.VerifyLeafHashes(api, statetransition.HashFn)
+	return nil
+}
+
+func TestCircuitLeafHashesCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitLeafHashes{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitLeafHashesProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	witness := newMockWitness(t)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitLeafHashes{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
@@ -397,5 +433,33 @@ func newMockVote(index, amount int64) *state.Vote {
 		Ballot:     ballot,
 		Address:    address,
 		Commitment: commitment,
+	}
+}
+
+func debugLog(t *testing.T, witness *statetransition.Circuit) {
+	// js, _ := json.MarshalIndent(witness, "", "  ")
+	// fmt.Printf("\n\n%s\n\n", js)
+	t.Log("public: RootHashBefore", util.PrettyHex(witness.RootHashBefore))
+	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
+	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
+	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
+	for name, mts := range map[string][circuits.VotesPerBatch]statetransition.MerkleTransition{
+		"Ballot":     witness.VotesProofs.Ballot,
+		"Commitment": witness.VotesProofs.Commitment,
+	} {
+		for _, mt := range mts {
+			t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
+				"value", util.PrettyHex(mt.OldLeafHash), "->", util.PrettyHex(mt.NewLeafHash),
+			)
+		}
+	}
+
+	for name, mt := range map[string]statetransition.MerkleTransition{
+		"ResultsAdd": witness.ResultsProofs.ResultsAdd,
+		"ResultsSub": witness.ResultsProofs.ResultsSub,
+	} {
+		t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
+			"value", util.PrettyHex(mt.OldLeafHash), "->", util.PrettyHex(mt.NewLeafHash),
+		)
 	}
 }
