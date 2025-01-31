@@ -9,18 +9,18 @@ import (
 
 // BallotMode is the struct to define the rules of a ballot
 type BallotMode struct {
-	MaxCount        uint8  `json:"maxCount"`
-	ForceUniqueness bool   `json:"forceUniqueness"`
-	MaxValue        BigInt `json:"maxValue"`
-	MinValue        BigInt `json:"minValue"`
-	MaxTotalCost    BigInt `json:"maxTotalCost"`
-	MinTotalCost    BigInt `json:"minTotalCost"`
-	CostExponent    uint8  `json:"costExponent"`
-	CostFromWeight  bool   `json:"costFromWeight"`
+	MaxCount        uint8   `json:"maxCount" cbor:"0,keyasint,omitempty"`
+	ForceUniqueness bool    `json:"forceUniqueness" cbor:"1,keyasint,omitempty"`
+	MaxValue        *BigInt `json:"maxValue" cbor:"2,keyasint,omitempty"`
+	MinValue        *BigInt `json:"minValue" cbor:"3,keyasint,omitempty"`
+	MaxTotalCost    *BigInt `json:"maxTotalCost" cbor:"4,keyasint,omitempty"`
+	MinTotalCost    *BigInt `json:"minTotalCost" cbor:"5,keyasint,omitempty"`
+	CostExponent    uint8   `json:"costExponent" cbor:"6,keyasint,omitempty"`
+	CostFromWeight  bool    `json:"costFromWeight" cbor:"7,keyasint,omitempty"`
 }
 
 // writeBigInt serializes a types.BigInt into the buffer as length + bytes
-func writeBigInt(buf *bytes.Buffer, bi BigInt) error {
+func writeBigInt(buf *bytes.Buffer, bi *BigInt) error {
 	data := bi.Bytes()
 	length := uint32(len(data))
 	err := binary.Write(buf, binary.BigEndian, length)
@@ -38,6 +38,9 @@ func writeBigInt(buf *bytes.Buffer, bi BigInt) error {
 
 // readBigInt deserializes a types.BigInt from the buffer
 func readBigInt(buf *bytes.Reader, bi *BigInt) error {
+	if bi == nil {
+		return fmt.Errorf("big int is nil")
+	}
 	var length uint32
 	err := binary.Read(buf, binary.BigEndian, &length)
 	if err != nil {
@@ -132,22 +135,22 @@ func (b *BallotMode) Unmarshal(data []byte) error {
 	b.ForceUniqueness = (force == 1)
 
 	// MaxValue
-	if err := readBigInt(buf, &b.MaxValue); err != nil {
+	if err := readBigInt(buf, b.MaxValue); err != nil {
 		return err
 	}
 
 	// MinValue
-	if err := readBigInt(buf, &b.MinValue); err != nil {
+	if err := readBigInt(buf, b.MinValue); err != nil {
 		return err
 	}
 
 	// MaxTotalCost
-	if err := readBigInt(buf, &b.MaxTotalCost); err != nil {
+	if err := readBigInt(buf, b.MaxTotalCost); err != nil {
 		return err
 	}
 
 	// MinTotalCost
-	if err := readBigInt(buf, &b.MinTotalCost); err != nil {
+	if err := readBigInt(buf, b.MinTotalCost); err != nil {
 		return err
 	}
 

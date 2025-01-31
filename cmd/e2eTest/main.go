@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -12,6 +11,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/service"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3"
@@ -76,22 +76,12 @@ func main() {
 		log.Infow("contracts deployed", "chainId", contracts.ChainID)
 	}
 
+	// monitor new processes
 	ctx := context.Background()
-	newProcChan, err := contracts.MonitorProcessCreationByPolling(ctx, time.Second*5)
-	if err != nil {
+	pm := service.NewProcessMonitor(contracts, nil, time.Second*2)
+	if err := pm.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		log.Info("monitoring new processes")
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case proc := <-newProcChan:
-				log.Infow("new process found", "process", proc.ID)
-			}
-		}
-	}()
 
 	newOrgChan, err := contracts.MonitorOrganizationCreatedByPolling(ctx, time.Second*5)
 	if err != nil {
@@ -147,16 +137,16 @@ func main() {
 		MetadataURI: "https://example.com/metadata",
 		BallotMode: &types.BallotMode{
 			MaxCount:        2,
-			MaxValue:        *new(types.BigInt).SetUint64(100),
-			MinValue:        *new(types.BigInt).SetUint64(0),
-			MaxTotalCost:    *new(types.BigInt).SetUint64(0),
-			MinTotalCost:    *new(types.BigInt).SetUint64(0),
+			MaxValue:        new(types.BigInt).SetUint64(100),
+			MinValue:        new(types.BigInt).SetUint64(0),
+			MaxTotalCost:    new(types.BigInt).SetUint64(0),
+			MinTotalCost:    new(types.BigInt).SetUint64(0),
 			ForceUniqueness: false,
 			CostFromWeight:  false,
 		},
 		Census: &types.Census{
 			CensusRoot:   util.RandomBytes(32),
-			MaxVotes:     new(big.Int).SetUint64(100),
+			MaxVotes:     new(types.BigInt).SetUint64(100),
 			CensusURI:    "https://example.com/census",
 			CensusOrigin: 0,
 		},

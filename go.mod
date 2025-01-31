@@ -9,6 +9,7 @@ require (
 	github.com/consensys/gnark-crypto v0.14.1-0.20241213223322-afee1955665f
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/frankban/quicktest v1.14.6
+	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/cors v1.2.1
 	github.com/iden3/go-iden3-crypto v0.0.17
@@ -48,7 +49,6 @@ require (
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/go-verkle v0.1.1-0.20240829091221-dffa7562dbe9 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/glendc/go-external-ip v0.1.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
