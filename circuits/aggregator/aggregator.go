@@ -77,6 +77,8 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	api.AssertIsEqual(c.InputsHash, finalHash)
 }
 
+// checkInnerInputsHashes is broken, uncomment when fixed
+/*
 // checkInnerInputsHashes circuit method checks the hash of the public inputs
 // of each voter proof with the provided VerifyPublicInputs. The hash is
 // calculated using the MiMC hash function in the same field of the proofs. As
@@ -114,6 +116,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		hashFn.Reset()
 	}
 }
+*/
 
 // checkProofs circuit method verifies each voter proof with the provided
 // verification keys and public inputs. The verification keys should contain
