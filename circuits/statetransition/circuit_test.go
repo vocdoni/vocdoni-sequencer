@@ -54,11 +54,11 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(2, 20)); err != nil { // new vote 2
 		t.Fatal(err)
 	}
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndBatch(); err != nil {
+	witness, err := statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 	{
@@ -94,11 +94,11 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(4, 30)); err != nil { // add vote 4
 		t.Fatal(err)
 	}
-	witness, err = statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndBatch(); err != nil {
+	witness, err = statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 	{
@@ -189,35 +189,7 @@ func TestCircuitAggregatedWitnessProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
@@ -254,35 +226,7 @@ func TestCircuitAggregatedProofProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitAggregatedProof{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
@@ -318,35 +262,7 @@ func TestCircuitBallotsProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitBallots{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
@@ -383,7 +299,18 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
+	witness := newMockWitness(t)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
 
+	debugLog(t, witness)
+}
+
+func newMockWitness(t *testing.T) *statetransition.Circuit {
 	s := newMockState(t)
 
 	if err := s.StartBatch(); err != nil {
@@ -394,12 +321,12 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.EndBatch(); err != nil {
+	witness, err := statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -412,15 +339,7 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 	witness.AggregatedProof = *proof
-
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
-
-	debugLog(t, witness)
+	return witness
 }
 
 func newMockState(t *testing.T) *state.State {
