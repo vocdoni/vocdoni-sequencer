@@ -18,7 +18,7 @@ import (
 // newProcess creates a new voting process
 // POST /process
 func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
-	p := &Process{}
+	p := &types.ProcessSetup{}
 	if err := json.NewDecoder(r.Body).Decode(p); err != nil {
 		ErrMalformedBody.Withf("could not decode request body: %v", err).Write(w)
 		return
@@ -77,14 +77,14 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the process response
-	pr := &ProcessResponse{
+	pr := &types.ProcessSetupResponse{
 		ProcessID:        pid.Marshal(),
 		EncryptionPubKey: [2]types.BigInt{types.BigInt(*x), types.BigInt(*y)},
 		StateRoot:        root.Bytes(),
 	}
 
 	// Write the response
-	log.Infow("new process",
+	log.Infow("new process setup",
 		"processId", pr.ProcessID.String(),
 		"pubKeyX", pr.EncryptionPubKey[0].String(),
 		"pubKeyY", pr.EncryptionPubKey[1].String(),
@@ -109,23 +109,12 @@ func (a *API) process(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve the process
-	pubk, _, err := a.storage.EncryptionKeys(pid)
+	proc, err := a.storage.Process(&pid)
 	if err != nil {
 		ErrProcessNotFound.Withf("could not retrieve process: %v", err).Write(w)
 		return
 	}
 
-	// Create the process response
-	x, y := pubk.Point()
-	pr := &ProcessResponse{
-		ProcessID:        pid.Marshal(),
-		Address:          pid.Address.Hex(),
-		ChainID:          pid.ChainID,
-		Nonce:            pid.Nonce,
-		EncryptionPubKey: [2]types.BigInt{types.BigInt(*x), types.BigInt(*y)},
-		StateRoot:        types.HexBytes{}, // TO-DO
-	}
-
 	// Write the response
-	httpWriteJSON(w, pr)
+	httpWriteJSON(w, proc)
 }

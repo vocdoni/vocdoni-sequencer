@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// For maps of string->string, you typically don't add cbor tags because
-// keyasint wouldn't apply (the keys are user-defined strings).
 type GenericMetadata map[string]string
 type MultilingualString map[string]string
 
@@ -91,4 +89,23 @@ func (o *OrganizationInfo) String() string {
 		return ""
 	}
 	return string(data)
+}
+
+// ProcessSetup is the struct to create a new voting process
+type ProcessSetup struct {
+	CensusRoot HexBytes   `json:"censusRoot"`
+	BallotMode BallotMode `json:"ballotRules"`
+	Nonce      uint64     `json:"nonce"`
+	ChainID    uint32     `json:"chainId"`
+	Signature  []byte     `json:"signature"`
+}
+
+// ProcessSetupResponse represents the response of a voting process
+type ProcessSetupResponse struct {
+	ProcessID        HexBytes  `json:"processId"`
+	EncryptionPubKey [2]BigInt `json:"encryptionPubKey,omitempty"`
+	StateRoot        HexBytes  `json:"stateRoot,omitempty"`
+	ChainID          uint32    `json:"chainId,omitempty"`
+	Nonce            uint64    `json:"nonce,omitempty"`
+	Address          string    `json:"address,omitempty"`
 }
