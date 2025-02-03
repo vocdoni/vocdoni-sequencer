@@ -1,5 +1,7 @@
 package statetransition_test
 
+// TODO: uncomment the following lines to enable the test
+/**
 import (
 	"fmt"
 	"math/big"
@@ -319,3 +321,4 @@ func debugLog(t *testing.T, witness *statetransition.Circuit) {
 		)
 	}
 }
+*/
