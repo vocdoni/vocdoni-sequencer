@@ -250,3 +250,26 @@ func (z *Ballot) SerializeVars() []frontend.Variable {
 	}
 	return vars
 }
+
+type EmulatedPoint[F emulated.FieldParams] struct {
+	X, Y emulated.Element[F]
+}
+
+type EmulatedCiphertext[F emulated.FieldParams] struct {
+	C1, C2 EmulatedPoint[F]
+}
+
+type EmulatedBallot[F emulated.FieldParams] [FieldsPerBallot]*EmulatedCiphertext[F]
+
+// Serialize returns a slice with the C1.X, C1.Y, C2.X, C2.Y in order
+func (z *EmulatedBallot[F]) Serialize() []emulated.Element[F] {
+	list := []emulated.Element[F]{}
+	for _, zi := range z {
+		list = append(list,
+			zi.C1.X,
+			zi.C1.Y,
+			zi.C2.X,
+			zi.C2.Y)
+	}
+	return list
+}
