@@ -12,6 +12,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/cors v1.2.1
+	github.com/google/uuid v1.6.0
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/iden3/go-rapidsnark/prover v0.0.12
 	github.com/iden3/go-rapidsnark/witness v0.0.6
@@ -119,7 +120,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241101162523-b92577c0c142 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect

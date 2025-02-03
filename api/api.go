@@ -55,8 +55,19 @@ func (a *API) Router() *chi.Mux {
 	return a.router
 }
 
-// registerHandlers registers all the API handlers.
+// registerHandlers registers all the HTTP handlers for the API endpoints.
 func (a *API) registerHandlers() {
+	// The following endpoints are registered:
+	// - GET /ping: No parameters
+	// - POST /process: No parameters
+	// - GET /process: No parameters
+	// - POST /census: No parameters
+	// - POST /census/participants?id=<uuid>: Parameters: id
+	// - GET /census/participants?id=<uuid>: Parameters: id
+	// - GET /census/root?id=<uuid>: Parameters: id
+	// - GET /census/size?id=<uuid>: Parameters: id
+	// - DELETE /census?id=<uuid>: Parameters: id
+	// - GET /census/proof?id=<uuid>&key=<key>: Parameters: id, key
 	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")
 	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		httpWriteOK(w)
@@ -65,6 +76,23 @@ func (a *API) registerHandlers() {
 	a.router.Post(ProcessEndpoint, a.newProcess)
 	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
 	a.router.Get(ProcessEndpoint, a.process)
+
+	// Census endpoints
+	log.Infow("register handler", "endpoint", NewCensusEndpoint, "method", "POST")
+	a.router.Post(NewCensusEndpoint, a.newCensus)
+	log.Infow("register handler", "endpoint", AddCensusParticipantsEndpoint, "method", "POST", "parameters", "id")
+	a.router.Post(AddCensusParticipantsEndpoint, a.addCensusParticipants)
+	log.Infow("register handler", "endpoint", GetCensusParticipantsEndpoint, "method", "GET", "parameters", "id")
+	a.router.Get(GetCensusParticipantsEndpoint, a.getCensusParticipants)
+	log.Infow("register handler", "endpoint", GetCensusRootEndpoint, "method", "GET", "parameters", "id")
+	a.router.Get(GetCensusRootEndpoint, a.getCensusRoot)
+	log.Infow("register handler", "endpoint", GetCensusSizeEndpoint, "method", "GET", "parameters", "id")
+	a.router.Get(GetCensusSizeEndpoint, a.getCensusSize)
+	log.Infow("register handler", "endpoint", DeleteCensusEndpoint, "method", "DELETE", "parameters", "id")
+	a.router.Delete(DeleteCensusEndpoint, a.deleteCensus)
+	log.Infow("register handler", "endpoint", GetCensusProofEndpoint, "method", "GET", "parameters", "id, key")
+	a.router.Get(GetCensusProofEndpoint, a.getCensusProof)
+
 }
 
 // initRouter creates the router with all the routes and middleware.

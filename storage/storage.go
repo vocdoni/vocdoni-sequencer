@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/storage/census"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
 )
@@ -26,6 +27,8 @@ var (
 	encryptionKeyPrefix        = []byte("ek/")
 	processPrefix              = []byte("p/")
 
+	censusDBprefix = []byte("cs_")
+
 	maxKeySize = 12
 )
 
@@ -36,15 +39,19 @@ type reservationRecord struct {
 
 // Storage manages artifacts in various stages with reservations.
 type Storage struct {
-	db db.Database
-
+	db       db.Database
+	censusDB *census.CensusDB
+	// globalLock is used to ensure that no two operations can interfere with each other.
 	globalLock sync.Mutex
 }
 
 // New creates a new Storage instance and attempts to recover from a previous
 // crash.
 func New(db db.Database) *Storage {
-	s := &Storage{db: db}
+	s := &Storage{
+		db:       db,
+		censusDB: census.NewCensusDB(prefixeddb.NewPrefixedDatabase(db, censusDBprefix)),
+	}
 	go func() {
 		if err := s.recover(); err != nil {
 			// If we fail here, we may panic because we must ensure consistency.
@@ -277,4 +284,9 @@ func (s *Storage) listArtifacts(prefix []byte) ([][]byte, error) {
 		return nil, err
 	}
 	return keys, nil
+}
+
+// CensusDB returns the census database instance.
+func (s *Storage) CensusDB() *census.CensusDB {
+	return s.censusDB
 }
