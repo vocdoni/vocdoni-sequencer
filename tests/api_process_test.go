@@ -25,13 +25,14 @@ func TestProcess(t *testing.T) {
 
 	// Setup
 	tmpDir := t.TempDir()
-	tmpPort, err := SetupAPI(tmpDir)
+	api, err := SetupAPI(tmpDir)
 	c.Assert(err, qt.IsNil)
 
 	signer, err := NewTestSigner()
 	c.Assert(err, qt.IsNil)
 
-	cli, err := NewTestClient(tmpPort)
+	_, port := api.HostPort()
+	cli, err := NewTestClient(port)
 	c.Assert(err, qt.IsNil)
 
 	t.Run("create process", func(t *testing.T) {

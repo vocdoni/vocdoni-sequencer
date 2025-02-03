@@ -10,23 +10,20 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	stg "github.com/vocdoni/vocdoni-z-sandbox/storage"
-	"go.vocdoni.io/dvote/db"
-	"go.vocdoni.io/dvote/db/metadb"
 )
 
 // APIConfig type represents the configuration for the API HTTP server.
-// It includes the host, port and the data directory.
+// It includes the host, port and optionally an existing storage instance.
 type APIConfig struct {
 	Host    string
 	Port    int
-	DataDir string
+	Storage *stg.Storage // Optional: use existing storage instance
 }
 
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
 	router  *chi.Mux
 	storage *stg.Storage
-	db      db.Database
 }
 
 // New creates a new API instance with the given configuration.
@@ -35,17 +32,11 @@ func New(conf *APIConfig) (*API, error) {
 	if conf == nil {
 		return nil, fmt.Errorf("missing API configuration")
 	}
-
-	database, err := metadb.New(db.TypePebble, conf.DataDir)
-	if err != nil {
-		return nil, err
+	if conf.Storage == nil {
+		return nil, fmt.Errorf("missing storage instance")
 	}
-
-	storage := stg.New(database)
-
 	a := &API{
-		storage: storage,
-		db:      database,
+		storage: conf.Storage,
 	}
 
 	// Initialize router

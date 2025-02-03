@@ -108,7 +108,9 @@ func (s *Storage) clearAllReservations(prefix []byte) error {
 }
 
 func (s *Storage) Close() {
-	s.db.Close()
+	if err := s.db.Close(); err != nil {
+		fmt.Printf("failed to close storage: %v", err)
+	}
 }
 
 // releaseStaleReservations checks and frees stale reservations.

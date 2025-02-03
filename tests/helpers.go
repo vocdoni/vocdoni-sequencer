@@ -1,12 +1,15 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/api"
+	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
+	"github.com/vocdoni/vocdoni-z-sandbox/service"
+	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -22,21 +25,19 @@ func toBigInt(i int64) *types.BigInt {
 
 // SetupAPI creates and starts a new API server for testing.
 // It returns the server port.
-func SetupAPI(tmpDir string) (int, error) {
+func SetupAPI(tmpDir string) (*service.APIService, error) {
 	tmpPort := util.RandomInt(40000, 60000)
+	kv := memdb.New()
+	storage := storage.New(kv)
 
-	_, err := api.New(&api.APIConfig{
-		Host:    "127.0.0.1",
-		Port:    tmpPort,
-		DataDir: tmpDir,
-	})
-	if err != nil {
-		return 0, err
+	api := service.NewAPI(storage, "127.0.0.1", tmpPort)
+	if err := api.Start(context.Background()); err != nil {
+		return nil, err
 	}
 
 	// Wait for the HTTP server to start
 	time.Sleep(500 * time.Millisecond)
-	return tmpPort, nil
+	return api, nil
 }
 
 // NewTestSigner creates and initializes a new ethereum signer for testing.

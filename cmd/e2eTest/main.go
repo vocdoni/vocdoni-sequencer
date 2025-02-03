@@ -8,10 +8,12 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/service"
+	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3"
@@ -76,13 +78,23 @@ func main() {
 		log.Infow("contracts deployed", "chainId", contracts.ChainID)
 	}
 
+	// create storage in memory
+	stg := storage.New(memdb.New())
+
 	// monitor new processes
 	ctx := context.Background()
-	pm := service.NewProcessMonitor(contracts, nil, time.Second*2)
+	pm := service.NewProcessMonitor(contracts, stg, time.Second*2)
 	if err := pm.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
 
+	// start API service
+	api := service.NewAPI(stg, "0.0.0.0", 0)
+	if err := api.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+
+	// monitor new organizations
 	newOrgChan, err := contracts.MonitorOrganizationCreatedByPolling(ctx, time.Second*5)
 	if err != nil {
 		log.Fatal(err)

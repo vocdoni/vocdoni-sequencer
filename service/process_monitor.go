@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
@@ -20,6 +21,14 @@ type ProcessMonitor struct {
 	interval  time.Duration
 	mu        sync.Mutex
 	cancel    context.CancelFunc
+}
+
+// ContractsService defines the interface for web3 contract operations.
+type ContractsService interface {
+	MonitorProcessCreation(ctx context.Context, interval time.Duration) (<-chan *types.Process, error)
+	CreateProcess(process *types.Process) (*types.ProcessID, *common.Hash, error)
+	AccountAddress() common.Address
+	WaitTx(hash common.Hash, timeout time.Duration) error
 }
 
 // NewProcessMonitor creates a new ProcessMonitor service. If storage is nil, it uses a memory storage.
