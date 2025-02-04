@@ -24,101 +24,54 @@ import (
 	"go.vocdoni.io/dvote/db/metadb"
 )
 
-func TestCircuitCompile(t *testing.T) {
+func testCircuitCompile(t *testing.T, c frontend.Circuit) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		statetransition.CircuitPlaceholder(),
-	); err != nil {
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, c); err != nil {
 		panic(err)
 	}
 }
 
-func TestCircuitProve(t *testing.T) {
+func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	// first batch
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-	if err := s.AddVote(newMockVote(2, 20)); err != nil { // new vote 2
-		t.Fatal(err)
-	}
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-	witness, err := statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	{
-		inputsHash, err := s.AggregatedWitnessHash()
-		if err != nil {
-			t.Fatal(err)
-		}
-		proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-		if err != nil {
-			t.Fatal(err)
-		}
-		witness.AggregatedProof = *proof
-	}
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
-		statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		circuit,
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
+}
 
-	debugLog(t, witness)
+func TestCircuitCompile(t *testing.T) {
+	testCircuitCompile(t, statetransition.CircuitPlaceholder())
+}
 
-	// second batch
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AddVote(newMockVote(1, 100)); err != nil { // overwrite vote 1
-		t.Fatal(err)
-	}
-	if err := s.AddVote(newMockVote(3, 30)); err != nil { // add vote 3
-		t.Fatal(err)
-	}
-	if err := s.AddVote(newMockVote(4, 30)); err != nil { // add vote 4
-		t.Fatal(err)
-	}
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-	witness, err = statetransitiontest.GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
+func TestCircuitProve(t *testing.T) {
+	s := newMockState(t)
+	{
+		witness := newMockTransitionWithVotes(t, s,
+			newMockVote(1, 10), // add vote 1
+			newMockVote(2, 20), // add vote 2
+		)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof), witness)
+
+		debugLog(t, witness)
 	}
 	{
-		inputsHash, err := s.AggregatedWitnessHash()
-		if err != nil {
-			t.Fatal(err)
-		}
-		proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-		if err != nil {
-			t.Fatal(err)
-		}
-		witness.AggregatedProof = *proof
-	}
-	assert.ProverSucceeded(
-		statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+		witness := newMockTransitionWithVotes(t, s,
+			newMockVote(1, 100), // overwrite vote 1
+			newMockVote(3, 30),  // add vote 3
+			newMockVote(4, 40),  // add vote 4
+		)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof), witness)
 
-	debugLog(t, witness)
+		debugLog(t, witness)
+	}
 }
 
 type CircuitAggregatedWitness struct {
@@ -131,31 +84,14 @@ func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
 }
 
 func TestCircuitAggregatedWitnessCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitAggregatedWitness{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitAggregatedWitnessProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitAggregatedWitness{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 }
 
 type CircuitAggregatedProof struct {
@@ -168,31 +104,14 @@ func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
 }
 
 func TestCircuitAggregatedProofCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitAggregatedProof{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitAggregatedProof{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitAggregatedProofProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitAggregatedProof{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitAggregatedProof{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 }
 
 type CircuitBallots struct {
@@ -205,30 +124,14 @@ func (circuit CircuitBallots) Define(api frontend.API) error {
 }
 
 func TestCircuitBallotsCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitBallots{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitBallots{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitBallotsProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitBallots{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitBallots{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 }
 
 type CircuitMerkleProofs struct {
@@ -241,31 +144,14 @@ func (circuit CircuitMerkleProofs) Define(api frontend.API) error {
 }
 
 func TestCircuitMerkleProofsCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitMerkleProofs{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitMerkleProofs{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitMerkleProofsProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	debugLog(t, witness)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitMerkleProofs{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitMerkleProofs{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 }
 
 type CircuitMerkleTransitions struct {
@@ -278,31 +164,14 @@ func (circuit CircuitMerkleTransitions) Define(api frontend.API) error {
 }
 
 func TestCircuitMerkleTransitionsCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitMerkleTransitions{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitMerkleTransitionsProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitMerkleTransitions{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 
 	debugLog(t, witness)
 }
@@ -317,44 +186,27 @@ func (circuit CircuitLeafHashes) Define(api frontend.API) error {
 }
 
 func TestCircuitLeafHashesCompile(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
-
-	// enable log to see nbConstraints
-	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
-		&CircuitLeafHashes{*statetransition.CircuitPlaceholder()},
-	); err != nil {
-		panic(err)
-	}
+	testCircuitCompile(t, &CircuitLeafHashes{*statetransition.CircuitPlaceholder()})
 }
 
 func TestCircuitLeafHashesProve(t *testing.T) {
-	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
-		t.Skip("skipping circuit tests...")
-	}
 	witness := newMockWitness(t)
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitLeafHashes{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
+	testCircuitProve(t, &CircuitLeafHashes{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	}, witness)
 
 	debugLog(t, witness)
 }
 
-func newMockWitness(t *testing.T) *statetransition.Circuit {
-	s := newMockState(t)
-
+func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vote) *statetransition.Circuit {
 	if err := s.StartBatch(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.AddVote(newMockVote(1, 10)); err != nil {
-		t.Fatal(err)
+	for _, v := range votes {
+		if err := s.AddVote(v); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := s.EndBatch(); err != nil {
@@ -376,6 +228,10 @@ func newMockWitness(t *testing.T) *statetransition.Circuit {
 	}
 	witness.AggregatedProof = *proof
 	return witness
+}
+
+func newMockWitness(t *testing.T) *statetransition.Circuit {
+	return newMockTransitionWithVotes(t, newMockState(t), newMockVote(1, 10))
 }
 
 func newMockState(t *testing.T) *state.State {
