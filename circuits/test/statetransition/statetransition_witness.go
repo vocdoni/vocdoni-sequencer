@@ -38,7 +38,9 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		witness.Votes[i].Ballot = *v.Ballot.ToGnark()
 		witness.Votes[i].Address = arbo.BytesToBigInt(v.Address)
 		witness.Votes[i].Commitment = v.Commitment
+		witness.Votes[i].OverwrittenBallot = *o.OverwrittenBallots()[i].ToGnark()
 	}
+
 	witness.ProcessProofs = statetransition.ProcessProofs{
 		ID:            statetransition.MerkleProofFromArboProof(o.ProcessProofs.ID),
 		CensusRoot:    statetransition.MerkleProofFromArboProof(o.ProcessProofs.CensusRoot),
@@ -60,9 +62,6 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-	for i := range witness.OverwrittenBallots {
-		witness.OverwrittenBallots[i] = *o.OverwrittenBallots()[i].ToGnark()
 	}
 
 	// update ResultsAdd

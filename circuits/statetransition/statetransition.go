@@ -27,10 +27,8 @@ type Circuit struct {
 	// ---------------------------------------------------------------------------------------------
 	// SECRET INPUTS
 	Process circuits.Process[frontend.Variable]
-	Votes   [circuits.VotesPerBatch]circuits.Vote[frontend.Variable]
+	Votes   [circuits.VotesPerBatch]Vote
 	Results Results
-
-	OverwrittenBallots [circuits.VotesPerBatch]circuits.Ballot
 
 	ProcessProofs ProcessProofs
 	VotesProofs   VotesProofs
@@ -63,6 +61,11 @@ type ResultsProofs struct {
 	ResultsSub MerkleTransition
 }
 
+type Vote struct {
+	circuits.Vote[frontend.Variable]
+	OverwrittenBallot circuits.Ballot
+}
+
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
 	circuit.VerifyAggregatedWitnessHash(api)
@@ -80,7 +83,7 @@ func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to pack scalar to var: ", err)
 	}
-	hash, err := HashFn(api, circuits.AggregatedWitnessInputsAsVars(api, circuit.Process, circuit.Votes[:])...)
+	hash, err := HashFn(api, circuits.AggregatedWitnessInputsAsVars(api, circuit.Process, circuit.ListVotes())...)
 	if err != nil {
 		circuits.FrontendError(api, "failed to hash: ", err)
 	}
@@ -131,12 +134,19 @@ func (circuit Circuit) VerifyLeafHashes(api frontend.API, hFn utils.Hasher) {
 	circuit.ProcessProofs.EncryptionKey.VerifyLeafHash(api, hFn, circuit.Process.EncryptionKey.Serialize()...)
 	// Votes
 	for i, v := range circuit.Votes {
+		// Nullifier
 		api.AssertIsEqual(v.Nullifier, circuit.VotesProofs.Ballot[i].NewKey)
+		// Ballot
 		circuit.VotesProofs.Ballot[i].VerifyNewLeafHash(api, hFn,
 			v.Ballot.SerializeVars()...)
+		// Address
 		api.AssertIsEqual(v.Address, circuit.VotesProofs.Commitment[i].NewKey)
+		// Commitment
 		circuit.VotesProofs.Commitment[i].VerifyNewLeafHash(api, hFn,
 			v.Commitment)
+		// OverwrittenBallot
+		circuit.VotesProofs.Ballot[i].VerifyOverwrittenBallot(api, hFn,
+			v.OverwrittenBallot.SerializeVars()...)
 	}
 	// Results
 	circuit.ResultsProofs.ResultsAdd.VerifyOldLeafHash(api, hFn,
@@ -147,12 +157,6 @@ func (circuit Circuit) VerifyLeafHashes(api frontend.API, hFn utils.Hasher) {
 		circuit.Results.NewResultsAdd.SerializeVars()...)
 	circuit.ResultsProofs.ResultsSub.VerifyNewLeafHash(api, hFn,
 		circuit.Results.NewResultsSub.SerializeVars()...)
-	// // TODO: fix this, fails when a vote is overwritten
-	// OverwrittenBallots
-	// for i, b := range circuit.OverwrittenBallots {
-	// 	circuit.VotesProofs.Ballot[i].VerifyOldLeafHash(api, hFn,
-	// 		b.SerializeVars()...)
-	// }
 }
 
 // VerifyBallots counts the ballots using homomorphic encrpytion
@@ -165,7 +169,7 @@ func (circuit Circuit) VerifyBallots(api frontend.API) {
 			circuits.NewBallot().Select(api, b.IsInsertOrUpdate(api), &circuit.Votes[i].Ballot, zero))
 
 		overwrittenSum.Add(api, overwrittenSum,
-			circuits.NewBallot().Select(api, b.IsUpdate(api), &circuit.OverwrittenBallots[i], zero))
+			circuits.NewBallot().Select(api, b.IsUpdate(api), &circuit.Votes[i].OverwrittenBallot, zero))
 
 		ballotCount = api.Add(ballotCount, api.Select(b.IsInsertOrUpdate(api), 1, 0))
 		overwrittenCount = api.Add(overwrittenCount, api.Select(b.IsUpdate(api), 1, 0))
@@ -181,6 +185,14 @@ func (circuit Circuit) VerifyBallots(api frontend.API) {
 			overwrittenSum))
 	api.AssertIsEqual(circuit.NumNewVotes, ballotCount)
 	api.AssertIsEqual(circuit.NumOverwrites, overwrittenCount)
+}
+
+func (circuit Circuit) ListVotes() []circuits.Vote[frontend.Variable] {
+	list := []circuits.Vote[frontend.Variable]{}
+	for _, v := range circuit.Votes {
+		list = append(list, v.Vote)
+	}
+	return list
 }
 
 func CircuitPlaceholder() *Circuit {
