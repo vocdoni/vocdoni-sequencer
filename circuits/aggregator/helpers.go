@@ -1,20 +1,11 @@
 package aggregator
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
-	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
-	fr_bls24317 "github.com/consensys/gnark-crypto/ecc/bls24-317/fr"
-	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
-	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
-	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	"github.com/consensys/gnark/constraint"
-	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/emulated"
@@ -41,70 +32,38 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 	return maxNum.Sub(maxNum, big.NewInt(1))
 }
 
-// VectorToEmulatedElements function converts a backend.Witness vector to an
-// array of emulated.Element[T] elements. A witness vector is a list of uints
-// that represents every limb of a list of variables of the flattened witness.
-// This function group the limbs in groups of T.NbLimbs() to create each element
-// of the array. Returns an error if the conversion fails or the vector type is
-// not supported.
-func VectorToEmulatedElements[T emulated.FieldParams](v any) ([]emulated.Element[T], error) {
-	var fr T
-	nbLimbs := int(fr.NbLimbs())
+func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
+	constraint.ConstraintSystem,
+	stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT],
+	stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine],
+	stdgroth16.Witness[sw_bls12377.ScalarField],
+	error,
+) {
+	nilVk := stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
+	nilProof := stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
+	nilWitness := stdgroth16.Witness[sw_bls12377.ScalarField]{}
 
-	// Helper function to process each vector type
-	processVector := func(vectorLen int, getLimbs func(i int) frontend.Variable) []emulated.Element[T] {
-		// Calculate the number of emulated.Elements needed (ceiling division)
-		numElements := (vectorLen + nbLimbs - 1) / nbLimbs
-		elements := make([]emulated.Element[T], numElements)
-
-		for elemIdx := 0; elemIdx < numElements; elemIdx++ {
-			limbs := make([]frontend.Variable, nbLimbs)
-			for limbIdx := 0; limbIdx < nbLimbs; limbIdx++ {
-				globalIdx := elemIdx*nbLimbs + limbIdx
-				if globalIdx < vectorLen {
-					limbs[limbIdx] = getLimbs(globalIdx)
-				} else {
-					// Pad with zero if there are not enough elements
-					limbs[limbIdx] = frontend.Variable(big.NewInt(0))
-				}
-			}
-			elements[elemIdx] = emulated.Element[T]{Limbs: limbs}
-		}
-		return elements
+	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
+		dummy.Placeholder(main), dummy.Assignment(1),
+		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField(), persist)
+	if err != nil {
+		return nil, nilVk, nilProof, nilWitness, err
 	}
-
-	switch pv := v.(type) {
-	case fr_bn254.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bls12377.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bls12381.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bw6761.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bls24317.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bls24315.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	case fr_bw6633.Vector:
-		return processVector(len(pv), func(i int) frontend.Variable {
-			return pv[i].BigInt(new(big.Int))
-		}), nil
-	default:
-		return nil, errors.New("unsupported vector type")
+	// set fixed dummy vk in the placeholders
+	dummyVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	if err != nil {
+		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("fix dummy vk error: %w", err)
 	}
+	// parse dummy proof and witness
+	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+	if err != nil {
+		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("dummy proof value error: %w", err)
+	}
+	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
+	if err != nil {
+		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("dummy witness value error: %w", err)
+	}
+	return dummyCCS, dummyVk, dummyProof, dummyWitness, nil
 }
 
 // FillWithDummyFixed function fills the placeholder and the assigments
@@ -112,42 +71,26 @@ func VectorToEmulatedElements[T emulated.FieldParams](v any) ([]emulated.Element
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int) (
+func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool) (
 	AggregatorCircuit, AggregatorCircuit, error,
 ) {
-	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
-		dummy.Placeholder(main), dummy.Assignment(1),
-		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField())
+	dummyCCS, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist)
 	if err != nil {
 		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
 	// set fixed dummy vk in the placeholders
-	placeholder.DummyVerificationKey, err = stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
-	if err != nil {
-		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("fix dummy vk error: %w", err)
-	}
-	// parse dummy proof and witness
-	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
-	if err != nil {
-		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy proof value error: %w", err)
-	}
-	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
-	if err != nil {
-		return AggregatorCircuit{}, AggregatorCircuit{}, fmt.Errorf("dummy witness value error: %w", err)
-	}
+	placeholder.DummyVerificationKey = dummyVk
 	// set some dummy values in others assigments variables
 	dummyValue := emulated.ValueOf[sw_bn254.ScalarField](0)
 	// fill placeholders and assigments dummy values
 	for i := range assigments.Proofs {
-		placeholder.Proofs[i].Proof = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
-		placeholder.Proofs[i].Witness = stdgroth16.PlaceholderWitness[sw_bls12377.ScalarField](dummyCCS)
+		placeholder.Proofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
 		if i >= fromIdx {
 			assigments.Votes[i].Nullifier = dummyValue
 			assigments.Votes[i].Commitment = dummyValue
 			assigments.Votes[i].Address = dummyValue
-			assigments.Votes[i].Ballot = *circuits.NewBallot()
-			assigments.Proofs[i].Proof = dummyProof
-			assigments.Proofs[i].Witness = dummyWitness
+			assigments.Votes[i].Ballot = *circuits.NewEmulatedBallot[sw_bn254.ScalarField]()
+			assigments.Proofs[i] = dummyProof
 		}
 	}
 	return placeholder, assigments, nil

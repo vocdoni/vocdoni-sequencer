@@ -40,7 +40,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregarorInputsForTest(processId, nValidVoters, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -92,7 +92,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	s := newState(
 		processId,
 		agInputs.CensusRoot.Bytes(),
-		ballotMode().Bytes(),
+		circuits.MockBallotMode().Bytes(),
 		agInputs.EncryptionPubKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {

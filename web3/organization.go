@@ -77,5 +77,4 @@ func (c *Contracts) MonitorOrganizationCreatedByPolling(ctx context.Context, int
 		}
 	}()
 	return ch, nil
-
 }

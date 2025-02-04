@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -16,11 +18,14 @@ import (
 
 // sizes in bytes needed to serialize a Ballot
 const (
-	sizeCoord      = 32
-	sizePoint      = 2 * sizeCoord
-	SizeCiphertext = 2 * sizePoint
-	SizeBallot     = circuits.FieldsPerBallot * SizeCiphertext
+	sizeCoord            = circuits.SerializedFieldSize
+	sizePoint            = 2 * sizeCoord
+	sizeCiphertext       = 2 * sizePoint
+	SerializedBallotSize = circuits.FieldsPerBallot * sizeCiphertext
 )
+
+// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and C2.Y coords
+const BigIntsPerCiphertext = 4
 
 type Ballot [circuits.FieldsPerBallot]*Ciphertext
 
@@ -80,11 +85,11 @@ func (z *Ballot) Serialize() []byte {
 // in reduced twisted edwards form.
 func (z *Ballot) Deserialize(data []byte) error {
 	// Validate the input length
-	if len(data) != SizeBallot {
-		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), SizeBallot)
+	if len(data) != SerializedBallotSize {
+		return fmt.Errorf("invalid input length for Ballot: got %d bytes, expected %d bytes", len(data), SerializedBallotSize)
 	}
 	for i := range z {
-		err := z[i].Deserialize(data[i*SizeCiphertext : (i+1)*SizeCiphertext])
+		err := z[i].Deserialize(data[i*sizeCiphertext : (i+1)*sizeCiphertext])
 		if err != nil {
 			return err
 		}
@@ -119,6 +124,28 @@ func (z *Ballot) ToGnark() *circuits.Ballot {
 		gz[i] = *z[i].ToGnark()
 	}
 	return gz
+}
+
+// ToGnarkEmulatedBN254 returns z as the struct used by gnark,
+// with the points in reduced twisted edwards format
+// but as emulated.Element[sw_bn254.ScalarField] instead of frontend.Variable
+func (z *Ballot) ToGnarkEmulatedBN254() *circuits.EmulatedBallot[sw_bn254.ScalarField] {
+	eb := &circuits.EmulatedBallot[sw_bn254.ScalarField]{}
+	for i, z := range z {
+		c1x, c1y := z.C1.Point()
+		c2x, c2y := z.C2.Point()
+		eb[i] = circuits.EmulatedCiphertext[sw_bn254.ScalarField]{
+			C1: circuits.EmulatedPoint[sw_bn254.ScalarField]{
+				X: emulated.ValueOf[sw_bn254.ScalarField](c1x),
+				Y: emulated.ValueOf[sw_bn254.ScalarField](c1y),
+			},
+			C2: circuits.EmulatedPoint[sw_bn254.ScalarField]{
+				X: emulated.ValueOf[sw_bn254.ScalarField](c2x),
+				Y: emulated.ValueOf[sw_bn254.ScalarField](c2y),
+			},
+		}
+	}
+	return eb
 }
 
 // Ciphertext represents an ElGamal encrypted message with homomorphic properties.
@@ -181,8 +208,8 @@ func (z *Ciphertext) Serialize() []byte {
 // in reduced twisted edwards form.
 func (z *Ciphertext) Deserialize(data []byte) error {
 	// Validate the input length
-	if len(data) != SizeCiphertext {
-		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), SizeCiphertext)
+	if len(data) != sizeCiphertext {
+		return fmt.Errorf("invalid input length for Ciphertext: got %d bytes, expected %d bytes", len(data), sizeCiphertext)
 	}
 
 	// Helper function to extract *big.Int from a serialized slice

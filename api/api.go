@@ -71,7 +71,7 @@ func (a *API) registerHandlers() {
 	// - GET /census/root?id=<uuid>: Parameters: id
 	// - GET /census/size?id=<uuid>: Parameters: id
 	// - DELETE /census?id=<uuid>: Parameters: id
-	// - GET /census/proof?id=<uuid>&key=<key>: Parameters: id, key
+	// - GET /census/proof?root=<hex>&key=<key>: Parameters: id, key
 	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")
 	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		httpWriteOK(w)

@@ -2,100 +2,90 @@ package statetransitiontest
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/consensys/gnark/frontend"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
-
 	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 )
-
-func ballotMode() circuits.BallotMode[frontend.Variable] {
-	return circuits.BallotMode[frontend.Variable]{
-		MaxCount:        ballottest.MaxCount,
-		ForceUniqueness: ballottest.ForceUniqueness,
-		MaxValue:        ballottest.MaxValue,
-		MinValue:        ballottest.MinValue,
-		MaxTotalCost:    int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount,
-		MinTotalCost:    ballottest.MaxCount,
-		CostExp:         ballottest.CostExp,
-		CostFromWeight:  ballottest.CostFromWeight,
-	}
-}
 
 func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	var err error
 	witness := &statetransition.Circuit{}
 
 	// RootHashBefore
-	witness.RootHashBefore, err = o.RootAsBigInt()
-	if err != nil {
-		return nil, err
+	witness.RootHashBefore = o.RootHashBefore
+
+	witness.Process.ID = o.Process.ID
+	witness.Process.CensusRoot = o.Process.CensusRoot
+	witness.Process.BallotMode = circuits.BallotMode[frontend.Variable]{
+		MaxCount:        o.Process.BallotMode.MaxCount,
+		ForceUniqueness: o.Process.BallotMode.ForceUniqueness,
+		MaxValue:        o.Process.BallotMode.MaxValue,
+		MinValue:        o.Process.BallotMode.MinValue,
+		MaxTotalCost:    o.Process.BallotMode.MaxTotalCost,
+		MinTotalCost:    o.Process.BallotMode.MinTotalCost,
+		CostExp:         o.Process.BallotMode.CostExp,
+		CostFromWeight:  o.Process.BallotMode.CostFromWeight,
+	}
+	witness.Process.EncryptionKey.PubKey[0] = o.Process.EncryptionKey.PubKey[0]
+	witness.Process.EncryptionKey.PubKey[1] = o.Process.EncryptionKey.PubKey[1]
+
+	for i, v := range o.PaddedVotes() {
+		witness.Votes[i].Nullifier = arbo.BytesToBigInt(v.Nullifier)
+		witness.Votes[i].Ballot = *v.Ballot.ToGnark()
+		witness.Votes[i].Address = arbo.BytesToBigInt(v.Address)
+		witness.Votes[i].Commitment = v.Commitment
+		witness.Votes[i].OverwrittenBallot = *o.OverwrittenBallots()[i].ToGnark()
 	}
 
-	// first get MerkleProofs, since they need to belong to RootHashBefore, i.e. before MerkleTransitions
-	if witness.ProcessIDProof, err = statetransition.GenMerkleProof(o, state.KeyProcessID); err != nil {
-		return nil, err
+	witness.ProcessProofs = statetransition.ProcessProofs{
+		ID:            statetransition.MerkleProofFromArboProof(o.ProcessProofs.ID),
+		CensusRoot:    statetransition.MerkleProofFromArboProof(o.ProcessProofs.CensusRoot),
+		BallotMode:    statetransition.MerkleProofFromArboProof(o.ProcessProofs.BallotMode),
+		EncryptionKey: statetransition.MerkleProofFromArboProof(o.ProcessProofs.EncryptionKey),
 	}
-	if witness.CensusRootProof, err = statetransition.GenMerkleProof(o, state.KeyCensusRoot); err != nil {
-		return nil, err
-	}
-	if witness.BallotModeProof, err = statetransition.GenMerkleProof(o, state.KeyBallotMode); err != nil {
-		return nil, err
-	}
-	if witness.EncryptionKeyProof, err = statetransition.GenMerkleProof(o, state.KeyEncryptionKey); err != nil {
-		return nil, err
-	}
-
-	// now build ordered chain of MerkleTransitions
 
 	// add Ballots
-	for i := range witness.Ballot {
-		if i < len(o.Votes()) {
-			witness.Ballot[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
-				o.Votes()[i].Nullifier, o.Votes()[i].Ballot.Serialize())
-		} else {
-			witness.Ballot[i], err = statetransition.MerkleTransitionFromNoop(o)
-		}
+	for i := range witness.VotesProofs.Ballot {
+		witness.VotesProofs.Ballot[i], err = statetransition.MerkleTransitionFromArboTransition(o.VotesProofs.Ballot[i])
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// add Commitments
-	for i := range witness.Commitment {
-		if i < len(o.Votes()) {
-			witness.Commitment[i], err = statetransition.MerkleTransitionFromAddOrUpdate(o,
-				o.Votes()[i].Address, arbo.BigIntToBytes(32, o.Votes()[i].Commitment))
-		} else {
-			witness.Commitment[i], err = statetransition.MerkleTransitionFromNoop(o)
-		}
+	for i := range witness.VotesProofs.Commitment {
+		witness.VotesProofs.Commitment[i], err = statetransition.MerkleTransitionFromArboTransition(o.VotesProofs.Commitment[i])
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// update ResultsAdd
-	witness.ResultsAdd, err = statetransition.MerkleTransitionFromAddOrUpdate(o,
-		state.KeyResultsAdd, o.ResultsAdd.Add(o.ResultsAdd, o.BallotSum).Serialize())
+	witness.ResultsProofs.ResultsAdd, err = statetransition.MerkleTransitionFromArboTransition(o.VotesProofs.ResultsAdd)
 	if err != nil {
 		return nil, fmt.Errorf("ResultsAdd: %w", err)
 	}
 
 	// update ResultsSub
-	witness.ResultsSub, err = statetransition.MerkleTransitionFromAddOrUpdate(o,
-		state.KeyResultsSub, o.ResultsSub.Add(o.ResultsSub, o.OverwriteSum).Serialize())
+	witness.ResultsProofs.ResultsSub, err = statetransition.MerkleTransitionFromArboTransition(o.VotesProofs.ResultsSub)
 	if err != nil {
 		return nil, fmt.Errorf("ResultsSub: %w", err)
+	}
+
+	witness.Results = statetransition.Results{
+		OldResultsAdd: *o.OldResultsAdd.ToGnark(),
+		OldResultsSub: *o.OldResultsSub.ToGnark(),
+		NewResultsAdd: *o.NewResultsAdd.ToGnark(),
+		NewResultsSub: *o.NewResultsSub.ToGnark(),
 	}
 
 	// update stats
 	witness.NumNewVotes = o.BallotCount()
 	witness.NumOverwrites = o.OverwriteCount()
-
 	// RootHashAfter
 	witness.RootHashAfter, err = o.RootAsBigInt()
 	if err != nil {

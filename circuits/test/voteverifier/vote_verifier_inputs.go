@@ -3,7 +3,6 @@ package voteverifiertest
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math"
 	"math/big"
 
 	gecc "github.com/consensys/gnark-crypto/ecc"
@@ -57,7 +56,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	bAddresses, bWeights := [][]byte{}, [][]byte{}
 	for _, voter := range votersData {
 		bAddresses = append(bAddresses, voter.Address.Bytes())
-		bWeights = append(bWeights, new(big.Int).SetInt64(int64(ballottest.Weight)).Bytes())
+		bWeights = append(bWeights, new(big.Int).SetInt64(int64(circuits.MockWeight)).Bytes())
 	}
 	// generate a test census
 	testCensus, err := primitivestest.GenerateCensusProofForTest(primitivestest.CensusTestConfig{
@@ -76,8 +75,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		processId = util.RandomBytes(20)
 	}
 	ek := ballottest.GenEncryptionKeyForTest()
-	ekX, ekY := ek.Point()
-	encryptionKey := circuits.EncryptionKey[*big.Int]{PubKey: [2]*big.Int{ekX, ekY}}
+	encryptionKey := circuits.EncryptionKeyFromECCPoint(ek)
 	// circuits assigments, voters data and proofs
 	var assigments []voteverifier.VerifyVoteCircuit
 	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}
@@ -103,7 +101,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		if err != nil {
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
-
 		// transform siblings to gnark frontend.Variable
 		emulatedSiblings := [circuits.CensusProofMaxLevels]emulated.Element[sw_bn254.ScalarField]{}
 		for j, s := range testCensus.Proofs[i].Siblings {
@@ -115,20 +112,13 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			voterProof.ProcessID,
 			testCensus.Root)
 		hashInputs = append(hashInputs, encryptionKey.Serialize()...)
+		hashInputs = append(hashInputs, circuits.MockBallotMode().Serialize()...)
 		hashInputs = append(hashInputs,
-			new(big.Int).SetInt64(int64(ballottest.MaxCount)),
-			new(big.Int).SetInt64(int64(ballottest.ForceUniqueness)),
-			new(big.Int).SetInt64(int64(ballottest.MaxValue)),
-			new(big.Int).SetInt64(int64(ballottest.MinValue)),
-			new(big.Int).SetInt64(int64(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp)))*int64(ballottest.MaxCount)),
-			new(big.Int).SetInt64(int64(ballottest.MaxCount)),
-			new(big.Int).SetInt64(int64(ballottest.CostExp)),
-			new(big.Int).SetInt64(int64(ballottest.CostFromWeight)),
 			voterProof.Address,
 			voterProof.Nullifier,
 			voterProof.Commitment)
 		hashInputs = append(hashInputs,
-			voterProof.PlainEcryptedFields...)
+			voterProof.EncryptedFields.BigInts()...)
 		// hash the inputs to generate the inputs hash
 		inputsHash, err := mimc7.Hash(hashInputs, nil)
 		if err != nil {
@@ -138,29 +128,20 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		// compose circuit placeholders
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
-			InputsHash: inputsHash,
+			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
-			Vote: circuits.Vote[emulated.Element[sw_bn254.ScalarField]]{
+			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
 				Address:    emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
 				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 				Commitment: emulated.ValueOf[sw_bn254.ScalarField](voterProof.Commitment),
-				Ballot:     *voterProof.EncryptedFields.ToGnark(),
+				Ballot:     *voterProof.EncryptedFields.ToGnarkEmulatedBN254(),
 			},
-			UserWeight: emulated.ValueOf[sw_bn254.ScalarField](ballottest.Weight),
+			UserWeight: emulated.ValueOf[sw_bn254.ScalarField](circuits.MockWeight),
 			Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
 				ID:            emulated.ValueOf[sw_bn254.ScalarField](voterProof.ProcessID),
 				CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](testCensus.Root),
 				EncryptionKey: encryptionKey.AsEmulatedElementBN254(),
-				BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
-					MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
-					ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](ballottest.ForceUniqueness),
-					MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxValue),
-					MinValue:        emulated.ValueOf[sw_bn254.ScalarField](ballottest.MinValue),
-					MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](int(math.Pow(float64(ballottest.MaxValue), float64(ballottest.CostExp))) * ballottest.MaxCount),
-					MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](ballottest.MaxCount),
-					CostExp:         emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostExp),
-					CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](ballottest.CostFromWeight),
-				},
+				BallotMode:    circuits.MockBallotModeEmulated(),
 			},
 			// census proof
 			CensusSiblings: emulatedSiblings,

@@ -2,8 +2,13 @@ package circuits
 
 import (
 	"fmt"
+	"log"
 	"math/big"
+	"os"
 
+	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/backend/witness"
+	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 )
@@ -49,8 +54,78 @@ func BigIntArrayToStringArray(arr []*big.Int, n int) []string {
 // representation.
 func BigIntToMIMCHash(input, base *big.Int) []byte {
 	hash := ecc.BigToFF(base, input).Bytes()
-	for len(hash) < 32 {
+	for len(hash) < SerializedFieldSize {
 		hash = append([]byte{0}, hash...)
 	}
 	return hash
+}
+
+// StoreConstraintSystem stores the constraint system in a file.
+func StoreConstraintSystem(cs constraint.ConstraintSystem, filepath string) error {
+	// persist the constraint system
+	csFd, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer csFd.Close()
+	if _, err := cs.WriteTo(csFd); err != nil {
+		return err
+	}
+	log.Printf("constraint system written to %s", filepath)
+	return nil
+}
+
+// StoreVerificationKey stores the verification key in a file.
+func StoreVerificationKey(vkey groth16.VerifyingKey, filepath string) error {
+	fd, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	if _, err := vkey.WriteRawTo(fd); err != nil {
+		return err
+	}
+	log.Printf("verification key written to %s", filepath)
+	return nil
+}
+
+// StoreProof stores the proof in a file.
+func StoreProof(proof groth16.Proof, filepath string) error {
+	// persist the proof
+	proofFd, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer proofFd.Close()
+	if _, err := proof.WriteTo(proofFd); err != nil {
+		return err
+	}
+	log.Printf("proof written to %s", filepath)
+	return nil
+}
+
+// StoreWitness stores the witness in a file.
+func StoreWitness(witness witness.Witness, filepath string) error {
+	// persist the witness
+	witnessFd, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer witnessFd.Close()
+	bWitness, err := witness.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	if _, err := witnessFd.Write(bWitness); err != nil {
+		return err
+	}
+	return nil
+}
+
+// BoolToBigInt returns 1 when b is true or 0 otherwise
+func BoolToBigInt(b bool) *big.Int {
+	if b {
+		return big.NewInt(1)
+	}
+	return big.NewInt(0)
 }
