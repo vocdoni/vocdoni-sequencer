@@ -74,22 +74,22 @@ func TestCircuitProve(t *testing.T) {
 	}
 }
 
-type CircuitAggregatedWitness struct {
+type CircuitCalculateAggregatorWitness struct {
 	statetransition.Circuit
 }
 
-func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
-	circuit.VerifyAggregatedWitnessHash(api)
+func (circuit CircuitCalculateAggregatorWitness) Define(api frontend.API) error {
+	circuit.CalculateAggregatorWitness(api)
 	return nil
 }
 
-func TestCircuitAggregatedWitnessCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitAggregatedWitness{*statetransition.CircuitPlaceholder()})
+func TestCircuitCalculateAggregatorWitnessCompile(t *testing.T) {
+	testCircuitCompile(t, &CircuitCalculateAggregatorWitness{*statetransition.CircuitPlaceholder()})
 }
 
-func TestCircuitAggregatedWitnessProve(t *testing.T) {
+func TestCircuitCalculateAggregatorWitnessProve(t *testing.T) {
 	witness := newMockWitness(t)
-	testCircuitProve(t, &CircuitAggregatedWitness{
+	testCircuitProve(t, &CircuitCalculateAggregatorWitness{
 		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
 	}, witness)
 }
@@ -222,10 +222,12 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
+
+	proof, err := statetransition.DummyInnerProof(inputsHash)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	witness.AggregatedProof = *proof
 	return witness
 }
@@ -242,7 +244,7 @@ func newMockState(t *testing.T) *state.State {
 	}
 
 	if err := s.Initialize(
-		util.RandomBytes(32),
+		util.RandomBytes(16),
 		circuits.MockBallotMode().Bytes(),
 		circuits.MockEncryptionKey().Bytes(),
 	); err != nil {

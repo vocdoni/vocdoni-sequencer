@@ -57,6 +57,24 @@ func (bm BallotMode[T]) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// VarsToEmulatedElementBN254 casts BallotMode[frontend.Variable] into a BallotMode[emulated.Element[sw_bn254.ScalarField]]
+func (bm BallotMode[T]) VarsToEmulatedElementBN254(api frontend.API) BallotMode[emulated.Element[sw_bn254.ScalarField]] {
+	bmv, ok := any(bm).(BallotMode[frontend.Variable])
+	if !ok {
+		return BallotMode[emulated.Element[sw_bn254.ScalarField]]{}
+	}
+	return BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+		MaxCount:        *varToEmulatedElementBN254(api, bmv.MaxCount),
+		ForceUniqueness: *varToEmulatedElementBN254(api, bmv.ForceUniqueness),
+		MaxValue:        *varToEmulatedElementBN254(api, bmv.MaxValue),
+		MinValue:        *varToEmulatedElementBN254(api, bmv.MinValue),
+		MaxTotalCost:    *varToEmulatedElementBN254(api, bmv.MaxTotalCost),
+		MinTotalCost:    *varToEmulatedElementBN254(api, bmv.MinTotalCost),
+		CostExp:         *varToEmulatedElementBN254(api, bmv.CostExp),
+		CostFromWeight:  *varToEmulatedElementBN254(api, bmv.CostFromWeight),
+	}
+}
+
 // DeserializeBallotMode reconstructs a BallotMode from a slice of bytes.
 // The input must be of len 8*32 bytes (otherwise it returns an error),
 // representing 8 big.Ints as little-endian.
@@ -117,9 +135,9 @@ func (k EncryptionKey[T]) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// AsEmulatedElementBN254 returns the EncryptionKey as a different type.
+// BigIntsToEmulatedElementBN254 returns the EncryptionKey as a different type.
 // Returns an empty EncryptionKey if T is not *big.Int.
-func (k EncryptionKey[T]) AsEmulatedElementBN254() EncryptionKey[emulated.Element[sw_bn254.ScalarField]] {
+func (k EncryptionKey[T]) BigIntsToEmulatedElementBN254() EncryptionKey[emulated.Element[sw_bn254.ScalarField]] {
 	ekbi, ok := any(k).(EncryptionKey[*big.Int])
 	if !ok {
 		return EncryptionKey[emulated.Element[sw_bn254.ScalarField]]{}
@@ -128,6 +146,21 @@ func (k EncryptionKey[T]) AsEmulatedElementBN254() EncryptionKey[emulated.Elemen
 		[2]emulated.Element[sw_bn254.ScalarField]{
 			emulated.ValueOf[sw_bn254.ScalarField](ekbi.PubKey[0]),
 			emulated.ValueOf[sw_bn254.ScalarField](ekbi.PubKey[1]),
+		},
+	}
+}
+
+// VarsToEmulatedElementBN254 returns the EncryptionKey as a different type.
+// Returns an empty EncryptionKey if T is not frontend.Variable
+func (k EncryptionKey[T]) VarsToEmulatedElementBN254(api frontend.API) EncryptionKey[emulated.Element[sw_bn254.ScalarField]] {
+	ekv, ok := any(k).(EncryptionKey[frontend.Variable])
+	if !ok {
+		return EncryptionKey[emulated.Element[sw_bn254.ScalarField]]{}
+	}
+	return EncryptionKey[emulated.Element[sw_bn254.ScalarField]]{
+		[2]emulated.Element[sw_bn254.ScalarField]{
+			*varToEmulatedElementBN254(api, ekv.PubKey[0]),
+			*varToEmulatedElementBN254(api, ekv.PubKey[1]),
 		},
 	}
 }
@@ -183,9 +216,21 @@ type Process[T any] struct {
 }
 
 func (p Process[T]) Serialize() []T {
-	processList := []T{p.ID, p.CensusRoot}
-	processList = append(processList, p.EncryptionKey.Serialize()...)
-	return append(processList, p.BallotMode.Serialize()...)
+	list := []T{}
+	list = append(list, p.ID)
+	list = append(list, p.CensusRoot)
+	list = append(list, p.BallotMode.Serialize()...)
+	list = append(list, p.EncryptionKey.Serialize()...)
+	return list
+}
+
+func (p Process[T]) VarsToEmulatedElementBN254(api frontend.API) Process[emulated.Element[sw_bn254.ScalarField]] {
+	return Process[emulated.Element[sw_bn254.ScalarField]]{
+		ID:            *varToEmulatedElementBN254(api, p.ID),
+		CensusRoot:    *varToEmulatedElementBN254(api, p.CensusRoot),
+		BallotMode:    p.BallotMode.VarsToEmulatedElementBN254(api),
+		EncryptionKey: p.EncryptionKey.VarsToEmulatedElementBN254(api),
+	}
 }
 
 // Vote is a struct that contains all data related to a vote.
@@ -195,6 +240,15 @@ type Vote[T any] struct {
 	Ballot     Ballot
 	Address    T
 	Commitment T
+}
+
+func (v Vote[T]) ToEmulatedVote(api frontend.API) EmulatedVote[sw_bn254.ScalarField] {
+	return EmulatedVote[sw_bn254.ScalarField]{
+		Nullifier:  *varToEmulatedElementBN254(api, v.Nullifier),
+		Ballot:     v.Ballot.ToEmulatedBallot(api),
+		Address:    *varToEmulatedElementBN254(api, v.Address),
+		Commitment: *varToEmulatedElementBN254(api, v.Commitment),
+	}
 }
 
 type Ballot [FieldsPerBallot]elgamal.Ciphertext
@@ -256,6 +310,17 @@ func (z *Ballot) SerializeVars() []frontend.Variable {
 	return vars
 }
 
+func (z *Ballot) ToEmulatedBallot(api frontend.API) EmulatedBallot[sw_bn254.ScalarField] {
+	ez := EmulatedBallot[sw_bn254.ScalarField]{}
+	for i := range ez {
+		ez[i].C1.X = *varToEmulatedElementBN254(api, z[i].C1.X)
+		ez[i].C1.Y = *varToEmulatedElementBN254(api, z[i].C1.Y)
+		ez[i].C2.X = *varToEmulatedElementBN254(api, z[i].C2.X)
+		ez[i].C2.Y = *varToEmulatedElementBN254(api, z[i].C2.Y)
+	}
+	return ez
+}
+
 // EmulatedPoint struct is a copy of the elgamal.Point struct, but using the
 // emulated.Element type
 type EmulatedPoint[F emulated.FieldParams] struct {
@@ -280,6 +345,16 @@ type EmulatedVote[F emulated.FieldParams] struct {
 	Ballot     EmulatedBallot[F]
 	Address    emulated.Element[F]
 	Commitment emulated.Element[F]
+}
+
+// Serialize returns a slice with the vote parameters in order
+func (z *EmulatedVote[F]) Serialize() []emulated.Element[F] {
+	list := []emulated.Element[F]{}
+	list = append(list, z.Nullifier)
+	list = append(list, z.Ballot.Serialize()...)
+	list = append(list, z.Address)
+	list = append(list, z.Commitment)
+	return list
 }
 
 // NewEmulatedBallot returns a new EmulatedBallot with all fields with both
@@ -307,4 +382,12 @@ func (z *EmulatedBallot[F]) Serialize() []emulated.Element[F] {
 			zi.C2.Y)
 	}
 	return list
+}
+
+func varToEmulatedElementBN254(api frontend.API, v frontend.Variable) *emulated.Element[sw_bn254.ScalarField] {
+	elem, err := utils.UnpackVarToScalar[sw_bn254.ScalarField](api, v)
+	if err != nil {
+		panic(err)
+	}
+	return elem
 }

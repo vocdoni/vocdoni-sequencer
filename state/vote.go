@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
@@ -14,6 +15,15 @@ type Vote struct {
 	Ballot     *elgamal.Ballot
 	Address    []byte
 	Commitment *big.Int
+}
+
+func (v *Vote) SerializeBigInts() []*big.Int {
+	list := []*big.Int{}
+	list = append(list, arbo.BytesToBigInt(v.Nullifier))
+	list = append(list, v.Ballot.BigInts()...)
+	list = append(list, arbo.BytesToBigInt(v.Address))
+	list = append(list, v.Commitment)
+	return list
 }
 
 // AddVote adds a vote to the state

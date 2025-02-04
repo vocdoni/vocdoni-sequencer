@@ -77,10 +77,6 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	agPublicInputs, err := stdgroth16.ValueOfWitness[sw_bw6761.ScalarField](publicWitness)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
@@ -117,7 +113,6 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	}
 
 	witness.AggregatedProof.Proof = proofInBLS12377
-	witness.AggregatedProof.Witness = agPublicInputs
 
 	// create final placeholder
 	circuitPlaceholder := statetransition.CircuitPlaceholder()

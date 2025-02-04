@@ -292,7 +292,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			ID:            emulated.ValueOf[sw_bn254.ScalarField](vvInputs.ProcessID),
 			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.CensusRoot),
 			BallotMode:    circuits.MockBallotModeEmulated(),
-			EncryptionKey: vvInputs.EncryptionPubKey.AsEmulatedElementBN254(),
+			EncryptionKey: vvInputs.EncryptionPubKey.BigIntsToEmulatedElementBN254(),
 		},
 		Proofs: proofs,
 	}

@@ -77,7 +77,7 @@ func VoteVerifierInputs(api frontend.API,
 //	Commitments
 func AggregatedWitnessInputs(api frontend.API,
 	process Process[emulated.Element[sw_bn254.ScalarField]],
-	votes []Vote[emulated.Element[sw_bn254.ScalarField]],
+	votes []EmulatedVote[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
 	inputs = append(inputs, process.ID)
@@ -88,7 +88,7 @@ func AggregatedWitnessInputs(api frontend.API,
 		inputs = append(inputs, v.Nullifier)
 	}
 	for _, v := range votes {
-		inputs = append(inputs, v.Ballot.Serialize(api)...)
+		inputs = append(inputs, v.Ballot.Serialize()...)
 	}
 	for _, v := range votes {
 		inputs = append(inputs, v.Address)
@@ -97,6 +97,24 @@ func AggregatedWitnessInputs(api frontend.API,
 		inputs = append(inputs, v.Commitment)
 	}
 	return inputs
+}
+
+func CalculateVotersHashes(api frontend.API,
+	process Process[emulated.Element[sw_bn254.ScalarField]],
+	votes []EmulatedVote[sw_bn254.ScalarField],
+) VotersHashes {
+	// initialize the hashes of the voters
+	votersHashes := [VotesPerBatch]emulated.Element[sw_bn254.ScalarField]{}
+	// group common inputs
+	commonInputs := process.Serialize()
+	// iterate over the voters
+	for i := 0; i < VotesPerBatch; i++ {
+		// group remaining inputs, those that are unique for each voter
+		voterInputs := append(commonInputs, votes[i].Serialize()...)
+		// calculate the voter hash and store it
+		votersHashes[i] = VoterHashFn(api, voterInputs...)
+	}
+	return VotersHashes{votersHashes}
 }
 
 // AggregatedWitnessInputsAsVars returns all values that are hashed

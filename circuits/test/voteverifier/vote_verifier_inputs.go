@@ -145,7 +145,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
 				ID:            emulated.ValueOf[sw_bn254.ScalarField](voterProof.ProcessID),
 				CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](testCensus.Root),
-				EncryptionKey: encryptionKey.AsEmulatedElementBN254(),
+				EncryptionKey: encryptionKey.BigIntsToEmulatedElementBN254(),
 				BallotMode:    circuits.MockBallotModeEmulated(),
 			},
 			// census proof

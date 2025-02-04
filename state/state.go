@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
@@ -290,6 +291,15 @@ func (o *State) PaddedVotes() []*Vote {
 	return v
 }
 
+func (o *State) ProcessSerializeBigInts() []*big.Int {
+	list := []*big.Int{}
+	list = append(list, arbo.BytesToBigInt(o.ProcessID()))
+	list = append(list, arbo.BytesToBigInt(o.CensusRoot()))
+	list = append(list, o.BallotMode().Serialize()...)
+	list = append(list, o.EncryptionKey().Serialize()...)
+	return list
+}
+
 func (o *State) ProcessID() []byte {
 	_, v, err := o.tree.Get(KeyProcessID)
 	if err != nil {
@@ -330,7 +340,7 @@ func (o *State) EncryptionKey() circuits.EncryptionKey[*big.Int] {
 	return ek
 }
 
-func (o *State) AggregatedWitnessInputs() [][]byte {
+func (o *State) VoterHashesInputs() []*big.Int {
 	// all of the following values compose the preimage that is hashed
 	// to produce the public input needed to verify AggregatedProof.
 	// ProcessID
@@ -342,30 +352,42 @@ func (o *State) AggregatedWitnessInputs() [][]byte {
 	// Addressess
 	// Commitments
 
-	inputs := [][]byte{
-		o.ProcessID(),
-		o.CensusRoot(),
-		o.BallotMode().Bytes(),
-		o.EncryptionKey().Bytes(),
-	}
+	inputs := []*big.Int{}
+	inputs = append(inputs, arbo.BytesToBigInt(o.ProcessID()))
+	inputs = append(inputs, arbo.BytesToBigInt(o.CensusRoot()))
+	inputs = append(inputs, o.BallotMode().Serialize()...)
+	inputs = append(inputs, o.EncryptionKey().Serialize()...)
+
 	votes := o.PaddedVotes()
 	for _, v := range votes {
-		inputs = append(inputs, v.Nullifier)
+		inputs = append(inputs, arbo.BytesToBigInt(v.Nullifier))
 	}
 	for _, v := range votes {
-		inputs = append(inputs, v.Ballot.Serialize())
+		inputs = append(inputs, v.Ballot.BigInts()...)
 	}
 	for _, v := range votes {
-		inputs = append(inputs, v.Address)
+		inputs = append(inputs, arbo.BytesToBigInt(v.Address))
 	}
 	for _, v := range votes {
-		inputs = append(inputs, arbo.BigIntToBytes(HashFunc.Len(), v.Commitment))
+		inputs = append(inputs, v.Commitment)
 	}
 	return inputs
 }
 
-func (o *State) AggregatedWitnessHash() ([]byte, error) {
-	hash, err := HashFunc.Hash(o.AggregatedWitnessInputs()...)
+func (o *State) AggregatedWitnessHash() (*big.Int, error) {
+	subhashes := []*big.Int{}
+	for _, v := range o.PaddedVotes() {
+		inputs := []*big.Int{}
+		inputs = append(inputs, o.ProcessSerializeBigInts()...)
+		inputs = append(inputs, v.SerializeBigInts()...)
+		h, err := mimc7.Hash(inputs, nil)
+		if err != nil {
+			return nil, err
+		}
+		subhashes = append(subhashes, h)
+	}
+
+	hash, err := mimc7.Hash(subhashes, nil)
 	if err != nil {
 		return nil, err
 	}
