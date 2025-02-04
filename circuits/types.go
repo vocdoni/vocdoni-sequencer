@@ -183,6 +183,12 @@ type Process[T any] struct {
 	EncryptionKey EncryptionKey[T]
 }
 
+func (p Process[T]) Serialize() []T {
+	processList := []T{p.ID, p.CensusRoot}
+	processList = append(processList, p.EncryptionKey.Serialize()...)
+	return append(processList, p.BallotMode.Serialize()...)
+}
+
 // Vote is a struct that contains all data related to a vote.
 // Is a generic struct that can be used with any type of circuit input.
 type Vote[T any] struct {
@@ -249,4 +255,57 @@ func (z *Ballot) SerializeVars() []frontend.Variable {
 		vars = append(vars, z[i].Serialize()...)
 	}
 	return vars
+}
+
+// EmulatedPoint struct is a copy of the elgamal.Point struct, but using the
+// emulated.Element type
+type EmulatedPoint[F emulated.FieldParams] struct {
+	X, Y emulated.Element[F]
+}
+
+// EmulatedCiphertext struct is a copy of the elgamal.Ciphertext struct, but
+// using the EmulatedPoint type
+type EmulatedCiphertext[F emulated.FieldParams] struct {
+	C1, C2 EmulatedPoint[F]
+}
+
+// EmulatedBallot is a copy of the Ballot struct, but using the
+// EmulatedCiphertext type
+type EmulatedBallot[F emulated.FieldParams] [FieldsPerBallot]EmulatedCiphertext[F]
+
+// EmulatedVote is a copy of the Vote struct, but using the emulated.Element
+// type as generic type for the Nullifier, Address and Commitment fields, and
+// the EmulatedBallot type for the Ballot field.
+type EmulatedVote[F emulated.FieldParams] struct {
+	Nullifier  emulated.Element[F]
+	Ballot     EmulatedBallot[F]
+	Address    emulated.Element[F]
+	Commitment emulated.Element[F]
+}
+
+// NewEmulatedBallot returns a new EmulatedBallot with all fields with both
+// points to zero point (0, 1).
+func NewEmulatedBallot[F emulated.FieldParams]() *EmulatedBallot[F] {
+	field := EmulatedCiphertext[F]{
+		C1: EmulatedPoint[F]{X: emulated.ValueOf[F](0), Y: emulated.ValueOf[F](1)},
+		C2: EmulatedPoint[F]{X: emulated.ValueOf[F](0), Y: emulated.ValueOf[F](1)},
+	}
+	z := &EmulatedBallot[F]{}
+	for i := range z {
+		z[i] = field
+	}
+	return z
+}
+
+// Serialize returns a slice with the C1.X, C1.Y, C2.X, C2.Y in order
+func (z *EmulatedBallot[F]) Serialize() []emulated.Element[F] {
+	list := []emulated.Element[F]{}
+	for _, zi := range z {
+		list = append(list,
+			zi.C1.X,
+			zi.C1.Y,
+			zi.C2.X,
+			zi.C2.Y)
+	}
+	return list
 }

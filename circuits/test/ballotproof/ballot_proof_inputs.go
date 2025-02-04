@@ -121,12 +121,8 @@ func EncryptBallotFieldsForTest(fields [circuits.FieldsPerBallot]*big.Int, n int
 	plainCipherfields := []*big.Int{}
 	for i := 0; i < n; i++ {
 		if i < len(fields) {
-			c1, c2, err := elgamal.EncryptWithK(pk, fields[i], k)
-			if err != nil {
-				panic(err)
-			}
-			c1X, c1Y := c1.Point()
-			c2X, c2Y := c2.Point()
+			c1X, c1Y := z[i].C1.Point()
+			c2X, c2Y := z[i].C2.Point()
 			plainCipherfields = append(plainCipherfields, c1X, c1Y, c2X, c2Y)
 		} else {
 			plainCipherfields = append(plainCipherfields, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0))
