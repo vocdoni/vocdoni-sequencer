@@ -77,6 +77,14 @@ type Census struct {
 	CensusURI    string   `json:"censusURI"    cbor:"3,keyasint,omitempty"`
 }
 
+// CensusProof holds the result of a Merkle proof.
+type CensusProof struct {
+	Root     HexBytes `json:"root"`
+	Key      HexBytes `json:"key"`
+	Value    HexBytes `json:"value"`
+	Siblings HexBytes `json:"siblings"`
+}
+
 type OrganizationInfo struct {
 	ID          common.Address `json:"id,omitempty"      cbor:"0,keyasint,omitempty"`
 	Name        string         `json:"name"              cbor:"1,keyasint,omitempty"`

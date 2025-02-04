@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -12,12 +13,66 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	qt "github.com/frankban/quicktest"
+	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3"
 )
+
+func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant) {
+	// Create a new census
+	body, code, err := cli.Request(http.MethodPost, nil, nil, "census")
+	c.Assert(err, qt.IsNil)
+	c.Assert(code, qt.Equals, http.StatusOK)
+
+	var resp api.NewCensus
+	err = json.NewDecoder(bytes.NewReader(body)).Decode(&resp)
+	c.Assert(err, qt.IsNil)
+
+	// Generate random participants
+	censusParticipants := api.CensusParticipants{Participants: []*api.CensusParticipant{}}
+	for i := 0; i < size; i++ {
+		key := util.RandomBytes(30)
+		censusParticipants.Participants = append(censusParticipants.Participants, &api.CensusParticipant{
+			Key:    key,
+			Weight: new(types.BigInt).SetUint64(1),
+		})
+	}
+
+	// Add participants to census
+	_, code, err = cli.Request(http.MethodPost, censusParticipants, []string{"id", resp.Census.String()}, "census", "participants")
+	c.Assert(err, qt.IsNil)
+	c.Assert(code, qt.Equals, http.StatusOK)
+
+	// Get census root
+	body, code, err = cli.Request(http.MethodGet, nil, []string{"id", resp.Census.String()}, "census", "root")
+	c.Assert(err, qt.IsNil)
+	c.Assert(code, qt.Equals, http.StatusOK)
+
+	var rootResp api.CensusRoot
+	err = json.NewDecoder(bytes.NewReader(body)).Decode(&rootResp)
+	c.Assert(err, qt.IsNil)
+
+	return rootResp.Root, censusParticipants.Participants
+}
+
+func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byte) []byte {
+	// Get proof for the key
+	body, code, err := cli.Request(http.MethodGet, nil, []string{
+		"root", hex.EncodeToString(root),
+		"key", hex.EncodeToString(key),
+	}, "census", "proof")
+	c.Assert(err, qt.IsNil)
+	c.Assert(code, qt.Equals, http.StatusOK)
+
+	var proof types.CensusProof
+	err = json.NewDecoder(bytes.NewReader(body)).Decode(&proof)
+	c.Assert(err, qt.IsNil)
+
+	return proof.Siblings
+}
 
 func init() {
 	log.Init(log.LogLevelDebug, "stdout", nil)
@@ -41,7 +96,12 @@ func TestIntegration(t *testing.T) {
 	t.Run("create process", func(t *testing.T) {
 		c := qt.New(t)
 
-		root := util.RandomBytes(32)
+		// Create census with 10 participants
+		root, participants := createCensus(c, cli, 10)
+
+		// Generate proof for first participant
+		proof := generateCensusProof(c, cli, root, participants[0].Key)
+		c.Assert(proof, qt.Not(qt.IsNil))
 		ballotMode := types.BallotMode{
 			MaxCount:        2,
 			MaxValue:        new(types.BigInt).SetUint64(100),

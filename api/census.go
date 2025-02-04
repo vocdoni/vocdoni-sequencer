@@ -8,27 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/storage/census"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
-
-const (
-	censusKeyMaxLen = 32
-)
-
-var (
-	ErrInvalidCensusID        = Error{Code: 40010, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census ID")}
-	ErrCensusNotFound         = Error{Code: 40011, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("census not found")}
-	ErrInvalidCensusKeyLength = Error{Code: 40012, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census key length")}
-)
-
-type CensusParticipant struct {
-	Key    types.HexBytes `json:"key"`
-	Weight *types.BigInt  `json:"weight,omitempty"`
-}
-
-type CensusParticipants struct {
-	Participants []CensusParticipant `json:"participants"`
-}
 
 func (a *API) newCensus(w http.ResponseWriter, r *http.Request) {
 	censusID := uuid.New()
@@ -37,14 +19,7 @@ func (a *API) newCensus(w http.ResponseWriter, r *http.Request) {
 		ErrGenericInternalServerError.WithErr(err).Write(w)
 		return
 	}
-	var data []byte
-	if data, err = json.Marshal(map[string]uuid.UUID{
-		"census": censusID,
-	}); err != nil {
-		ErrGenericInternalServerError.WithErr(err).Write(w)
-		return
-	}
-	httpWriteJSON(w, data)
+	httpWriteJSON(w, &NewCensus{Census: censusID})
 }
 
 func (a *API) addCensusParticipants(w http.ResponseWriter, r *http.Request) {
@@ -78,23 +53,28 @@ func (a *API) addCensusParticipants(w http.ResponseWriter, r *http.Request) {
 		if p.Weight == nil {
 			p.Weight = new(types.BigInt).SetUint64(1)
 		}
-
 		leafKey := p.Key
-		if len(leafKey) > censusKeyMaxLen {
-			ErrInvalidCensusKeyLength.Withf("the census key cannot be longer than %d bytes", censusKeyMaxLen).Write(w)
-			return
+		if len(p.Key) > census.KeyMaxLen {
+			leafKey = a.storage.CensusDB().HashAndTrunkKey(p.Key)
+			if leafKey == nil {
+				ErrGenericInternalServerError.WithErr(fmt.Errorf("failed to hash participant key")).Write(w)
+				return
+			}
 		}
-
 		keys = append(keys, leafKey)
-		values = append(values, arbo.BigIntToBytes(censusKeyMaxLen, p.Weight.MathBigInt()))
+		values = append(values, arbo.BigIntToBytes(a.storage.CensusDB().HashLen(), p.Weight.MathBigInt()))
 	}
 
 	// insert the keys and values into the tree
-	if err := ref.InsertBatch(keys, values); err != nil {
+	invalid, err := ref.InsertBatch(keys, values)
+	if err != nil {
 		ErrGenericInternalServerError.WithErr(err).Write(w)
 		return
 	}
-
+	if len(invalid) > 0 {
+		ErrMalformedBody.WithErr(fmt.Errorf("failed to insert %d participants", len(invalid))).Write(w)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -131,15 +111,9 @@ func (a *API) getCensusParticipants(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data, err := json.Marshal(map[string]interface{}{
+	httpWriteJSON(w, map[string]interface{}{
 		"participants": participants,
 	})
-	if err != nil {
-		ErrGenericInternalServerError.WithErr(err).Write(w)
-		return
-	}
-
-	httpWriteJSON(w, data)
 }
 
 func (a *API) getCensusRoot(w http.ResponseWriter, r *http.Request) {
@@ -155,15 +129,9 @@ func (a *API) getCensusRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(map[string]types.HexBytes{
+	httpWriteJSON(w, map[string]types.HexBytes{
 		"root": types.HexBytes(ref.Root()),
 	})
-	if err != nil {
-		ErrGenericInternalServerError.WithErr(err).Write(w)
-		return
-	}
-
-	httpWriteJSON(w, data)
 }
 
 func (a *API) getCensusSize(w http.ResponseWriter, r *http.Request) {
@@ -179,15 +147,9 @@ func (a *API) getCensusSize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(map[string]int{
+	httpWriteJSON(w, map[string]interface{}{
 		"size": ref.Size(),
 	})
-	if err != nil {
-		ErrGenericInternalServerError.WithErr(err).Write(w)
-		return
-	}
-
-	httpWriteJSON(w, data)
 }
 
 func (a *API) deleteCensus(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +182,16 @@ func (a *API) getCensusProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proof, err := a.storage.CensusDB().ProofByRoot(root, key)
+	leafKey := key
+	if len(key) > census.KeyMaxLen {
+		leafKey = a.storage.CensusDB().HashAndTrunkKey(key)
+		if leafKey == nil {
+			ErrGenericInternalServerError.WithErr(fmt.Errorf("failed to hash participant key")).Write(w)
+			return
+		}
+	}
+
+	proof, err := a.storage.CensusDB().ProofByRoot(root, leafKey)
 	if err != nil {
 		ErrResourceNotFound.WithErr(err).Write(w)
 		return
