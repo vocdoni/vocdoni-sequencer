@@ -13,7 +13,9 @@ import (
 	"github.com/consensys/gnark/logger"
 	"github.com/consensys/gnark/test"
 	"github.com/rs/zerolog"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
+	statetransitiontest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/statetransition"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
@@ -52,11 +54,11 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(2, 20)); err != nil { // new vote 2
 		t.Fatal(err)
 	}
-	witness, err := GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndBatch(); err != nil {
+	witness, err := statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 	{
@@ -92,11 +94,11 @@ func TestCircuitProve(t *testing.T) {
 	if err := s.AddVote(newMockVote(4, 30)); err != nil { // add vote 4
 		t.Fatal(err)
 	}
-	witness, err = GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EndBatch(); err != nil {
+	witness, err = statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 	{
@@ -119,54 +121,12 @@ func TestCircuitProve(t *testing.T) {
 	debugLog(t, witness)
 }
 
-func debugLog(t *testing.T, witness *statetransition.Circuit) {
-	// js, _ := json.MarshalIndent(witness, "", "  ")
-	// fmt.Printf("\n\n%s\n\n", js)
-	t.Log("public: RootHashBefore", util.PrettyHex(witness.RootHashBefore))
-	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
-	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
-	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
-	for name, mts := range map[string][statetransition.VoteBatchSize]state.MerkleTransition{
-		"Ballot":     witness.Ballot,
-		"Commitment": witness.Commitment,
-	} {
-		for _, mt := range mts {
-			t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
-				"value", mt.OldValue, "->", mt.NewValue,
-			)
-			for i := range mt.OldCiphertexts {
-				t.Log(name, i, "elgamal.C1.X", mt.OldCiphertexts[i].C1.X, "->", mt.NewCiphertexts[i].C1.X)
-				t.Log(name, i, "elgamal.C1.Y", mt.OldCiphertexts[i].C1.Y, "->", mt.NewCiphertexts[i].C1.Y)
-				t.Log(name, i, "elgamal.C2.X", mt.OldCiphertexts[i].C2.X, "->", mt.NewCiphertexts[i].C2.X)
-				t.Log(name, i, "elgamal.C2.Y", mt.OldCiphertexts[i].C2.Y, "->", mt.NewCiphertexts[i].C2.Y)
-			}
-		}
-	}
-
-	for name, mt := range map[string]state.MerkleTransition{
-		"ResultsAdd": witness.ResultsAdd,
-		"ResultsSub": witness.ResultsSub,
-	} {
-		t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
-			"value", mt.OldValue, "->", mt.NewValue,
-		)
-		for i := range mt.OldCiphertexts {
-			t.Log(name, i, "elgamal.C1.X", mt.OldCiphertexts[i].C1.X, "->", mt.NewCiphertexts[i].C1.X)
-			t.Log(name, i, "elgamal.C1.Y", mt.OldCiphertexts[i].C1.Y, "->", mt.NewCiphertexts[i].C1.Y)
-			t.Log(name, i, "elgamal.C2.X", mt.OldCiphertexts[i].C2.X, "->", mt.NewCiphertexts[i].C2.X)
-			t.Log(name, i, "elgamal.C2.Y", mt.OldCiphertexts[i].C2.Y, "->", mt.NewCiphertexts[i].C2.Y)
-		}
-	}
-}
-
 type CircuitAggregatedWitness struct {
 	statetransition.Circuit
 }
 
 func (circuit CircuitAggregatedWitness) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedWitnessHash(api, statetransition.HashFn); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedWitnessHash(api)
 	return nil
 }
 
@@ -189,35 +149,7 @@ func TestCircuitAggregatedWitnessProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitAggregatedWitness{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
@@ -231,9 +163,7 @@ type CircuitAggregatedProof struct {
 }
 
 func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
-	if err := circuit.VerifyAggregatedProof(api); err != nil {
-		return err
-	}
+	circuit.VerifyAggregatedProof(api)
 	return nil
 }
 
@@ -256,35 +186,7 @@ func TestCircuitAggregatedProofProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitAggregatedProof{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
@@ -320,38 +222,47 @@ func TestCircuitBallotsProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
-	s := newMockState(t)
-
-	if err := s.StartBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.AddVote(newMockVote(1, 10)); err != nil { // new vote 1
-		t.Fatal(err)
-	}
-
-	witness, err := GenerateWitnesses(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.EndBatch(); err != nil {
-		t.Fatal(err)
-	}
-
-	inputsHash, err := s.AggregatedWitnessHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	proof, err := statetransition.DummyInnerProof(arbo.BytesToBigInt(inputsHash))
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatedProof = *proof
-
+	witness := newMockWitness(t)
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		&CircuitBallots{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+}
+
+type CircuitMerkleProofs struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitMerkleProofs) Define(api frontend.API) error {
+	circuit.VerifyMerkleProofs(api, statetransition.HashFn)
+	return nil
+}
+
+func TestCircuitMerkleProofsCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitMerkleProofs{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitMerkleProofsProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	witness := newMockWitness(t)
+	debugLog(t, witness)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitMerkleProofs{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
 		witness,
 		test.WithCurves(ecc.BN254),
 		test.WithBackends(backend.GROTH16))
@@ -385,7 +296,57 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
+	witness := newMockWitness(t)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
 
+	debugLog(t, witness)
+}
+
+type CircuitLeafHashes struct {
+	statetransition.Circuit
+}
+
+func (circuit CircuitLeafHashes) Define(api frontend.API) error {
+	circuit.VerifyLeafHashes(api, statetransition.HashFn)
+	return nil
+}
+
+func TestCircuitLeafHashesCompile(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
+	// enable log to see nbConstraints
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
+	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder,
+		&CircuitLeafHashes{*statetransition.CircuitPlaceholder()},
+	); err != nil {
+		panic(err)
+	}
+}
+
+func TestCircuitLeafHashesProve(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	witness := newMockWitness(t)
+	assert := test.NewAssert(t)
+	assert.ProverSucceeded(
+		&CircuitLeafHashes{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
+		witness,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+
+	debugLog(t, witness)
+}
+
+func newMockWitness(t *testing.T) *statetransition.Circuit {
 	s := newMockState(t)
 
 	if err := s.StartBatch(); err != nil {
@@ -396,12 +357,12 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	witness, err := GenerateWitnesses(s)
-	if err != nil {
+	if err := s.EndBatch(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.EndBatch(); err != nil {
+	witness, err := statetransitiontest.GenerateWitnesses(s)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -414,15 +375,7 @@ func TestCircuitMerkleTransitionsProve(t *testing.T) {
 		t.Fatal(err)
 	}
 	witness.AggregatedProof = *proof
-
-	assert := test.NewAssert(t)
-	assert.ProverSucceeded(
-		&CircuitMerkleTransitions{*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof)},
-		witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16))
-
-	debugLog(t, witness)
+	return witness
 }
 
 func newMockState(t *testing.T) *state.State {
@@ -433,9 +386,9 @@ func newMockState(t *testing.T) *state.State {
 	}
 
 	if err := s.Initialize(
-		[]byte{0xca, 0xfe, 0x01},
-		[]byte{0xca, 0xfe, 0x02},
-		[]byte{0xca, 0xfe, 0x03},
+		util.RandomBytes(32),
+		circuits.MockBallotMode().Bytes(),
+		circuits.MockEncryptionKey().Bytes(),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -446,11 +399,13 @@ func newMockState(t *testing.T) *state.State {
 const (
 	mockNullifiersOffset = 100
 	mockAddressesOffset  = 200
+	// maxKeyLen is ceil(maxLevels/8)
+	maxKeyLen = (circuits.StateProofMaxLevels + 7) / 8
 )
 
 // newMockVote creates a new vote
 func newMockVote(index, amount int64) *state.Vote {
-	nullifier := arbo.BigIntToBytes(state.MaxKeyLen,
+	nullifier := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockNullifiersOffset))) // mock
 
 	// generate a public mocked key
@@ -459,17 +414,17 @@ func newMockVote(index, amount int64) *state.Vote {
 		panic(fmt.Errorf("error generating public key: %v", err))
 	}
 
-	ballot, err := elgamal.NewCiphertexts(publicKey).Encrypt(
-		[elgamal.NumCiphertexts]*big.Int{
-			big.NewInt(int64(amount)),
-			big.NewInt(int64(amount + 1)),
-		},
-		publicKey, nil)
+	fields := [circuits.FieldsPerBallot]*big.Int{}
+	for i := range fields {
+		fields[i] = big.NewInt(int64(amount + int64(i)))
+	}
+
+	ballot, err := elgamal.NewBallot(publicKey).Encrypt(fields, publicKey, nil)
 	if err != nil {
 		panic(fmt.Errorf("error encrypting: %v", err))
 	}
 
-	address := arbo.BigIntToBytes(state.MaxKeyLen,
+	address := arbo.BigIntToBytes(maxKeyLen,
 		big.NewInt(int64(index)+int64(mockAddressesOffset))) // mock
 	commitment := big.NewInt(amount + 256)
 
@@ -478,5 +433,33 @@ func newMockVote(index, amount int64) *state.Vote {
 		Ballot:     ballot,
 		Address:    address,
 		Commitment: commitment,
+	}
+}
+
+func debugLog(t *testing.T, witness *statetransition.Circuit) {
+	// js, _ := json.MarshalIndent(witness, "", "  ")
+	// fmt.Printf("\n\n%s\n\n", js)
+	t.Log("public: RootHashBefore", util.PrettyHex(witness.RootHashBefore))
+	t.Log("public: RootHashAfter", util.PrettyHex(witness.RootHashAfter))
+	t.Log("public: NumVotes", util.PrettyHex(witness.NumNewVotes))
+	t.Log("public: NumOverwrites", util.PrettyHex(witness.NumOverwrites))
+	for name, mts := range map[string][circuits.VotesPerBatch]statetransition.MerkleTransition{
+		"Ballot":     witness.VotesProofs.Ballot,
+		"Commitment": witness.VotesProofs.Commitment,
+	} {
+		for _, mt := range mts {
+			t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
+				"value", util.PrettyHex(mt.OldLeafHash), "->", util.PrettyHex(mt.NewLeafHash),
+			)
+		}
+	}
+
+	for name, mt := range map[string]statetransition.MerkleTransition{
+		"ResultsAdd": witness.ResultsProofs.ResultsAdd,
+		"ResultsSub": witness.ResultsProofs.ResultsSub,
+	} {
+		t.Log(name, "transitioned", "(root", util.PrettyHex(mt.OldRoot), "->", util.PrettyHex(mt.NewRoot), ")",
+			"value", util.PrettyHex(mt.OldLeafHash), "->", util.PrettyHex(mt.NewLeafHash),
+		)
 	}
 }

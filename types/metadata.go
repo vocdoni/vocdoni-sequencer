@@ -1,5 +1,13 @@
 package types
 
+import (
+	"encoding/json"
+	"math/big"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
 type GenericMetadata map[string]string
 
 type MultilingualString map[string]string
@@ -34,4 +42,52 @@ type Metadata struct {
 	Questions   []Question         `json:"questions"`
 	ProcessType ProcessType        `json:"processType"`
 	BallotMode  BallotMode         `json:"ballotMode"`
+}
+
+type Process struct {
+	ID             HexBytes       `json:"id,omitempty"`
+	Status         uint8          `json:"status"`
+	OrganizationId common.Address `json:"organizationId"`
+	EncryptionKey  *EncryptionKey `json:"encryptionKey"`
+	StateRoot      HexBytes       `json:"stateRoot"`
+	Result         []*big.Int     `json:"result"`
+	StartTime      time.Time      `json:"startTime"`
+	Duration       time.Duration  `json:"duration"`
+	MetadataURI    string         `json:"metadataURI"`
+	BallotMode     *BallotMode    `json:"ballotMode"`
+	Census         *Census        `json:"census"`
+}
+
+func (p *Process) String() string {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+type EncryptionKey struct {
+	X *big.Int `json:"x"`
+	Y *big.Int `json:"y"`
+}
+
+type Census struct {
+	CensusOrigin uint8    `json:"censusOrigin"`
+	MaxVotes     *big.Int `json:"maxVotes"`
+	CensusRoot   HexBytes `json:"censusRoot"`
+	CensusURI    string   `json:"censusURI"`
+}
+
+type OrganizationInfo struct {
+	ID          common.Address `json:"id,omitempty"`
+	Name        string         `json:"name"`
+	MetadataURI string         `json:"metadataURI"`
+}
+
+func (o *OrganizationInfo) String() string {
+	data, err := json.Marshal(o)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

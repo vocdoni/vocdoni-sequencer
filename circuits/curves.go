@@ -29,10 +29,10 @@ type InnerProofBN254 struct {
 	Witness groth16.Witness[sw_bn254.ScalarField]
 	VK      groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
 }
-
 type InnerProofBLS12377 struct {
 	Proof   groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
 	Witness groth16.Witness[sw_bls12377.ScalarField]
+	VK      groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
 type InnerProofBW6761 struct {

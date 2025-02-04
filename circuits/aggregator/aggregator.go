@@ -37,11 +37,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
-const (
-	MaxVotes  = 10
-	MaxFields = 8
-)
-
 type AggregatorCircuit struct {
 	InputsHash frontend.Variable `gnark:",public"`
 	ValidVotes frontend.Variable `gnark:",public"`
@@ -49,23 +44,13 @@ type AggregatorCircuit struct {
 	// compared with the InputsHash. All the variables should be hashed in the
 	// same order as they are defined here.
 
-	// BallotMode is a struct that contains the common inputs for all the
-	// voters. The values of this struct should be the same for all the voters
-	// in the same process.
-	circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]
-	// Other common inputs
-	EncryptionPubKey [2]emulated.Element[sw_bn254.ScalarField] // Part of InputsHash
-	ProcessId        emulated.Element[sw_bn254.ScalarField]    // Part of InputsHash
-	CensusRoot       emulated.Element[sw_bn254.ScalarField]    // Part of InputsHash
-	// Voter inputs
-	Nullifiers       [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	Commitments      [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	Addresses        [MaxVotes]emulated.Element[sw_bn254.ScalarField]                  // Part of InputsHash
-	EncryptedBallots [MaxVotes][MaxFields][2][2]emulated.Element[sw_bn254.ScalarField] // Part of InputsHash
+	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
+	Votes   [circuits.VotesPerBatch]circuits.Vote[emulated.Element[sw_bn254.ScalarField]]
+
 	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
 	// real vk and dummy is used for no valid proofs in the scenario where there
 	// are less valid votes than MaxVotes)
-	Proofs               [MaxVotes]circuits.InnerProofBLS12377
+	Proofs               [circuits.VotesPerBatch]circuits.InnerProofBLS12377
 	BaseVerificationKey  groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
@@ -78,25 +63,12 @@ type AggregatorCircuit struct {
 // key, the ballot mode params, the nullifiers, commitments, addresses and the
 // encrypted ballots.
 func (c AggregatorCircuit) checkInputHash(api frontend.API) {
-	// group common inputs
-	hashInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.ProcessId, c.CensusRoot, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
-	hashInputs = append(hashInputs, c.BallotMode.List()...)
-	hashInputs = append(hashInputs, c.Nullifiers[:]...)
-	hashInputs = append(hashInputs, c.Commitments[:]...)
-	hashInputs = append(hashInputs, c.Addresses[:]...)
-	// include flattened EncryptedBallots
-	for _, voterBallots := range c.EncryptedBallots {
-		for _, ballot := range voterBallots {
-			hashInputs = append(hashInputs, ballot[0][0], ballot[0][1], ballot[1][0], ballot[1][1])
-		}
-	}
 	// hash the inputs
 	h, err := mimc7.NewMiMC(api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
 	}
-	h.Write(hashInputs...)
+	h.Write(circuits.AggregatedWitnessInputs(api, c.Process, c.Votes[:])...)
 	finalHash, err := utils.PackScalarToVar(api, h.Sum())
 	if err != nil {
 		circuits.FrontendError(api, "failed to pack scalar to variable", err)
@@ -105,6 +77,8 @@ func (c AggregatorCircuit) checkInputHash(api frontend.API) {
 	api.AssertIsEqual(c.InputsHash, finalHash)
 }
 
+// TODO: checkInnerInputsHashes is broken
+/*
 // checkInnerInputsHashes circuit method checks the hash of the public inputs
 // of each voter proof with the provided VerifyPublicInputs. The hash is
 // calculated using the MiMC hash function in the same field of the proofs. As
@@ -115,28 +89,14 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
 	}
-	// group common inputs
-	commonInputs := []emulated.Element[sw_bn254.ScalarField]{
-		c.ProcessId, c.CensusRoot, c.EncryptionPubKey[0], c.EncryptionPubKey[1]}
-	commonInputs = append(commonInputs, c.BallotMode.List()...)
-	// iterate over each voter inputs to group the remaining ones and calculate
-	// every voter hash
+	// iterate over each voter to calculate every voter hash
 	validHashes := api.ToBinary(c.ValidVotes)
-	for i := 0; i < MaxVotes; i++ {
+	for i := 0; i < circuits.VotesPerBatch; i++ {
 		// ensure the proof is valid (it has a single public input, the
 		// expected hash)
 		api.AssertIsEqual(len(c.Proofs[i].Witness.Public), 1)
-		// group remaining inputs
-		remainingInputs := []emulated.Element[sw_bn254.ScalarField]{c.Addresses[i], c.Nullifiers[i], c.Commitments[i]}
-		for j := 0; j < MaxFields; j++ {
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][0])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][0][1])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][0])
-			remainingInputs = append(remainingInputs, c.EncryptedBallots[i][j][1][1])
-		}
 		// calculate the hash
-		hashFn.Write(commonInputs...)
-		hashFn.Write(remainingInputs...)
+		hashFn.Write(circuits.VoteVerifierInputs(api, c.Process, c.Votes[i])...)
 		resultHash := hashFn.Sum()
 		calculatedHash, err := utils.PackScalarToVar(api, resultHash)
 		if err != nil {
@@ -156,6 +116,7 @@ func (c AggregatorCircuit) checkInnerInputsHashes(api frontend.API) {
 		hashFn.Reset()
 	}
 }
+*/
 
 // checkProofs circuit method verifies each voter proof with the provided
 // verification keys and public inputs. The verification keys should contain

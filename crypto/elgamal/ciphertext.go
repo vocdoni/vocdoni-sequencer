@@ -9,72 +9,85 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 )
 
-// NumCiphertexts represents how many Ciphertexts are grouped
-const NumCiphertexts = gelgamal.NumCiphertexts
-
-// sizes in bytes needed to serialize Ciphertexts
+// sizes in bytes needed to serialize a Ballot
 const (
-	sizeCoord       = 32
-	sizePoint       = 2 * sizeCoord
-	SizeCiphertext  = 2 * sizePoint
-	SizeCiphertexts = NumCiphertexts * SizeCiphertext
+	sizeCoord            = circuits.SerializedFieldSize
+	sizePoint            = 2 * sizeCoord
+	sizeCiphertext       = 2 * sizePoint
+	SerializedBallotSize = circuits.FieldsPerBallot * sizeCiphertext
 )
 
-type Ciphertexts [NumCiphertexts]*Ciphertext
+// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and C2.Y coords
+const BigIntsPerCiphertext = 4
 
-func NewCiphertexts(curve ecc.Point) *Ciphertexts {
-	cs := &Ciphertexts{}
-	for i := range cs {
-		cs[i] = NewCiphertext(curve)
+type Ballot [circuits.FieldsPerBallot]*Ciphertext
+
+func NewBallot(curve ecc.Point) *Ballot {
+	z := &Ballot{}
+	for i := range z {
+		z[i] = NewCiphertext(curve)
 	}
-	return cs
+	return z
 }
 
 // Encrypt encrypts a message using the public key provided as elliptic curve point.
 // The randomness k can be provided or nil to generate a new one.
-func (cs *Ciphertexts) Encrypt(message [NumCiphertexts]*big.Int, publicKey ecc.Point, k *big.Int) (*Ciphertexts, error) {
-	for i := range cs {
-		if _, err := cs[i].Encrypt(message[i], publicKey, k); err != nil {
+func (z *Ballot) Encrypt(message [circuits.FieldsPerBallot]*big.Int, publicKey ecc.Point, k *big.Int) (*Ballot, error) {
+	for i := range z {
+		if _, err := z[i].Encrypt(message[i], publicKey, k); err != nil {
 			return nil, err
 		}
 	}
-	return cs, nil
+	return z, nil
 }
 
-// Add adds two Ciphertexts and stores the result in the receiver, which is also returned.
-func (cs *Ciphertexts) Add(x, y *Ciphertexts) *Ciphertexts {
-	for i := range cs {
-		cs[i].Add(x[i], y[i])
+// Add adds two Ballots and stores the result in the receiver, which is also returned.
+func (z *Ballot) Add(x, y *Ballot) *Ballot {
+	for i := range z {
+		z[i].Add(x[i], y[i])
 	}
-	return cs
+	return z
+}
+
+// BigInts returns a slice with 8*4 BigInts, namely the coords of each Ciphertext
+// C1.X, C1.Y, C2.X, C2.Y as little-endian, in reduced twisted edwards form.
+func (z *Ballot) BigInts() []*big.Int {
+	list := []*big.Int{}
+	for _, z := range z {
+		c1x, c1y := z.C1.Point()
+		c2x, c2y := z.C2.Point()
+		list = append(list, c1x, c1y, c2x, c2y)
+	}
+	return list
 }
 
 // Serialize returns a slice of len N*4*32 bytes,
 // representing each Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian,
 // in reduced twisted edwards form.
-func (cs *Ciphertexts) Serialize() []byte {
+func (z *Ballot) Serialize() []byte {
 	var buf bytes.Buffer
-	for _, z := range cs {
+	for _, z := range z {
 		buf.Write(z.Serialize())
 	}
 	return buf.Bytes()
 }
 
-// Deserialize reconstructs a Ciphertexts from a slice of bytes.
+// Deserialize reconstructs a Ballot from a slice of bytes.
 // The input must be of len N*4*32 bytes (otherwise it returns an error),
 // representing each Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian,
 // in reduced twisted edwards form.
-func (cs *Ciphertexts) Deserialize(data []byte) error {
+func (z *Ballot) Deserialize(data []byte) error {
 	// Validate the input length
-	if len(data) != SizeCiphertexts {
-		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), SizeCiphertexts)
+	if len(data) != SerializedBallotSize {
+		return fmt.Errorf("invalid input length for Ballot: got %d bytes, expected %d bytes", len(data), SerializedBallotSize)
 	}
-	for i := range cs {
-		err := cs[i].Deserialize(data[i*SizeCiphertext : (i+1)*SizeCiphertext])
+	for i := range z {
+		err := z[i].Deserialize(data[i*sizeCiphertext : (i+1)*sizeCiphertext])
 		if err != nil {
 			return err
 		}
@@ -82,33 +95,33 @@ func (cs *Ciphertexts) Deserialize(data []byte) error {
 	return nil
 }
 
-// TODO: implement Marshal, Unmarshal, String for Ciphertexts
-// // Marshal converts Ciphertexts to a byte slice.
-// func (z *Ciphertexts) Marshal() ([]byte, error) {
+// TODO: implement Marshal, Unmarshal, String for Ballot
+// // Marshal converts Ballot to a byte slice.
+// func (z *Ballot) Marshal() ([]byte, error) {
 // 	return json.Marshal(z)
 // }
 
-// // Unmarshal populates Ciphertexts from a byte slice.
-// func (z *Ciphertexts) Unmarshal(data []byte) error {
+// // Unmarshal populates Ballot from a byte slice.
+// func (z *Ballot) Unmarshal(data []byte) error {
 // 	return json.Unmarshal(data, z)
 // }
 
-// // String returns a string representation of the Ciphertexts.
-// func (z *Ciphertexts) String() string {
+// // String returns a string representation of the Ballot.
+// func (z *Ballot) String() string {
 // 	if z == nil || z.C1 == nil || z.C2 == nil {
 // 		return "{C1: nil, C2: nil}"
 // 	}
 // 	return fmt.Sprintf("{C1: %s, C2: %s}", z.C1.String(), z.C2.String())
 // }
 
-// ToGnark returns cs as the struct used by gnark,
+// ToGnark returns z as the struct used by gnark,
 // with the points in reduced twisted edwards format
-func (cs *Ciphertexts) ToGnark() *gelgamal.Ciphertexts {
-	gcs := &gelgamal.Ciphertexts{}
-	for i := range cs {
-		gcs[i] = *cs[i].ToGnark()
+func (z *Ballot) ToGnark() *circuits.Ballot {
+	gz := &circuits.Ballot{}
+	for i := range z {
+		gz[i] = *z[i].ToGnark()
 	}
-	return gcs
+	return gz
 }
 
 // Ciphertext represents an ElGamal encrypted message with homomorphic properties.
@@ -171,8 +184,8 @@ func (z *Ciphertext) Serialize() []byte {
 // in reduced twisted edwards form.
 func (z *Ciphertext) Deserialize(data []byte) error {
 	// Validate the input length
-	if len(data) != SizeCiphertext {
-		return fmt.Errorf("invalid input length: got %d bytes, expected %d bytes", len(data), SizeCiphertext)
+	if len(data) != sizeCiphertext {
+		return fmt.Errorf("invalid input length for Ciphertext: got %d bytes, expected %d bytes", len(data), sizeCiphertext)
 	}
 
 	// Helper function to extract *big.Int from a serialized slice
