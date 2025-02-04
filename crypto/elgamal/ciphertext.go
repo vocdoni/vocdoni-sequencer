@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -122,6 +124,28 @@ func (z *Ballot) ToGnark() *circuits.Ballot {
 		gz[i] = *z[i].ToGnark()
 	}
 	return gz
+}
+
+// ToGnarkEmulatedBN254 returns z as the struct used by gnark,
+// with the points in reduced twisted edwards format
+// but as emulated.Element[sw_bn254.ScalarField] instead of frontend.Variable
+func (z *Ballot) ToGnarkEmulatedBN254() *circuits.EmulatedBallot[sw_bn254.ScalarField] {
+	eb := &circuits.EmulatedBallot[sw_bn254.ScalarField]{}
+	for i, z := range z {
+		c1x, c1y := z.C1.Point()
+		c2x, c2y := z.C2.Point()
+		eb[i] = circuits.EmulatedCiphertext[sw_bn254.ScalarField]{
+			C1: circuits.EmulatedPoint[sw_bn254.ScalarField]{
+				X: emulated.ValueOf[sw_bn254.ScalarField](c1x),
+				Y: emulated.ValueOf[sw_bn254.ScalarField](c1y),
+			},
+			C2: circuits.EmulatedPoint[sw_bn254.ScalarField]{
+				X: emulated.ValueOf[sw_bn254.ScalarField](c2x),
+				Y: emulated.ValueOf[sw_bn254.ScalarField](c2y),
+			},
+		}
+	}
+	return eb
 }
 
 // Ciphertext represents an ElGamal encrypted message with homomorphic properties.

@@ -212,7 +212,7 @@ func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
 func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
 	_, witness, proof, vk, err := dummy.Prove(
 		dummy.PlaceholderWithConstraints(0), dummy.Assignment(inputsHash),
-		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())
+		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField(), false)
 	if err != nil {
 		return nil, err
 	}

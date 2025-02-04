@@ -20,7 +20,7 @@ import (
 //	Ballot
 func CircomInputs(api frontend.API,
 	process Process[emulated.Element[sw_bn254.ScalarField]],
-	vote Vote[emulated.Element[sw_bn254.ScalarField]],
+	vote EmulatedVote[sw_bn254.ScalarField],
 	userWeight emulated.Element[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
@@ -31,7 +31,7 @@ func CircomInputs(api frontend.API,
 	inputs = append(inputs, process.EncryptionKey.Serialize()...)
 	inputs = append(inputs, vote.Nullifier)
 	inputs = append(inputs, vote.Commitment)
-	inputs = append(inputs, vote.Ballot.Serialize(api)...)
+	inputs = append(inputs, vote.Ballot.Serialize()...)
 	return inputs
 }
 
@@ -49,17 +49,17 @@ func CircomInputs(api frontend.API,
 //	Commitment
 func VoteVerifierInputs(api frontend.API,
 	process Process[emulated.Element[sw_bn254.ScalarField]],
-	vote Vote[emulated.Element[sw_bn254.ScalarField]],
+	vote EmulatedVote[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
 	inputs = append(inputs, process.ID)
 	inputs = append(inputs, process.CensusRoot)
-	inputs = append(inputs, process.BallotMode.Serialize()...)
 	inputs = append(inputs, process.EncryptionKey.Serialize()...)
-	inputs = append(inputs, vote.Nullifier)
-	inputs = append(inputs, vote.Ballot.Serialize(api)...)
+	inputs = append(inputs, process.BallotMode.Serialize()...)
 	inputs = append(inputs, vote.Address)
+	inputs = append(inputs, vote.Nullifier)
 	inputs = append(inputs, vote.Commitment)
+	inputs = append(inputs, vote.Ballot.Serialize()...)
 	return inputs
 }
 
