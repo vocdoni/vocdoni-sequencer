@@ -33,4 +33,7 @@ var (
 
 	ErrMarshalingServerJSONFailed = Error{Code: 50001, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("marshaling (server-side) JSON failed")}
 	ErrGenericInternalServerError = Error{Code: 50002, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("internal server error")}
+
+	ErrInvalidCensusID = Error{Code: 40020, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census ID")}
+	ErrCensusNotFound  = Error{Code: 40021, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("census not found")}
 )

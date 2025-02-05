@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
@@ -144,14 +145,14 @@ func (c *HTTPclient) Request(method string, jsonBody any, params []string, urlPa
 	}
 
 	// Log the request details, truncating body if large
-	log.Debugw("http client request",
+	log.Debugw("client request",
 		"type", method,
 		"url", u.String(),
 		"body", func() string {
 			if len(body) > 512 {
 				return string(body[:512]) + "..."
 			}
-			return string(body)
+			return strings.ReplaceAll(string(body), "\"", "")
 		}(),
 	)
 
@@ -179,11 +180,7 @@ func (c *HTTPclient) Request(method string, jsonBody any, params []string, urlPa
 		break
 	}
 
-	if err != nil {
-		return nil, 0, fmt.Errorf("http request ultimately failed after retries: %w", err)
-	}
 	defer resp.Body.Close()
-
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)

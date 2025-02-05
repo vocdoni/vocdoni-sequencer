@@ -61,8 +61,8 @@ func (c *Contracts) Process(processID []byte) (*types.Process, error) {
 	return contractProcess2Process(&process), nil
 }
 
-// MonitorProcessCreationByPolling monitors the creation of new processes by polling the ProcessRegistry contract every interval.
-func (c *Contracts) MonitorProcessCreationByPolling(ctx context.Context, interval time.Duration) (<-chan *types.Process, error) {
+// MonitorProcessCreation monitors the creation of new processes by polling the ProcessRegistry contract every interval.
+func (c *Contracts) MonitorProcessCreation(ctx context.Context, interval time.Duration) (<-chan *types.Process, error) {
 	ch := make(chan *types.Process)
 	go func() {
 		defer close(ch)
@@ -165,20 +165,20 @@ func contractProcess2Process(contractProcess *bindings.ProcessRegistryProcess) *
 		CostExponent:    contractProcess.BallotMode.CostExponent,
 	}
 	if contractProcess.BallotMode.MaxValue != nil {
-		mode.MaxValue = types.BigInt(*contractProcess.BallotMode.MaxValue)
+		mode.MaxValue = (*types.BigInt)(contractProcess.BallotMode.MaxValue)
 	}
 	if contractProcess.BallotMode.MinValue != nil {
-		mode.MinValue = types.BigInt(*contractProcess.BallotMode.MinValue)
+		mode.MinValue = (*types.BigInt)(contractProcess.BallotMode.MinValue)
 	}
 	if contractProcess.BallotMode.MaxTotalCost != nil {
-		mode.MaxTotalCost = types.BigInt(*contractProcess.BallotMode.MaxTotalCost)
+		mode.MaxTotalCost = (*types.BigInt)(contractProcess.BallotMode.MaxTotalCost)
 	}
 	if contractProcess.BallotMode.MinTotalCost != nil {
-		mode.MinTotalCost = types.BigInt(*contractProcess.BallotMode.MinTotalCost)
+		mode.MinTotalCost = (*types.BigInt)(contractProcess.BallotMode.MinTotalCost)
 	}
 	census := types.Census{
 		CensusRoot:   contractProcess.Census.CensusRoot[:],
-		MaxVotes:     contractProcess.Census.MaxVotes,
+		MaxVotes:     (*types.BigInt)(contractProcess.Census.MaxVotes),
 		CensusURI:    contractProcess.Census.CensusURI,
 		CensusOrigin: contractProcess.Census.CensusOrigin,
 	}
@@ -210,7 +210,7 @@ func process2ContractProcess(process *types.Process) *bindings.ProcessRegistryPr
 	}
 	census := bindings.ProcessRegistryCensus{
 		CensusRoot:   [32]byte{},
-		MaxVotes:     process.Census.MaxVotes,
+		MaxVotes:     process.Census.MaxVotes.MathBigInt(),
 		CensusURI:    process.Census.CensusURI,
 		CensusOrigin: process.Census.CensusOrigin,
 	}

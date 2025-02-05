@@ -8,28 +8,27 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-// ProcessMetadata retrieves the process metadata from the storage.
-// It returns nil metadata and ErrNotFound if the metadata is not found.
-func (s *Storage) ProcessMetadata(pid types.ProcessID) (*types.Metadata, error) {
-	artifact, err := s.getArtifact(metadataPrefix, pid.Marshal())
-	if err != nil {
+// Process retrieves the process data from the storage.
+// It returns nil data and ErrNotFound if the metadata is not found.
+func (s *Storage) Process(pid *types.ProcessID) (*types.Process, error) {
+	p := &types.Process{}
+	if err := s.getArtifact(processPrefix, pid.Marshal(), p); err != nil {
 		return nil, err
 	}
-	metadata, ok := artifact.(*types.Metadata)
-	if !ok {
-		return nil, fmt.Errorf("unexpected artifact type")
-	}
-	return metadata, nil
+	return p, nil
 }
 
 // SeProcess stores a process and its metadata into the storage.
-func (s *Storage) SetProcess(pid types.ProcessID, metadata *types.Metadata) error {
-	return s.setArtifact(metadataPrefix, pid.Marshal(), metadata)
+func (s *Storage) SetProcess(data *types.Process) error {
+	if data == nil {
+		return fmt.Errorf("nil process data")
+	}
+	return s.setArtifact(processPrefix, data.ID, data)
 }
 
 // ListProcesses returns the list of process IDs stored in the storage (by SetProcessMetadata) as a list of byte slices.
 func (s *Storage) ListProcesses() ([][]byte, error) {
-	pids, err := s.listArtifacts(metadataPrefix)
+	pids, err := s.listArtifacts(processPrefix)
 	if err != nil {
 		return nil, err
 	}

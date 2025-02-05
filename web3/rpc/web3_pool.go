@@ -101,7 +101,7 @@ func (nm *Web3Pool) AddEndpoint(uri string) (uint64, error) {
 	// check if the endpoint is an archive node or not
 	isArchive, err := isArchiveNode(ctx, client)
 	if err != nil {
-		log.Warnw("error checking if the web3 provider is an archive node", "chainID", chainID, "error", err)
+		log.Debugw("error checking if the web3 provider is an archive node", "chainID", chainID, "error", err)
 	}
 	// add the endpoint to the pool
 	endpoint := &Web3Endpoint{
