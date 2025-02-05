@@ -20,10 +20,6 @@ import (
 const (
 	censusDBprefix          = "cs_"
 	censusDBreferencePrefix = "cr_"
-	maxLevels               = 160
-
-	// KeyMaxLen is the maximum length of a census key in bytes.
-	KeyMaxLen = maxLevels / 8
 )
 
 var (
@@ -114,7 +110,7 @@ func (c *CensusDB) New(censusID uuid.UUID) (*CensusRef, error) {
 	// Prepare a new census reference.
 	ref := &CensusRef{
 		ID:        censusID,
-		MaxLevels: maxLevels,
+		MaxLevels: types.CensusTreeMaxLevels,
 		HashType:  string(defaultHashFunction.Type()),
 		LastUsed:  time.Now(),
 	}
@@ -122,7 +118,7 @@ func (c *CensusDB) New(censusID uuid.UUID) (*CensusRef, error) {
 	// Create the Merkle tree.
 	tree, err := arbo.NewTree(arbo.Config{
 		Database:     prefixeddb.NewPrefixedDatabase(c.db, censusPrefix(censusID)),
-		MaxLevels:    maxLevels,
+		MaxLevels:    types.CensusTreeMaxLevels,
 		HashFunction: defaultHashFunction,
 	})
 	tree.HashFunction().Type()

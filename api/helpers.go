@@ -20,9 +20,11 @@ func httpWriteJSON(w http.ResponseWriter, data interface{}) {
 	n, err := w.Write(jdata)
 	if err != nil {
 		log.Warnw("failed to write http response", "error", err)
+		return
 	}
 	if _, err := w.Write([]byte("\n")); err != nil {
 		log.Warnw("failed to write on response", "error", err)
+		return
 	}
 	log.Debugw("api response", "bytes", n, "data", strings.ReplaceAll(string(jdata), "\"", ""))
 }
