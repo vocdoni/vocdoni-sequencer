@@ -8,8 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type GenericMetadata map[string]string
-type MultilingualString map[string]string
+type (
+	GenericMetadata    map[string]string
+	MultilingualString map[string]string
+)
 
 type MediaMetadata struct {
 	Header string `json:"header" cbor:"0,keyasint,omitempty"`

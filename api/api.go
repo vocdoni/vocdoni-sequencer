@@ -96,7 +96,6 @@ func (a *API) registerHandlers() {
 	a.router.Delete(DeleteCensusEndpoint, a.deleteCensus)
 	log.Infow("register handler", "endpoint", GetCensusProofEndpoint, "method", "GET", "parameters", "id, key")
 	a.router.Get(GetCensusProofEndpoint, a.getCensusProof)
-
 }
 
 // bufPool is a pool of bytes.Buffer to reduce logger allocations.

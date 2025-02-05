@@ -2,6 +2,7 @@ package census
 
 import (
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vocdoni/arbo"
@@ -12,6 +13,8 @@ import (
 type CensusRef struct {
 	ID          uuid.UUID
 	MaxLevels   int
+	HashType    string
+	LastUsed    time.Time
 	currentRoot []byte
 	tree        *arbo.Tree `gob:"-"`
 	// treeMu protects all access to the underlying Merkle tree.

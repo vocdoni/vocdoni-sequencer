@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/vocdoni/arbo"
@@ -74,50 +75,6 @@ func NewCensusDB(db db.Database) *CensusDB {
 		updateRootChan: make(chan *updateRootRequest, 100),
 	}
 
-	// Scan the persistent DB for all census references.
-	refDB := prefixeddb.NewPrefixedDatabase(db, []byte(censusDBreferencePrefix))
-	_ = refDB.Iterate(nil, func(k, v []byte) bool {
-		// Expect key: censusDBreferencePrefix + censusID (16 bytes)
-		if len(k) != len(censusDBreferencePrefix)+16 {
-			return true
-		}
-		censusID, err := uuid.FromBytes(k[len(censusDBreferencePrefix):])
-		if err != nil {
-			return true
-		}
-		var ref CensusRef
-		if err := gob.NewDecoder(bytes.NewReader(v)).Decode(&ref); err != nil {
-			return true
-		}
-		// Build the Merkle tree.
-		tree, err := arbo.NewTree(arbo.Config{
-			Database:     prefixeddb.NewPrefixedDatabase(db, censusPrefix(censusID)),
-			MaxLevels:    ref.MaxLevels,
-			HashFunction: defaultHashFunction,
-		})
-		if err != nil {
-			return true
-		}
-		ref.tree = tree
-		// Compute current root.
-		root, err := tree.Root()
-		if err != nil {
-			return true
-		}
-		ref.currentRoot = root
-
-		// Prepare the root update channel.
-		ref.updateRootRequest = c.updateRootChan
-
-		c.loadedCensus[censusID] = &ref
-		// Add to the in‑memory index.
-		keyStr := rootKey(root)
-		if _, exists := c.rootIndex[keyStr]; !exists {
-			c.rootIndex[keyStr] = censusID
-		}
-		return true
-	})
-
 	// Start the root update worker.
 	go func() {
 		for req := range c.updateRootChan {
@@ -158,25 +115,17 @@ func (c *CensusDB) New(censusID uuid.UUID) (*CensusRef, error) {
 	ref := &CensusRef{
 		ID:        censusID,
 		MaxLevels: maxLevels,
-	}
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(ref); err != nil {
-		return nil, err
+		HashType:  string(defaultHashFunction.Type()),
+		LastUsed:  time.Now(),
 	}
 
-	// Write to the persistent database.
-	wtx := c.db.WriteTx()
-	defer wtx.Discard()
-
-	if err := wtx.Set(key, buf.Bytes()); err != nil {
-		return nil, err
-	}
-
+	// Create the Merkle tree.
 	tree, err := arbo.NewTree(arbo.Config{
 		Database:     prefixeddb.NewPrefixedDatabase(c.db, censusPrefix(censusID)),
 		MaxLevels:    maxLevels,
-		HashFunction: arbo.HashFunctionMiMC_BN254,
+		HashFunction: defaultHashFunction,
 	})
+	tree.HashFunction().Type()
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +140,11 @@ func (c *CensusDB) New(censusID uuid.UUID) (*CensusRef, error) {
 	// Prepare the root update channel.
 	ref.updateRootRequest = c.updateRootChan
 
+	// Store the reference in the database.
+	if err := c.writeReference(ref); err != nil {
+		return nil, err
+	}
+
 	// Add to the in‑memory maps.
 	c.loadedCensus[censusID] = ref
 	rk := rootKey(root)
@@ -198,13 +152,22 @@ func (c *CensusDB) New(censusID uuid.UUID) (*CensusRef, error) {
 		c.rootIndex[rk] = censusID
 	}
 
-	if err := wtx.Commit(); err != nil {
-		delete(c.loadedCensus, censusID)
-		delete(c.rootIndex, rk)
-		return nil, err
-	}
-
 	return ref, nil
+}
+
+// writeReference writes a census reference to the database.
+func (c *CensusDB) writeReference(ref *CensusRef) error {
+	key := append([]byte(censusDBreferencePrefix), ref.ID[:]...)
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(ref); err != nil {
+		return err
+	}
+	wtx := c.db.WriteTx()
+	defer wtx.Discard()
+	if err := wtx.Set(key, buf.Bytes()); err != nil {
+		return err
+	}
+	return wtx.Commit()
 }
 
 // HashAndTrunk computes the hash of a key and truncates it to the required length.
@@ -277,7 +240,7 @@ func (c *CensusDB) loadCensusRef(censusID uuid.UUID) (*CensusRef, error) {
 	tree, err := arbo.NewTree(arbo.Config{
 		Database:     prefixeddb.NewPrefixedDatabase(c.db, censusPrefix(censusID)),
 		MaxLevels:    ref.MaxLevels,
-		HashFunction: arbo.HashFunctionMiMC_BN254,
+		HashFunction: defaultHashFunction,
 	})
 	if err != nil {
 		return nil, err
@@ -288,12 +251,14 @@ func (c *CensusDB) loadCensusRef(censusID uuid.UUID) (*CensusRef, error) {
 		return nil, err
 	}
 	ref.currentRoot = root
-
 	ref.updateRootRequest = c.updateRootChan
 
-	if existing, exists := c.loadedCensus[censusID]; exists {
-		return existing, nil
+	// Update the LastUsed timestamp and write back to the database.
+	ref.LastUsed = time.Now()
+	if err := c.writeReference(&ref); err != nil {
+		return nil, err
 	}
+
 	c.loadedCensus[censusID] = &ref
 	rk := rootKey(root)
 	if _, exists := c.rootIndex[rk]; !exists {
