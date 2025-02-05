@@ -101,7 +101,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		if err != nil {
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
-
 		// transform siblings to gnark frontend.Variable
 		emulatedSiblings := [circuits.CensusProofMaxLevels]emulated.Element[sw_bn254.ScalarField]{}
 		for j, s := range testCensus.Proofs[i].Siblings {
@@ -119,7 +118,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			voterProof.Nullifier,
 			voterProof.Commitment)
 		hashInputs = append(hashInputs,
-			voterProof.PlainEcryptedFields...)
+			voterProof.EncryptedFields.BigInts()...)
 		// hash the inputs to generate the inputs hash
 		inputsHash, err := mimc7.Hash(hashInputs, nil)
 		if err != nil {
@@ -129,13 +128,13 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		// compose circuit placeholders
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
-			InputsHash: inputsHash,
+			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
-			Vote: circuits.Vote[emulated.Element[sw_bn254.ScalarField]]{
+			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
 				Address:    emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
 				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 				Commitment: emulated.ValueOf[sw_bn254.ScalarField](voterProof.Commitment),
-				Ballot:     *voterProof.EncryptedFields.ToGnark(),
+				Ballot:     *voterProof.EncryptedFields.ToGnarkEmulatedBN254(),
 			},
 			UserWeight: emulated.ValueOf[sw_bn254.ScalarField](circuits.MockWeight),
 			Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
