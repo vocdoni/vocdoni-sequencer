@@ -149,8 +149,8 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
 	var staleKeys [][]byte
 	if err := rd.Iterate(nil, func(k, v []byte) bool {
-		r, err := decodeReservation(v)
-		if err != nil {
+		r := &reservationRecord{}
+		if err := decodeArtifact(v, r); err != nil {
 			staleKeys = append(staleKeys, append([]byte(nil), k...))
 			return true
 		}
@@ -180,7 +180,7 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 }
 
 func (s *Storage) setReservation(prefix, key []byte) error {
-	val, err := encodeReservation(&reservationRecord{Timestamp: time.Now().Unix()})
+	val, err := encodeArtifact(&reservationRecord{Timestamp: time.Now().Unix()})
 	if err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ var (
 	// ErrKeyNotFound is returned when a key is not found in the Merkle tree.
 	ErrKeyNotFound = fmt.Errorf("key not found")
 
-	defaultHashFunction = arbo.HashFunctionMiMC_BN254
+	defaultHashFunction = arbo.HashFunctionMiMC_BLS12_377
 )
 
 // updateRootRequest is used to update the root of a census tree.
