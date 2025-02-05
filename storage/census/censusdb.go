@@ -345,6 +345,22 @@ func (c *CensusDB) ProofByRoot(root, leafKey []byte) (*types.CensusProof, error)
 	}, nil
 }
 
+// SizeByRoot returns the number of leaves in the Merkle tree with the given root.
+func (c *CensusDB) SizeByRoot(root []byte) (int, error) {
+	rk := rootKey(root)
+	c.mu.RLock()
+	censusID, exists := c.rootIndex[rk]
+	c.mu.RUnlock()
+	if !exists {
+		return 0, fmt.Errorf("no census found with the provided root")
+	}
+	ref, err := c.Load(censusID)
+	if err != nil {
+		return 0, err
+	}
+	return ref.Size(), nil
+}
+
 // updateRoot recalculates the Merkle tree root for a given census and updates the in‑memory index.
 // It acquires the CensusRef's treeMu before reading or writing currentRoot.
 func (c *CensusDB) updateRoot(censusID uuid.UUID, newRoot []byte) error {

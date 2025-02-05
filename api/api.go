@@ -69,7 +69,7 @@ func (a *API) registerHandlers() {
 	// - POST /census/participants?id=<uuid>: Parameters: id
 	// - GET /census/participants?id=<uuid>: Parameters: id
 	// - GET /census/root?id=<uuid>: Parameters: id
-	// - GET /census/size?id=<uuid>: Parameters: id
+	// - GET /census/size?id=<uuid>|root=<hex>: Parameters: id or root
 	// - DELETE /census?id=<uuid>: Parameters: id
 	// - GET /census/proof?root=<hex>&key=<key>: Parameters: id, key
 	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")

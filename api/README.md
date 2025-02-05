@@ -194,7 +194,9 @@ Gets the Merkle root of a census.
 Gets the number of participants in a census.
 
 **URL Parameters**:
+Accepts one of both:
 - id: Census UUID
+- root: Census merkle root (hex encoded)
 
 **Response Body**:
 ```json

@@ -135,20 +135,40 @@ func (a *API) getCensusRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getCensusSize(w http.ResponseWriter, r *http.Request) {
-	censusID, err := uuid.Parse(r.URL.Query().Get("id"))
-	if err != nil {
-		ErrInvalidCensusID.WithErr(err).Write(w)
-		return
-	}
+	rootStr := r.URL.Query().Get("root")
+	idStr := r.URL.Query().Get("id")
+	size := 0
+	if idStr != "" {
+		censusID, err := uuid.Parse(r.URL.Query().Get("id"))
+		if err != nil {
+			ErrInvalidCensusID.WithErr(err).Write(w)
+			return
+		}
 
-	ref, err := a.storage.CensusDB().Load(censusID)
-	if err != nil {
-		ErrGenericInternalServerError.WithErr(err).Write(w)
+		ref, err := a.storage.CensusDB().Load(censusID)
+		if err != nil {
+			ErrGenericInternalServerError.WithErr(err).Write(w)
+			return
+		}
+		size = ref.Size()
+	} else if rootStr != "" {
+		root, err := hex.DecodeString(rootStr)
+		if err != nil {
+			ErrInvalidCensusID.WithErr(err).Write(w)
+			return
+		}
+		size, err = a.storage.CensusDB().SizeByRoot(root)
+		if err != nil {
+			ErrGenericInternalServerError.WithErr(err).Write(w)
+			return
+		}
+	} else {
+		ErrInvalidCensusID.Write(w)
 		return
 	}
 
 	httpWriteJSON(w, map[string]interface{}{
-		"size": ref.Size(),
+		"size": size,
 	})
 }
 
