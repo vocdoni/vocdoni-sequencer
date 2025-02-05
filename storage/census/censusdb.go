@@ -335,11 +335,13 @@ func (c *CensusDB) ProofByRoot(root, leafKey []byte) (*types.CensusProof, error)
 	if !inclusion {
 		return nil, ErrKeyNotFound
 	}
+
 	return &types.CensusProof{
 		Root:     root,
 		Key:      key,
 		Value:    value,
 		Siblings: siblings,
+		Weight:   (*types.BigInt)(arbo.BytesToBigInt(value)),
 	}, nil
 }
 

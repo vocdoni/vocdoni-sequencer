@@ -85,6 +85,7 @@ type CensusProof struct {
 	Key      HexBytes `json:"key"`
 	Value    HexBytes `json:"value"`
 	Siblings HexBytes `json:"siblings"`
+	Weight   *BigInt  `json:"weight"`
 }
 
 type OrganizationInfo struct {

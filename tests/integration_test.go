@@ -15,13 +15,13 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
-	"github.com/vocdoni/vocdoni-z-sandbox/util"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3"
 )
 
-func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant) {
+func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant, []*ethereum.SignKeys) {
 	// Create a new census
 	body, code, err := cli.Request(http.MethodPost, nil, nil, "census")
 	c.Assert(err, qt.IsNil)
@@ -32,13 +32,19 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 	c.Assert(err, qt.IsNil)
 
 	// Generate random participants
+	signers := []*ethereum.SignKeys{}
 	censusParticipants := api.CensusParticipants{Participants: []*api.CensusParticipant{}}
 	for i := 0; i < size; i++ {
-		key := util.RandomBytes(30)
+		signer := ethereum.NewSignKeys()
+		if err := signer.Generate(); err != nil {
+			c.Fatalf("failed to generate signer: %v", err)
+		}
+		key := signer.Address().Bytes()
 		censusParticipants.Participants = append(censusParticipants.Participants, &api.CensusParticipant{
 			Key:    key,
 			Weight: new(types.BigInt).SetUint64(1),
 		})
+		signers = append(signers, signer)
 	}
 
 	// Add participants to census
@@ -55,10 +61,10 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 	err = json.NewDecoder(bytes.NewReader(body)).Decode(&rootResp)
 	c.Assert(err, qt.IsNil)
 
-	return rootResp.Root, censusParticipants.Participants
+	return rootResp.Root, censusParticipants.Participants, signers
 }
 
-func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byte) []byte {
+func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byte) *types.CensusProof {
 	// Get proof for the key
 	body, code, err := cli.Request(http.MethodGet, nil, []string{
 		"root", hex.EncodeToString(root),
@@ -71,7 +77,7 @@ func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byt
 	err = json.NewDecoder(bytes.NewReader(body)).Decode(&proof)
 	c.Assert(err, qt.IsNil)
 
-	return proof.Siblings
+	return &proof
 }
 
 func init() {
@@ -97,11 +103,17 @@ func TestIntegration(t *testing.T) {
 		c := qt.New(t)
 
 		// Create census with 10 participants
-		root, participants := createCensus(c, cli, 10)
+		root, participants, signers := createCensus(c, cli, 100)
 
 		// Generate proof for first participant
 		proof := generateCensusProof(c, cli, root, participants[0].Key)
 		c.Assert(proof, qt.Not(qt.IsNil))
+		c.Assert(proof.Siblings, qt.IsNotNil)
+
+		// Check the proof key is the same as the participant key and signer address
+		qt.Assert(t, proof.Key.String(), qt.DeepEquals, participants[0].Key.String())
+		qt.Assert(t, string(proof.Key), qt.DeepEquals, string(signers[0].Address().Bytes()))
+
 		ballotMode := types.BallotMode{
 			MaxCount:        2,
 			MaxValue:        new(types.BigInt).SetUint64(100),
