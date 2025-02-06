@@ -18,7 +18,6 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
-	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
@@ -121,8 +120,8 @@ func EncryptBallotFieldsForTest(fields [circuits.FieldsPerBallot]*big.Int, n int
 	plainCipherfields := []*big.Int{}
 	for i := 0; i < n; i++ {
 		if i < len(fields) {
-			c1X, c1Y := z[i].C1.Point()
-			c2X, c2Y := z[i].C2.Point()
+			c1X, c1Y := z.Ciphertexts[i].C1.Point()
+			c2X, c2Y := z.Ciphertexts[i].C2.Point()
 			plainCipherfields = append(plainCipherfields, c1X, c1Y, c2X, c2Y)
 		} else {
 			plainCipherfields = append(plainCipherfields, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0))
@@ -189,7 +188,8 @@ type VoterProofResult struct {
 	Commitment          *big.Int
 	EncryptedFields     *elgamal.Ballot
 	PlainEcryptedFields []*big.Int
-	Proof               *parser.GnarkRecursionProof
+	Proof               string
+	PubInputs           string
 	InputsHash          *big.Int
 }
 
@@ -261,11 +261,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		return nil, err
 	}
 	// create circom proof and public signals
-	circomProof, pubSignals, err := CompileAndGenerateProofForTest(bCircomInputs)
-	if err != nil {
-		return nil, err
-	}
-	proof, err := circuits.Circom2GnarkProofForRecursion(TestCircomVerificationKey, circomProof, pubSignals)
+	circomProof, circomPubInputs, err := CompileAndGenerateProofForTest(bCircomInputs)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +272,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		Commitment:          commitment,
 		EncryptedFields:     ballot,
 		PlainEcryptedFields: plainBallot,
-		Proof:               proof,
+		Proof:               circomProof,
+		PubInputs:           circomPubInputs,
 		InputsHash:          circomInputsHash,
 	}, nil
 }

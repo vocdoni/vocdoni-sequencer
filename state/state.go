@@ -7,6 +7,7 @@ import (
 
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/db"
@@ -17,7 +18,7 @@ var (
 	// HashFunc is the hash function used in the state tree.
 	HashFunc = arbo.HashFunctionMiMC_BN254
 	// Curve is the curve used for the encryption
-	Curve = curves.New(curves.CurveTypeBabyJubJubGnark)
+	Curve = curves.New(bjj.CurveType)
 )
 
 var (

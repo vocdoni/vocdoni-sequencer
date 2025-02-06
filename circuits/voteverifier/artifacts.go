@@ -9,6 +9,7 @@ import (
 // Artifacts contains the circuit artifacts for the vote verifier circuit,
 // which includes the proving and verification keys.
 var Artifacts = circuits.NewCircuitArtifacts(
+	nil, 
 	&circuits.Artifact{
 		RemoteURL: config.VoteVerifierProvingKeyURL,
 		Hash:      types.HexStringToHexBytes(config.VoteVerifierProvingKeyHash),

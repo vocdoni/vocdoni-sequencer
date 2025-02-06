@@ -13,6 +13,8 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 )
 
+const CurveType = "bn254"
+
 var Generator bn254.G1Jac
 
 func init() {
@@ -123,4 +125,8 @@ func (g *G1) SetPoint(x, y *big.Int) curve.Point {
 	g.inner.X.SetBigInt(x)
 	g.inner.Y.SetBigInt(y)
 	return g
+}
+
+func (g *G1) Type() string {
+	return CurveType
 }

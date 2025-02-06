@@ -12,6 +12,8 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
+const CurveType = "bjj_iden3"
+
 // BJJ is the affine representation of the BabyJubJub group element.
 type BJJ struct {
 	inner *babyjubjub.Point
@@ -128,4 +130,8 @@ func (g *BJJ) SetPoint(x, y *big.Int) curve.Point {
 	g.inner.X = g.inner.X.Set(x)
 	g.inner.Y = g.inner.Y.Set(y)
 	return g
+}
+
+func (g *BJJ) Type() string {
+	return CurveType
 }

@@ -74,6 +74,9 @@ type Point interface {
 
 	// SetPoint sets the X and Y coordinates of the elliptic curve element. Modifies the receiver.
 	SetPoint(x, y *big.Int) Point
+
+	// Type returns the type of the elliptic curve element.
+	Type() string
 }
 
 // PointEC represents a point on an elliptic curve in affine coordinates.

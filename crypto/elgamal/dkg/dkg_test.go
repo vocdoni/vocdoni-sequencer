@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_iden3"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
@@ -23,7 +24,7 @@ func TestDKG(t *testing.T) {
 	c := qt.New(t)
 
 	// Initialize curve
-	curvePoint := curves.New(curves.CurveTypeBabyJubJubIden3)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Initialize participants
 	participantIDs := []int{1, 2, 3, 4, 5}

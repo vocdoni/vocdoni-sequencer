@@ -76,13 +76,15 @@ func (a *API) registerHandlers() {
 	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		httpWriteOK(w)
 	})
+	// processes endpoints
 	log.Infow("register handler", "endpoint", ProcessesEndpoint, "method", "POST")
-	a.router.Post(ProcessEndpoint, a.newProcess)
+	a.router.Post(ProcessesEndpoint, a.newProcess)
 	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
 	a.router.Get(ProcessEndpoint, a.process)
+	// votes endpoints
 	log.Infow("register handler", "endpoint", VotesEndpoint, "method", "POST")
 	a.router.Post(VotesEndpoint, a.newVote)
-	// Census endpoints
+	// census endpoints
 	log.Infow("register handler", "endpoint", NewCensusEndpoint, "method", "POST")
 	a.router.Post(NewCensusEndpoint, a.newCensus)
 	log.Infow("register handler", "endpoint", AddCensusParticipantsEndpoint, "method", "POST", "parameters", "id")

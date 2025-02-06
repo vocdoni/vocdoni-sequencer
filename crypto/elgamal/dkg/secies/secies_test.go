@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
 
 func TestKeyGeneration(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	se, err := New(nil, curvePoint, nil)
 	c.Assert(err, qt.IsNil)
@@ -26,7 +27,7 @@ func TestKeyGeneration(t *testing.T) {
 
 func TestEncryptionDecryption(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -66,7 +67,7 @@ func TestEncryptionDecryption(t *testing.T) {
 
 func TestDecryptionWithWrongPrivateKey(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -95,7 +96,7 @@ func TestDecryptionWithWrongPrivateKey(t *testing.T) {
 
 func TestDecryptionWithMalformedCiphertext(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -131,7 +132,7 @@ func TestDecryptionWithMalformedCiphertext(t *testing.T) {
 
 func TestEncryptDecryptWithMaxMessage(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -156,7 +157,7 @@ func TestEncryptDecryptWithMaxMessage(t *testing.T) {
 
 func TestEncryptDecryptRandomMessages(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate recipient keys
 	recipient, err := New(nil, curvePoint, nil)
@@ -187,7 +188,7 @@ func TestEncryptDecryptRandomMessages(t *testing.T) {
 
 func TestEncryptWithNilPrivateKey(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Create a recipient with nil private key (should generate keys)
 	se, err := New(nil, curvePoint, nil)
@@ -198,7 +199,7 @@ func TestEncryptWithNilPrivateKey(t *testing.T) {
 
 func TestPublicKeyMarshaling(t *testing.T) {
 	c := qt.New(t)
-	curvePoint := curves.New(curves.CurveTypeBabyJubJub)
+	curvePoint := curves.New(bjj.CurveType)
 
 	// Generate keys
 	se, err := New(nil, curvePoint, nil)

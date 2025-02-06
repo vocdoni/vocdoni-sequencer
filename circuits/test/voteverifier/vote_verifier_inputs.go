@@ -126,6 +126,10 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		}
 		inputsHashes = append(inputsHashes, inputsHash)
 		// compose circuit placeholders
+		recursiveProof, err := circuits.Circom2GnarkProofForRecursion(ballottest.TestCircomVerificationKey, voterProof.Proof, voterProof.PubInputs)
+		if err != nil {
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+		}
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
@@ -157,9 +161,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			},
 			// circom proof
 			CircomProof: circuits.InnerProofBN254{
-				VK:      voterProof.Proof.Vk,
-				Proof:   voterProof.Proof.Proof,
-				Witness: voterProof.Proof.PublicInputs,
+				VK:      recursiveProof.Vk,
+				Proof:   recursiveProof.Proof,
+				Witness: recursiveProof.PublicInputs,
 			},
 		})
 	}

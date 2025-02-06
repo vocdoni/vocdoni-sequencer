@@ -23,25 +23,25 @@ type EncryptionKeys struct {
 }
 
 type VerifiedBallot struct {
-	ProcessID       types.HexBytes      `json:"processId"`
-	VoterWeight     *big.Int            `json:"voterWeight"`
-	Nullifier       types.HexBytes      `json:"nullifier"`
-	Commitment      types.HexBytes      `json:"commitment"`
-	EncryptedBallot elgamal.Ciphertexts `json:"encryptedBallot"`
-	Address         types.HexBytes      `json:"address"`
-	Proof           groth16.Proof       `json:"proof"`
+	ProcessID       types.HexBytes `json:"processId"`
+	VoterWeight     *big.Int       `json:"voterWeight"`
+	Nullifier       types.HexBytes `json:"nullifier"`
+	Commitment      types.HexBytes `json:"commitment"`
+	EncryptedBallot elgamal.Ballot `json:"encryptedBallot"`
+	Address         types.HexBytes `json:"address"`
+	Proof           groth16.Proof  `json:"proof"`
 }
 
 type Ballot struct {
 	ProcessID        types.HexBytes             `json:"processId"`
 	VoterWeight      *big.Int                   `json:"voterWeight"`
-	EncryptedBallot  elgamal.Ciphertexts        `json:"encryptedBallot"`
+	EncryptedBallot  elgamal.Ballot             `json:"encryptedBallot"`
 	Nullifier        types.HexBytes             `json:"nullifier"`
 	Commitment       types.HexBytes             `json:"commitment"`
 	Address          types.HexBytes             `json:"address"`
 	BallotInputsHash types.HexBytes             `json:"ballotInputsHash"`
 	BallotProof      parser.GnarkRecursionProof `json:"ballotProof"`
-	Signature        types.HexBytes             `json:"signature"`
+	Signature        types.BallotSignature      `json:"signature"`
 	CensusProof      types.CensusProof          `json:"censusProof"`
 }
 

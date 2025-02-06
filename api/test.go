@@ -7,6 +7,7 @@ import (
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 var tree *arbo.Tree
@@ -17,7 +18,7 @@ func init() {
 		var err error
 		tree, err = arbo.NewTree(arbo.Config{
 			Database:     memdb.New(),
-			MaxLevels:    state.MaxLevels,
+			MaxLevels:    types.CensusTreeMaxLevels,
 			HashFunction: state.HashFunc,
 		})
 		if err != nil {

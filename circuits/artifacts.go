@@ -94,16 +94,18 @@ func (k *Artifact) Load(ctx context.Context) error {
 // zkSNARK circuit. It provides a method to load the keys from the local cache
 // or download them from the remote URLs provided.
 type CircuitArtifacts struct {
-	provingKey   *Artifact
-	verifyingKey *Artifact
+	circuitDefinition *Artifact
+	provingKey        *Artifact
+	verifyingKey      *Artifact
 }
 
 // NewCircuitArtifacts creates a new CircuitArtifacts struct with the proving
 // and verifying keys provided.
-func NewCircuitArtifacts(provingKey, verifyingKey *Artifact) *CircuitArtifacts {
+func NewCircuitArtifacts(circuit, provingKey, verifyingKey *Artifact) *CircuitArtifacts {
 	return &CircuitArtifacts{
-		provingKey:   provingKey,
-		verifyingKey: verifyingKey,
+		circuitDefinition: circuit,
+		provingKey:        provingKey,
+		verifyingKey:      verifyingKey,
 	}
 }
 
@@ -113,6 +115,11 @@ func NewCircuitArtifacts(provingKey, verifyingKey *Artifact) *CircuitArtifacts {
 func (ca *CircuitArtifacts) LoadAll() error {
 	ctx, cancel := context.WithTimeout(context.Background(), downloadCircuitsTimeout)
 	defer cancel()
+	if ca.circuitDefinition != nil {
+		if err := ca.circuitDefinition.Load(ctx); err != nil {
+			return fmt.Errorf("error loading circuit definition: %w", err)
+		}
+	}
 	if ca.provingKey != nil {
 		if err := ca.provingKey.Load(ctx); err != nil {
 			return fmt.Errorf("error loading proving key: %w", err)
@@ -124,6 +131,15 @@ func (ca *CircuitArtifacts) LoadAll() error {
 		}
 	}
 	return nil
+}
+
+// CircuitDefinition returns the content of the circuit definition as types.HexBytes.
+// If the circuit definition is not loaded, it returns nil.
+func (ca *CircuitArtifacts) CircuitDefinition() types.HexBytes {
+	if ca.circuitDefinition == nil {
+		return nil
+	}
+	return ca.circuitDefinition.Content
 }
 
 // ProvingKey returns the content of the proving key as types.HexBytes. If the

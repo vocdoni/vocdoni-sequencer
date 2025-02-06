@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -27,6 +28,6 @@ func (s *Storage) EncryptionKeys(pid types.ProcessID) (ecc.Point, *big.Int, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	pubKey := curves.New(curves.CurveTypeBN254).SetPoint(eks.X, eks.Y)
+	pubKey := curves.New(bjj.CurveType).SetPoint(eks.X, eks.Y)
 	return pubKey, eks.PrivateKey, nil
 }

@@ -10,17 +10,32 @@ import (
 // circom circuit.
 const BallotProofNPubInputs = 1
 
+// Circom2GnarkProof function is a wrapper to convert a circom proof to a gnark
+// proof, it receives the circom proof and the public signals as strings, as
+// snarkjs returns them. Then, it parses the inputs to the gnark format. It
+// returns a parser.CircomProof and a list of public signals or an error.
+func Circom2GnarkProof(circomProof, pubSignals string) (*parser.CircomProof, []string, error) {
+	// transform to gnark format
+	proofData, err := parser.UnmarshalCircomProofJSON([]byte(circomProof))
+	if err != nil {
+		return nil, nil, err
+	}
+	pubSignalsData, err := parser.UnmarshalCircomPublicSignalsJSON([]byte(pubSignals))
+	if err != nil {
+		return nil, nil, err
+	}
+	return proofData, pubSignalsData, nil
+}
+
 // Circom2GnarkProofForRecursion function is a wrapper to convert a circom
-// proof to a gnark proof, it receives the circom proof and the public signals
-// as strings, as snarkjs returns them. Then, it parses the inputs to the gnark
-// format and transforms the proof to the gnark recursion format.
+// proof to a gnark proof to be verified inside another gnark circuit. It
+// receives the circom proof, the public signals and the verification key as
+// strings, as snarkjs returns them. Then, it converts the proof, the public
+// signals and the verification key to the gnark format and returns a gnark
+// recursion proof or an error.
 func Circom2GnarkProofForRecursion(vkey []byte, circomProof, pubSignals string) (*parser.GnarkRecursionProof, error) {
 	// transform to gnark format
-	gnarkProofData, err := parser.UnmarshalCircomProofJSON([]byte(circomProof))
-	if err != nil {
-		return nil, err
-	}
-	gnarkPubSignalsData, err := parser.UnmarshalCircomPublicSignalsJSON([]byte(pubSignals))
+	gnarkProofData, gnarkPubSignalsData, err := Circom2GnarkProof(circomProof, pubSignals)
 	if err != nil {
 		return nil, err
 	}
