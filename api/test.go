@@ -10,8 +10,10 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-var tree *arbo.Tree
-var testAvailable bool
+var (
+	tree          *arbo.Tree
+	testAvailable bool
+)
 
 func init() {
 	if os.Getenv("TEST_API") == "true" || os.Getenv("TEST_API") == "1" {
