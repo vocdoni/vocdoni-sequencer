@@ -228,8 +228,8 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 		ProcessID:        pid.Marshal(),
 		Commitment:       votedata.Commitment.Bytes(),
 		Nullifier:        votedata.Nullifier.Bytes(),
-		Ballot:           *votedata.EncryptedFields,
-		BallotProof:      *circomProof,
+		Ballot:           votedata.EncryptedFields,
+		BallotProof:      circomProof,
 		BallotInputsHash: votedata.InputsHash.Bytes(),
 		PublicKey:        signer.PublicKey(),
 	}

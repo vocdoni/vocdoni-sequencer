@@ -35,7 +35,7 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 	// convert the circom proof to gnark proof and verify it
 	proof, err := circuits.VerifyAndConvertToRecursion(
 		ballotproof.Artifacts.VerifyingKey(),
-		&vote.BallotProof,
+		vote.BallotProof,
 		[]string{vote.BallotInputsHash.BigInt().String()},
 	)
 	if err != nil {
@@ -47,7 +47,7 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 	if err := a.storage.PushBallot(&storage.Ballot{
 		ProcessID:        vote.ProcessID,
 		VoterWeight:      new(big.Int).SetBytes(vote.CensusProof.Value),
-		EncryptedBallot:  vote.Ballot,
+		EncryptedBallot:  *vote.Ballot,
 		Nullifier:        vote.Nullifier,
 		Commitment:       vote.Commitment,
 		Address:          vote.CensusProof.Key,
