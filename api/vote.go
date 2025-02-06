@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -20,12 +21,24 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		ErrMalformedBody.Withf("could not decode request body: %v", err).Write(w)
 		return
 	}
-	// get the encryption keys from db for the process id provided
+	// get the process from the storage
 	pid := new(types.ProcessID)
 	if err := pid.Unmarshal(vote.ProcessID); err != nil {
 		ErrMalformedBody.Withf("could not decode process id: %v", err).Write(w)
 		return
 	}
+	process, err := a.storage.Process(pid)
+	if err != nil {
+		ErrGenericInternalServerError.Withf("could not get process: %v", err).Write(w)
+		return
+	}
+	// check that the census root is the same as the one in the process
+	if !bytes.Equal(process.Census.CensusRoot, vote.CensusProof.Root) {
+		ErrGenericInternalServerError.Withf("census root mismatch").Write(w)
+		return
+	}
+	// TODO: verify the census proof
+
 	// load the verification key for the ballot proof circuit, used by the user
 	// to generate a proof of a valid ballot
 	if err := ballotproof.Artifacts.LoadAll(); err != nil {
@@ -42,6 +55,8 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		ErrGenericInternalServerError.Withf("could not verify and convert proof: %v", err).Write(w)
 		return
 	}
+	// TODO: verify the signature of the vote
+
 	// push the ballot to the processor storage queue to be verified, aggregated
 	// and published
 	if err := a.storage.PushBallot(&storage.Ballot{
