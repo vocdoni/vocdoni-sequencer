@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +13,7 @@ import (
 type MockContracts struct {
 	processes []*types.Process
 	chainID   uint64
+	mu        sync.Mutex
 }
 
 func NewMockContracts() *MockContracts {
@@ -32,10 +34,12 @@ func (m *MockContracts) MonitorProcessCreation(ctx context.Context, interval tim
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				m.mu.Lock()
 				for _, proc := range m.processes {
 					ch <- proc
 				}
 				m.processes = nil // Clear after sending
+				m.mu.Unlock()
 			}
 		}
 	}()
@@ -43,6 +47,9 @@ func (m *MockContracts) MonitorProcessCreation(ctx context.Context, interval tim
 }
 
 func (m *MockContracts) CreateProcess(process *types.Process) (*types.ProcessID, *common.Hash, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	pid := types.ProcessID{
 		Address: process.OrganizationId,
 		Nonce:   uint64(len(m.processes)),
