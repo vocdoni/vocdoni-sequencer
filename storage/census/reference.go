@@ -109,3 +109,12 @@ func (cr *CensusRef) GenProof(key []byte) ([]byte, []byte, []byte, bool, error) 
 	defer cr.treeMu.Unlock()
 	return cr.tree.GenProof(key)
 }
+
+// VerifyProof verifies a Merkle proof for the given leaf key.
+func VerifyProof(key, value, root, siblings []byte) bool {
+	valid, err := arbo.CheckProof(defaultHashFunction, key, value, root, siblings)
+	if err != nil {
+		return false
+	}
+	return valid
+}
