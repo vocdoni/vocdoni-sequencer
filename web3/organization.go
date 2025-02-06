@@ -17,7 +17,7 @@ func (c *Contracts) CreateOrganization(address common.Address, orgInfo *types.Or
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to create transact options: %w", err)
 	}
-	tx, err := c.organizations.CreateOrganization(txOpts, address, orgInfo.Name, orgInfo.MetadataURI, []common.Address{c.address})
+	tx, err := c.organizations.CreateOrganization(txOpts, address, orgInfo.Name, orgInfo.MetadataURI, []common.Address{c.signer.Address()})
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to create organization: %w", err)
 	}

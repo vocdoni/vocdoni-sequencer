@@ -1,30 +1,16 @@
 package storage
 
 import (
-	"bytes"
 	"crypto/sha256"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/vocdoni/vocdoni-z-sandbox/types"
+	"github.com/vocdoni/vocdoni-z-sandbox/storage/census"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
 )
-
-func init() {
-	// Register types for gob encoding/decoding
-	gob.RegisterName("Metadata", &types.Metadata{})
-	gob.RegisterName("MultilingualString", types.MultilingualString{})
-	gob.RegisterName("MediaMetadata", types.MediaMetadata{})
-	gob.RegisterName("Question", types.Question{})
-	gob.RegisterName("Choice", types.Choice{})
-	gob.RegisterName("ProcessType", types.ProcessType{})
-	gob.RegisterName("GenericMetadata", types.GenericMetadata{})
-	gob.RegisterName("BallotMode", types.BallotMode{})
-}
 
 var (
 	ErrKeyAlreadyExists = errors.New("key already exists")
@@ -39,7 +25,9 @@ var (
 	aggregBatchPrefix          = []byte("ag/")
 	aggregBatchReservPrefix    = []byte("agr/")
 	encryptionKeyPrefix        = []byte("ek/")
-	metadataPrefix             = []byte("m/")
+	processPrefix              = []byte("p/")
+
+	censusDBprefix = []byte("cs_")
 
 	maxKeySize = 12
 )
@@ -51,15 +39,19 @@ type reservationRecord struct {
 
 // Storage manages artifacts in various stages with reservations.
 type Storage struct {
-	db db.Database
-
+	db       db.Database
+	censusDB *census.CensusDB
+	// globalLock is used to ensure that no two operations can interfere with each other.
 	globalLock sync.Mutex
 }
 
 // New creates a new Storage instance and attempts to recover from a previous
 // crash.
 func New(db db.Database) *Storage {
-	s := &Storage{db: db}
+	s := &Storage{
+		db:       db,
+		censusDB: census.NewCensusDB(prefixeddb.NewPrefixedDatabase(db, censusDBprefix)),
+	}
 	go func() {
 		if err := s.recover(); err != nil {
 			// If we fail here, we may panic because we must ensure consistency.
@@ -123,7 +115,9 @@ func (s *Storage) clearAllReservations(prefix []byte) error {
 }
 
 func (s *Storage) Close() {
-	s.db.Close()
+	if err := s.db.Close(); err != nil {
+		fmt.Printf("failed to close storage: %v", err)
+	}
 }
 
 // releaseStaleReservations checks and frees stale reservations.
@@ -155,8 +149,8 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 	rd := prefixeddb.NewPrefixedReader(s.db, prefix)
 	var staleKeys [][]byte
 	if err := rd.Iterate(nil, func(k, v []byte) bool {
-		r, err := decodeReservation(v)
-		if err != nil {
+		r := &reservationRecord{}
+		if err := decodeArtifact(v, r); err != nil {
 			staleKeys = append(staleKeys, append([]byte(nil), k...))
 			return true
 		}
@@ -186,7 +180,7 @@ func (s *Storage) releaseStaleInPrefix(prefix []byte, now int64, maxAge time.Dur
 }
 
 func (s *Storage) setReservation(prefix, key []byte) error {
-	val, err := encodeReservation(&reservationRecord{Timestamp: time.Now().Unix()})
+	val, err := encodeArtifact(&reservationRecord{Timestamp: time.Now().Unix()})
 	if err != nil {
 		return err
 	}
@@ -221,13 +215,13 @@ func (s *Storage) deleteArtifact(prefix, key []byte) error {
 // It returns ErrKeyAlreadyExists if the key already exists.
 func (s *Storage) setArtifact(prefix []byte, key []byte, artifact any) error {
 	// encode the artifact
-	data := bytes.NewBuffer(nil)
-	if err := gob.NewEncoder(data).Encode(artifact); err != nil {
-		return fmt.Errorf("could not encode: %w", err)
+	data, err := encodeArtifact(artifact)
+	if err != nil {
+		return err
 	}
 	// if the string key is provided, decode it
 	if key == nil {
-		hash := sha256.Sum256(data.Bytes())
+		hash := sha256.Sum256(data)
 		key = hash[:maxKeySize]
 	}
 
@@ -239,7 +233,7 @@ func (s *Storage) setArtifact(prefix []byte, key []byte, artifact any) error {
 	// instance a write transaction with the prefix provided
 	wTx := prefixeddb.NewPrefixedWriteTx(s.db.WriteTx(), prefix)
 	// store the artifact in the database with the key generated
-	if err := wTx.Set(key, data.Bytes()); err != nil {
+	if err := wTx.Set(key, data); err != nil {
 		return err
 	}
 	// commit the transaction
@@ -250,35 +244,32 @@ func (s *Storage) setArtifact(prefix []byte, key []byte, artifact any) error {
 // It receives the prefix of the key and a pointer to the artifact to decode into.
 // If the key is not provided, it retrieves the first artifact found for the
 // prefix, and returns ErrNoMoreElements if there are no more elements.
-func (s *Storage) getArtifact(prefix []byte, key []byte) (any, error) {
+func (s *Storage) getArtifact(prefix []byte, key []byte, out any) error {
 	var data []byte
 	var err error
+
 	if key != nil {
 		data, err = prefixeddb.NewPrefixedReader(s.db, prefix).Get(key)
 		if err != nil {
-			return nil, ErrNotFound
+			return ErrNotFound
 		}
 	} else {
-		// iterate over the keys in the database, take the next key
-		// and get the artifact
 		if err := prefixeddb.NewPrefixedReader(s.db, prefix).Iterate(nil, func(_, value []byte) bool {
 			data = value
 			return false
 		}); err != nil {
-			return nil, err
+			return err
 		}
 		if data == nil {
-			return nil, ErrNoMoreElements
+			return ErrNotFound
 		}
 	}
 
-	// Create a new instance of the concrete type
-	var metadata types.Metadata
-	r := bytes.NewReader(data)
-	if err := gob.NewDecoder(r).Decode(&metadata); err != nil {
-		return nil, fmt.Errorf("could not decode artifact: %w", err)
+	if err := decodeArtifact(data, out); err != nil {
+		return fmt.Errorf("could not decode artifact: %w", err)
 	}
-	return &metadata, nil
+
+	return nil
 }
 
 // listArtifacts retrieves all the keys for a given prefix.
@@ -293,4 +284,9 @@ func (s *Storage) listArtifacts(prefix []byte) ([][]byte, error) {
 		return nil, err
 	}
 	return keys, nil
+}
+
+// CensusDB returns the census database instance.
+func (s *Storage) CensusDB() *census.CensusDB {
+	return s.censusDB
 }

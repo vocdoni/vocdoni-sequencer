@@ -1,40 +1,43 @@
 package api
 
 import (
+	"github.com/google/uuid"
 	"github.com/vocdoni/circom2gnark/parser"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-// Process is the struct to create a new voting process
-type Process struct {
-	CensusRoot types.HexBytes   `json:"censusRoot"`
-	BallotMode types.BallotMode `json:"ballotRules"`
-	Nonce      uint64           `json:"nonce"`
-	ChainID    uint32           `json:"chainId"`
-	Signature  []byte           `json:"signature"`
+// NewCensus is the response to a new census creation request.
+type NewCensus struct {
+	Census uuid.UUID `json:"census"`
 }
 
-// ProcessResponse represents the response of a voting process
-type ProcessResponse struct {
-	ProcessID        types.HexBytes  `json:"processId"`
-	EncryptionPubKey [2]types.BigInt `json:"encryptionPubKey,omitempty"`
-	StateRoot        types.HexBytes  `json:"stateRoot,omitempty"`
-	ChainID          uint32          `json:"chainId,omitempty"`
-	Nonce            uint64          `json:"nonce,omitempty"`
-	Address          string          `json:"address,omitempty"`
+// CensusRoot is the response to a census root request.
+type CensusRoot struct {
+	Root types.HexBytes `json:"root"`
+}
+
+// CensusParticipant is a participant in a census.
+type CensusParticipant struct {
+	Key    types.HexBytes `json:"key"`
+	Weight *types.BigInt  `json:"weight,omitempty"`
+}
+
+// CensusParticipants is a list of participants in a census.
+type CensusParticipants struct {
+	Participants []*CensusParticipant `json:"participants"`
 }
 
 // Vote is the struct to represent a vote in the system. It will be provided by
 // the user to cast a vote in a process.
 type Vote struct {
-	ProcessID        types.HexBytes      `json:"processId"`
-	Commitment       types.HexBytes      `json:"commitment"`
-	Nullifier        types.HexBytes      `json:"nullifier"`
-	Cipherfields     elgamal.Ciphertexts `json:"cipherfields"`
-	CensusProof      types.CensusProof   `json:"censusProof"`
-	BallotProof      parser.CircomProof  `json:"ballotProof"`
-	BallotInputsHash types.HexBytes      `json:"ballotInputsHash"`
-	PublicKey        types.HexBytes      `json:"publicKey"`
-	Signature        types.HexBytes      `json:"signature"`
+	ProcessID        types.HexBytes     `json:"processId"`
+	Commitment       types.HexBytes     `json:"commitment"`
+	Nullifier        types.HexBytes     `json:"nullifier"`
+	Cipherfields     elgamal.Ballot     `json:"cipherfields"`
+	CensusProof      types.CensusProof  `json:"censusProof"`
+	BallotProof      parser.CircomProof `json:"ballotProof"`
+	BallotInputsHash types.HexBytes     `json:"ballotInputsHash"`
+	PublicKey        types.HexBytes     `json:"publicKey"`
+	Signature        types.HexBytes     `json:"signature"`
 }

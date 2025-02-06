@@ -3,6 +3,7 @@ package storage
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	qt "github.com/frankban/quicktest"
@@ -11,7 +12,7 @@ import (
 	"go.vocdoni.io/dvote/db/metadb"
 )
 
-func TestProcessMetadata(t *testing.T) {
+func TestProcess(t *testing.T) {
 	c := qt.New(t)
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "db")
@@ -23,18 +24,18 @@ func TestProcessMetadata(t *testing.T) {
 	defer st.Close()
 
 	// Create a test process ID
-	processID := types.ProcessID{
+	processID := &types.ProcessID{
 		Address: common.Address{},
 		Nonce:   42,
 		ChainID: 1,
 	}
 
-	// Test 1: Get non-existent metadata
-	metadata, err := st.ProcessMetadata(processID)
+	// Test 1: Get non-existent data
+	metadata, err := st.Process(processID)
 	c.Assert(err, qt.Equals, ErrNotFound)
 	c.Assert(metadata, qt.IsNil)
 
-	// Test 2: Set and get metadata
+	// Test 2: Set and get data
 	testMetadata := &types.Metadata{
 		Title:       map[string]string{"default": "Test Election"},
 		Description: map[string]string{"default": "Test Description"},
@@ -60,12 +61,41 @@ func TestProcessMetadata(t *testing.T) {
 		},
 	}
 
-	err = st.SetProcess(processID, testMetadata)
+	testProcess := &types.Process{
+		ID:             processID.Marshal(),
+		Status:         0,
+		OrganizationId: common.Address{},
+		StateRoot:      make([]byte, 32),
+		StartTime:      time.Now(),
+		Duration:       time.Hour,
+		MetadataURI:    "https://example.com/metadata",
+		BallotMode: &types.BallotMode{
+			MaxCount:        2,
+			MaxValue:        new(types.BigInt).SetUint64(100),
+			MinValue:        new(types.BigInt).SetUint64(0),
+			MaxTotalCost:    new(types.BigInt).SetUint64(0),
+			MinTotalCost:    new(types.BigInt).SetUint64(0),
+			ForceUniqueness: false,
+			CostFromWeight:  false,
+		},
+		Census: &types.Census{
+			CensusRoot:   make([]byte, 32),
+			MaxVotes:     new(types.BigInt).SetUint64(100),
+			CensusURI:    "https://example.com/census",
+			CensusOrigin: 0,
+		},
+		Metadata: testMetadata,
+	}
+
+	err = st.SetProcess(testProcess)
 	c.Assert(err, qt.IsNil)
 
-	// Get and verify metadata
-	retrievedMetadata, err := st.ProcessMetadata(processID)
+	// Get and verify data and metadata
+	process, err := st.Process(processID)
 	c.Assert(err, qt.IsNil)
+	retrievedMetadata := process.Metadata
+	c.Assert(string(process.ID), qt.DeepEquals, string(processID.Marshal()))
+	c.Assert(process.MetadataURI, qt.Equals, testProcess.MetadataURI)
 	c.Assert(retrievedMetadata, qt.Not(qt.IsNil))
 	c.Assert(retrievedMetadata.Title["default"], qt.Equals, testMetadata.Title["default"])
 	c.Assert(retrievedMetadata.Description["default"], qt.Equals, testMetadata.Description["default"])
@@ -84,8 +114,9 @@ func TestProcessMetadata(t *testing.T) {
 		Nonce:   43,
 		ChainID: 1,
 	}
+	process.ID = anotherProcessID.Marshal()
 
-	err = st.SetProcess(anotherProcessID, testMetadata)
+	err = st.SetProcess(process)
 	c.Assert(err, qt.IsNil)
 
 	// Verify list now contains both processes

@@ -19,6 +19,20 @@ type ProcessID struct {
 	ChainID uint32
 }
 
+// SetBytes decodes bytes to ProcessId and returns the pointer to the ProcessId.
+// This method is useful for chaining calls. However it does not return an error, so it should be used with caution.
+// If the data is invalid, it will return a new ProcessId with zero values.
+func (p *ProcessID) SetBytes(data []byte) *ProcessID {
+	if err := p.Unmarshal(data); err != nil {
+		return &ProcessID{
+			Address: common.Address{},
+			Nonce:   0,
+			ChainID: 0,
+		}
+	}
+	return p
+}
+
 // Marshal encodes ProcessId to bytes:
 func (p *ProcessID) Marshal() []byte {
 	chainId := make([]byte, 4)

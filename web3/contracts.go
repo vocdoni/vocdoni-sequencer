@@ -2,7 +2,6 @@ package web3
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -10,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	bindings "github.com/vocdoni/contracts-z/golang-types/non-proxy"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/web3/rpc"
 )
@@ -36,8 +35,7 @@ type Contracts struct {
 	processes          *bindings.ProcessRegistry
 	web3pool           *rpc.Web3Pool
 	cli                *rpc.Client
-	privKey            *ecdsa.PrivateKey
-	address            common.Address
+	signer             *ethereum.SignKeys
 
 	knownProcesses        map[string]struct{}
 	lastWatchProcessBlock uint64
@@ -170,19 +168,35 @@ func (c *Contracts) AddWeb3Endpoint(web3rpc string) error {
 
 // SetAccountPrivateKey sets the private key to be used for signing transactions.
 func (c *Contracts) SetAccountPrivateKey(hexPrivKey string) error {
-	var err error
-	c.privKey, err = crypto.HexToECDSA(hexPrivKey)
-	if err != nil {
-		return fmt.Errorf("failed to parse private key: %w", err)
+	signer := ethereum.SignKeys{}
+	if err := signer.AddHexKey(hexPrivKey); err != nil {
+		return fmt.Errorf("failed to add private key: %w", err)
 	}
-	c.address = crypto.PubkeyToAddress(c.privKey.PublicKey)
-	log.Debugw("set ethereum account", "address", c.address.Hex())
+	c.signer = &signer
 	return nil
 }
 
 // AccountAddress returns the address of the account used to sign transactions.
 func (c *Contracts) AccountAddress() common.Address {
-	return c.address
+	return c.signer.Address()
+}
+
+// SignMessage signs a message with the account private key.
+func (c *Contracts) SignMessage(msg []byte) ([]byte, error) {
+	if c.signer == nil {
+		return nil, fmt.Errorf("no private key set")
+	}
+	return c.signer.SignEthereum(msg)
+}
+
+// AccountNonce returns the nonce of the account used to sign transactions.
+func (c *Contracts) AccountNonce() (uint64, error) {
+	if c.signer == nil {
+		return 0, fmt.Errorf("no private key set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), web3QueryTimeout)
+	defer cancel()
+	return c.cli.PendingNonceAt(ctx, c.signer.Address())
 }
 
 // authTransactOpts helper method creates the transact options with the private
@@ -190,11 +204,11 @@ func (c *Contracts) AccountAddress() common.Address {
 // limit. If something goes wrong creating the signer, getting the nonce, or
 // getting the gas price, it returns an error.
 func (c *Contracts) authTransactOpts() (*bind.TransactOpts, error) {
-	if c.privKey == nil {
+	if c.signer == nil {
 		return nil, fmt.Errorf("no private key set")
 	}
 	bChainID := new(big.Int).SetUint64(c.ChainID)
-	auth, err := bind.NewKeyedTransactorWithChainID(c.privKey, bChainID)
+	auth, err := bind.NewKeyedTransactorWithChainID(&c.signer.Private, bChainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transactor: %w", err)
 	}
@@ -202,7 +216,7 @@ func (c *Contracts) authTransactOpts() (*bind.TransactOpts, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// set the nonce
-	nonce, err := c.cli.PendingNonceAt(ctx, c.address)
+	nonce, err := c.cli.PendingNonceAt(ctx, c.signer.Address())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
