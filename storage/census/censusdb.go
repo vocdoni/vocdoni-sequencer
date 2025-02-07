@@ -341,6 +341,20 @@ func (c *CensusDB) ProofByRoot(root, leafKey []byte) (*types.CensusProof, error)
 	}, nil
 }
 
+// VerifyProof checks the validity of a Merkle proof.
+func (c *CensusDB) VerifyProof(proof *types.CensusProof) bool {
+	if proof == nil {
+		return false
+	}
+	// if weight is available, check it
+	if proof.Weight != nil {
+		if proof.Weight.MathBigInt().Cmp(arbo.BytesToBigInt(proof.Value)) != 0 {
+			return false
+		}
+	}
+	return VerifyProof(proof.Key, proof.Value, proof.Root, proof.Siblings)
+}
+
 // SizeByRoot returns the number of leaves in the Merkle tree with the given root.
 func (c *CensusDB) SizeByRoot(root []byte) (int, error) {
 	rk := rootKey(root)

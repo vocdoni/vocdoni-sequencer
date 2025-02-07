@@ -411,3 +411,32 @@ func TestSameRootForMultipleCensuses(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, proof, qt.Not(qt.IsNil))
 }
+
+func TestVerifyProof(t *testing.T) {
+	t.Parallel()
+	db := newDatabase(t)
+	censusDB := NewCensusDB(db)
+	censusID := uuid.New()
+	ref, err := censusDB.New(censusID)
+	qt.Assert(t, err, qt.IsNil)
+	// Insert a key/value pair.
+	leafKey := []byte("myKey")
+	value := []byte("myValue")
+	err = ref.Insert(leafKey, value)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Use the new root to get a proof.
+	newRoot := ref.Root()
+	proof, err := censusDB.ProofByRoot(newRoot, leafKey)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, proof, qt.Not(qt.IsNil))
+
+	// Verify the proof.
+	ok := censusDB.VerifyProof(proof)
+	qt.Assert(t, ok, qt.IsTrue)
+
+	// Modify the proof and verify it again.
+	proof.Value = []byte("modifiedValue")
+	ok = censusDB.VerifyProof(proof)
+	qt.Assert(t, ok, qt.IsFalse)
+}
