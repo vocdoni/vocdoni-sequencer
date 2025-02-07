@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/ethereum/go-ethereum/common"
 	qt "github.com/frankban/quicktest"
 	tc "github.com/testcontainers/testcontainers-go/modules/compose"
@@ -19,6 +20,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballotprooftest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
@@ -220,6 +222,12 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	encKey := new(bjj.BJJ).SetPoint(encryptionKey.X, encryptionKey.Y)
 	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), encKey)
 	c.Assert(err, qt.IsNil)
+	// convert the circom inputs hash to the field of the curve used by the
+	// circuit as input for MIMC hash
+	blsCircomInputsHash := crypto.BigIntToMIMCHash(votedata.InputsHash, gecc.BLS12_377.ScalarField())
+	// sign the inputs hash with the private key
+	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
+	c.Assert(err, qt.IsNil)
 
 	circomProof, _, err := circuits.Circom2GnarkProof(votedata.Proof, votedata.PubInputs)
 	c.Assert(err, qt.IsNil)
@@ -232,5 +240,9 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 		BallotProof:      circomProof,
 		BallotInputsHash: votedata.InputsHash.Bytes(),
 		PublicKey:        signer.PublicKey(),
+		Signature: types.BallotSignature{
+			R: rSign.Bytes(),
+			S: sSign.Bytes(),
+		},
 	}
 }

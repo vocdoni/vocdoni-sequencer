@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
@@ -13,14 +12,16 @@ import (
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
+	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 // sizes in bytes needed to serialize a Ballot
 const (
-	sizeCoord            = circuits.SerializedFieldSize
+	sizeCoord            = crypto.SerializedFieldSize
 	sizePoint            = 2 * sizeCoord
 	sizeCiphertext       = 2 * sizePoint
 	SerializedBallotSize = circuits.FieldsPerBallot * sizeCiphertext
@@ -107,12 +108,35 @@ func (z *Ballot) Deserialize(data []byte) error {
 
 // Marshal converts Ballot to a byte slice.
 func (z *Ballot) MarshalJSON() ([]byte, error) {
-	return json.Marshal(z)
+	aux := struct {
+		Ciphertexts []struct {
+			C1 ecc.PointEC `json:"c1"`
+			C2 ecc.PointEC `json:"c2"`
+		} `json:"ciphertexts"`
+		CurveType string `json:"curveType"`
+	}{
+		CurveType: z.CurveType,
+	}
+
+	for i := range z.Ciphertexts {
+		c1x, c1y := z.Ciphertexts[i].C1.Point()
+		c2x, c2y := z.Ciphertexts[i].C2.Point()
+		bc1x, bc1y := (types.BigInt)(*c1x), (types.BigInt)(*c1y)
+		bc2x, bc2y := (types.BigInt)(*c2x), (types.BigInt)(*c2y)
+
+		aux.Ciphertexts = append(aux.Ciphertexts, struct {
+			C1 ecc.PointEC `json:"c1"`
+			C2 ecc.PointEC `json:"c2"`
+		}{
+			C1: ecc.PointEC{X: bc1x, Y: bc1y},
+			C2: ecc.PointEC{X: bc2x, Y: bc2y},
+		})
+	}
+	return json.Marshal(aux)
 }
 
 // // Unmarshal populates Ballot from a byte slice.
 func (z *Ballot) UnmarshalJSON(data []byte) error {
-	log.Println(string(data))
 	aux := struct {
 		Ciphertexts []struct {
 			C1 ecc.PointEC `json:"c1"`

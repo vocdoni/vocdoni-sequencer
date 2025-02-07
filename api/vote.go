@@ -29,16 +29,19 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 	}
 	process, err := a.storage.Process(pid)
 	if err != nil {
-		ErrGenericInternalServerError.Withf("could not get process: %v", err).Write(w)
+		ErrResourceNotFound.Withf("could not get process: %v", err).Write(w)
 		return
 	}
 	// check that the census root is the same as the one in the process
 	if !bytes.Equal(process.Census.CensusRoot, vote.CensusProof.Root) {
-		ErrGenericInternalServerError.Withf("census root mismatch").Write(w)
+		ErrInvalidCensusProof.Withf("census root mismatch").Write(w)
 		return
 	}
-	// TODO: verify the census proof
-
+	// verify the census proof
+	if !a.storage.CensusDB().VerifyProof(&vote.CensusProof) {
+		ErrInvalidCensusProof.Withf("census proof verification failed").Write(w)
+		return
+	}
 	// load the verification key for the ballot proof circuit, used by the user
 	// to generate a proof of a valid ballot
 	if err := ballotproof.Artifacts.LoadAll(); err != nil {
@@ -52,11 +55,14 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		[]string{vote.BallotInputsHash.BigInt().String()},
 	)
 	if err != nil {
-		ErrGenericInternalServerError.Withf("could not verify and convert proof: %v", err).Write(w)
+		ErrInvalidBallotProof.Withf("could not verify and convert proof: %v", err).Write(w)
 		return
 	}
-	// TODO: verify the signature of the vote
-
+	// verify the signature of the vote
+	if !vote.Signature.Verify(vote.BallotInputsHash.BigInt().MathBigInt(), vote.PublicKey) {
+		ErrInvalidSignature.Withf("invalid vote signature").Write(w)
+		return
+	}
 	// push the ballot to the processor storage queue to be verified, aggregated
 	// and published
 	if err := a.storage.PushBallot(&storage.Ballot{
