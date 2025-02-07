@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,7 +28,13 @@ func testDummyKeyServer() *httptest.Server {
 
 func TestMain(m *testing.M) {
 	// set BaseDir to a temporary directory and create it
-	BaseDir = filepath.Join(os.TempDir(), BaseDir)
+	tempDir, err := os.MkdirTemp("", "circuits_artifacts_")
+	if err != nil {
+		panic(fmt.Errorf("failed to create temporary base directory: %v", err))
+	}
+	// Set BaseDir to the unique temporary directory.
+	BaseDir = tempDir
+
 	// run the tests
 	code := m.Run()
 	// remove BaseDir
