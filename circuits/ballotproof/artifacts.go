@@ -11,8 +11,8 @@ import (
 // the voter to generate the proof.
 var Artifacts = circuits.NewCircuitArtifacts(
 	&circuits.Artifact{
-		RemoteURL: config.BallotProofWasmURL,
-		Hash:      types.HexStringToHexBytes(config.BallotProofWasmHash),
+		RemoteURL: config.BallotProoCircuitURL,
+		Hash:      types.HexStringToHexBytes(config.BallotProofCircuitHash),
 	},
 	&circuits.Artifact{
 		RemoteURL: config.BallotProofProvingKeyURL,
