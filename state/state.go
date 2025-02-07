@@ -7,6 +7,7 @@ import (
 
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
@@ -216,7 +217,7 @@ func (o *State) EndBatch() error {
 	for i := range o.VotesProofs.Commitment {
 		if i < len(o.Votes()) {
 			o.VotesProofs.Commitment[i], err = ArboTransitionFromAddOrUpdate(o,
-				o.Votes()[i].Address, arbo.BigIntToBytes(circuits.SerializedFieldSize, o.Votes()[i].Commitment))
+				o.Votes()[i].Address, arbo.BigIntToBytes(crypto.SerializedFieldSize, o.Votes()[i].Commitment))
 		} else {
 			o.VotesProofs.Commitment[i], err = ArboTransitionFromNoop(o)
 		}

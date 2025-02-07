@@ -12,13 +12,14 @@ import (
 	gecc "github.com/consensys/gnark-crypto/ecc"
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/iden3/go-iden3-crypto/babyjub"
 	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/prover"
 	"github.com/iden3/go-rapidsnark/witness"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
@@ -38,24 +39,24 @@ var TestCircomVerificationKey []byte
 // key, public key and address.
 func GenECDSAaccountForTest() (*ecdsa.PrivateKey, ecdsa.PublicKey, common.Address, error) {
 	// generate ecdsa keys and address (privKey and publicKey)
-	privKey, err := crypto.GenerateKey()
+	privKey, err := ethcrypto.GenerateKey()
 	if err != nil {
 		return nil, ecdsa.PublicKey{}, common.Address{}, err
 	}
-	return privKey, privKey.PublicKey, crypto.PubkeyToAddress(privKey.PublicKey), nil
+	return privKey, privKey.PublicKey, ethcrypto.PubkeyToAddress(privKey.PublicKey), nil
 }
 
 // SignECDSAForTest signs the data with the private key provided and returns the R and
 // S values of the signature.
 func SignECDSAForTest(privKey *ecdsa.PrivateKey, data []byte) (*big.Int, *big.Int, error) {
-	sigBin, err := crypto.Sign(data, privKey)
+	sigBin, err := ethcrypto.Sign(data, privKey)
 	if err != nil {
 		return nil, nil, err
 	}
 	// truncate the signature to 64 bytes (the first 32 bytes are the R value,
 	// the second 32 bytes are the S value)
 	sigBin = sigBin[:64]
-	if valid := crypto.VerifySignature(crypto.CompressPubkey(&privKey.PublicKey), data, sigBin); !valid {
+	if valid := ethcrypto.VerifySignature(ethcrypto.CompressPubkey(&privKey.PublicKey), data, sigBin); !valid {
 		return nil, nil, fmt.Errorf("invalid signature")
 	}
 	var sig gecdsa.Signature
@@ -63,8 +64,8 @@ func SignECDSAForTest(privKey *ecdsa.PrivateKey, data []byte) (*big.Int, *big.In
 		return nil, nil, err
 	}
 	r, s := new(big.Int), new(big.Int)
-	r.SetBytes(sig.R[:32])
-	s.SetBytes(sig.S[:32])
+	r.SetBytes(sig.R[:])
+	s.SetBytes(sig.S[:])
 	return r, s, nil
 }
 
@@ -138,16 +139,16 @@ func EncryptBallotFieldsForTest(fields [circuits.FieldsPerBallot]*big.Int, n int
 // while the nullifier is generated using the commitment and secret value.
 func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
-		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
-		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
-		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
+		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
+		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	nullifier, err := poseidon.Hash([]*big.Int{
 		commitment,
-		ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -215,8 +216,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
-	ffProcessID := ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
+	ffAddress := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{}
 	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
@@ -253,7 +254,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"cipherfields":     circuits.BigIntArrayToStringArray(ballot.BigInts(), circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           ecc.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
+		"secret":           crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)

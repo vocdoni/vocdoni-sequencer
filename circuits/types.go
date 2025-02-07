@@ -11,11 +11,10 @@ import (
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
-
-const SerializedFieldSize = 32 // bytes
 
 // BallotMode is a struct that contains the common inputs for all the voters.
 // The values of this struct should be the same for all the voters in the same
@@ -53,7 +52,7 @@ func (bm BallotMode[T]) Bytes() []byte {
 	}
 	buf := bytes.Buffer{}
 	for _, bigint := range bmbi.Serialize() {
-		buf.Write(arbo.BigIntToBytes(SerializedFieldSize, bigint))
+		buf.Write(arbo.BigIntToBytes(crypto.SerializedFieldSize, bigint))
 	}
 	return buf.Bytes()
 }
@@ -63,23 +62,23 @@ func (bm BallotMode[T]) Bytes() []byte {
 // representing 8 big.Ints as little-endian.
 func DeserializeBallotMode(data []byte) (BallotMode[*big.Int], error) {
 	// Validate the input length
-	expectedSize := 8 * SerializedFieldSize
+	expectedSize := 8 * crypto.SerializedFieldSize
 	if len(data) != expectedSize {
 		return BallotMode[*big.Int]{}, fmt.Errorf("invalid input length for BallotMode: got %d bytes, expected %d bytes", len(data), expectedSize)
 	}
 	// Helper function to extract *big.Int from a serialized slice
 	readBigInt := func(offset int) *big.Int {
-		return arbo.BytesToBigInt(data[offset : offset+SerializedFieldSize])
+		return arbo.BytesToBigInt(data[offset : offset+crypto.SerializedFieldSize])
 	}
 	return BallotMode[*big.Int]{
-		MaxCount:        readBigInt(0 * SerializedFieldSize),
-		ForceUniqueness: readBigInt(1 * SerializedFieldSize),
-		MaxValue:        readBigInt(2 * SerializedFieldSize),
-		MinValue:        readBigInt(3 * SerializedFieldSize),
-		MaxTotalCost:    readBigInt(4 * SerializedFieldSize),
-		MinTotalCost:    readBigInt(5 * SerializedFieldSize),
-		CostExp:         readBigInt(6 * SerializedFieldSize),
-		CostFromWeight:  readBigInt(7 * SerializedFieldSize),
+		MaxCount:        readBigInt(0 * crypto.SerializedFieldSize),
+		ForceUniqueness: readBigInt(1 * crypto.SerializedFieldSize),
+		MaxValue:        readBigInt(2 * crypto.SerializedFieldSize),
+		MinValue:        readBigInt(3 * crypto.SerializedFieldSize),
+		MaxTotalCost:    readBigInt(4 * crypto.SerializedFieldSize),
+		MinTotalCost:    readBigInt(5 * crypto.SerializedFieldSize),
+		CostExp:         readBigInt(6 * crypto.SerializedFieldSize),
+		CostFromWeight:  readBigInt(7 * crypto.SerializedFieldSize),
 	}, nil
 }
 
@@ -113,7 +112,7 @@ func (k EncryptionKey[T]) Bytes() []byte {
 	}
 	buf := bytes.Buffer{}
 	for _, bigint := range ekbi.Serialize() {
-		buf.Write(arbo.BigIntToBytes(SerializedFieldSize, bigint))
+		buf.Write(arbo.BigIntToBytes(crypto.SerializedFieldSize, bigint))
 	}
 	return buf.Bytes()
 }
@@ -153,18 +152,18 @@ func (k EncryptionKey[T]) AsVar() EncryptionKey[frontend.Variable] {
 // representing 2 big.Ints as little-endian.
 func DeserializeEncryptionKey(data []byte) (EncryptionKey[*big.Int], error) {
 	// Validate the input length
-	expectedSize := 2 * SerializedFieldSize
+	expectedSize := 2 * crypto.SerializedFieldSize
 	if len(data) != expectedSize {
 		return EncryptionKey[*big.Int]{}, fmt.Errorf("invalid input length for EncryptionKey: got %d bytes, expected %d bytes", len(data), expectedSize)
 	}
 	// Helper function to extract *big.Int from a serialized slice
 	readBigInt := func(offset int) *big.Int {
-		return arbo.BytesToBigInt(data[offset : offset+SerializedFieldSize])
+		return arbo.BytesToBigInt(data[offset : offset+crypto.SerializedFieldSize])
 	}
 	return EncryptionKey[*big.Int]{
 		PubKey: [2]*big.Int{
-			readBigInt(0 * SerializedFieldSize),
-			readBigInt(1 * SerializedFieldSize),
+			readBigInt(0 * crypto.SerializedFieldSize),
+			readBigInt(1 * crypto.SerializedFieldSize),
 		},
 	}, nil
 }
