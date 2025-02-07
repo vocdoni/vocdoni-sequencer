@@ -34,8 +34,8 @@ type Vote struct {
 	ProcessID        types.HexBytes        `json:"processId"`
 	Commitment       types.HexBytes        `json:"commitment"`
 	Nullifier        types.HexBytes        `json:"nullifier"`
-	Ballot           *elgamal.Ballot       `json:"cipherfields"`
 	CensusProof      types.CensusProof     `json:"censusProof"`
+	Ballot           *elgamal.Ballot       `json:"ballot"`
 	BallotProof      *parser.CircomProof   `json:"ballotProof"`
 	BallotInputsHash types.HexBytes        `json:"ballotInputsHash"`
 	PublicKey        types.HexBytes        `json:"publicKey"`

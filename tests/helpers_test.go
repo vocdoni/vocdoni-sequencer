@@ -91,7 +91,7 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 
 func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant, []*ethereum.SignKeys) {
 	// Create a new census
-	body, code, err := cli.Request(http.MethodPost, nil, nil, "census")
+	body, code, err := cli.Request(http.MethodPost, nil, nil, api.NewCensusEndpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
@@ -116,12 +116,14 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 	}
 
 	// Add participants to census
-	_, code, err = cli.Request(http.MethodPost, censusParticipants, []string{"id", resp.Census.String()}, "census", "participants")
+	addEnpoint := api.EndpointWithParam(api.AddCensusParticipantsEndpoint, api.CensusURLParam, resp.Census.String())
+	_, code, err = cli.Request(http.MethodPost, censusParticipants, nil, addEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
 	// Get census root
-	body, code, err = cli.Request(http.MethodGet, nil, []string{"id", resp.Census.String()}, "census", "root")
+	getRootEnpoint := api.EndpointWithParam(api.GetCensusRootEndpoint, api.CensusURLParam, resp.Census.String())
+	body, code, err = cli.Request(http.MethodGet, nil, nil, getRootEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
@@ -134,10 +136,8 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 
 func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byte) *types.CensusProof {
 	// Get proof for the key
-	body, code, err := cli.Request(http.MethodGet, nil, []string{
-		"root", hex.EncodeToString(root),
-		"key", hex.EncodeToString(key),
-	}, "census", "proof")
+	getProofEnpoint := api.EndpointWithParam(api.GetCensusProofEndpoint, api.CensusURLParam, hex.EncodeToString(root))
+	body, code, err := cli.Request(http.MethodGet, nil, []string{"key", hex.EncodeToString(key)}, getProofEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
