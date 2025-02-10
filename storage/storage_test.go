@@ -176,9 +176,9 @@ func TestBallotBatchQueue(t *testing.T) {
 	c.Assert(err, qt.Equals, ErrNoMoreElements, qt.Commentf("no batches expected initially"))
 
 	// Test 2: Single batch lifecycle
-	batch1 := &AggregatedBallotBatch{
+	batch1 := &AggregatorBallotBatch{
 		ProcessID: processID.Marshal(),
-		Ballots: []AggregatedBallot{
+		Ballots: []AggregatorBallot{
 			{
 				Nullifier:  bytes.Repeat([]byte{1}, 32),
 				Address:    bytes.Repeat([]byte{1}, 20),
@@ -201,9 +201,9 @@ func TestBallotBatchQueue(t *testing.T) {
 	c.Assert(st.MarkBallotBatchDone(b1key), qt.IsNil)
 
 	// Test 3: Multiple batches
-	batch2 := &AggregatedBallotBatch{
+	batch2 := &AggregatorBallotBatch{
 		ProcessID: processID.Marshal(),
-		Ballots: []AggregatedBallot{
+		Ballots: []AggregatorBallot{
 			{
 				Nullifier:  bytes.Repeat([]byte{2}, 32),
 				Address:    bytes.Repeat([]byte{2}, 20),
@@ -226,9 +226,9 @@ func TestBallotBatchQueue(t *testing.T) {
 	c.Assert(st.MarkBallotBatchDone(b2key), qt.IsNil)
 
 	// Push and verify batch3
-	batch3 := &AggregatedBallotBatch{
+	batch3 := &AggregatorBallotBatch{
 		ProcessID: processID.Marshal(),
-		Ballots: []AggregatedBallot{
+		Ballots: []AggregatorBallot{
 			{
 				Nullifier:  bytes.Repeat([]byte{3}, 32),
 				Address:    bytes.Repeat([]byte{3}, 20),

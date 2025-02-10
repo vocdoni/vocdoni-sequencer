@@ -58,7 +58,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(1, 10), // add vote 1
 			newMockVote(2, 20), // add vote 2
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof), witness)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof), witness)
 
 		debugLog(t, witness)
 	}
@@ -68,7 +68,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(3, 30),  // add vote 3
 			newMockVote(4, 40),  // add vote 4
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof), witness)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof), witness)
 
 		debugLog(t, witness)
 	}
@@ -90,27 +90,27 @@ func TestCircuitCalculateAggregatorWitnessCompile(t *testing.T) {
 func TestCircuitCalculateAggregatorWitnessProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitCalculateAggregatorWitness{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 }
 
-type CircuitAggregatedProof struct {
+type CircuitAggregatorProof struct {
 	statetransition.Circuit
 }
 
-func (circuit CircuitAggregatedProof) Define(api frontend.API) error {
-	circuit.VerifyAggregatedProof(api)
+func (circuit CircuitAggregatorProof) Define(api frontend.API) error {
+	circuit.VerifyAggregatorProof(api)
 	return nil
 }
 
-func TestCircuitAggregatedProofCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitAggregatedProof{*statetransition.CircuitPlaceholder()})
+func TestCircuitAggregatorProofCompile(t *testing.T) {
+	testCircuitCompile(t, &CircuitAggregatorProof{*statetransition.CircuitPlaceholder()})
 }
 
-func TestCircuitAggregatedProofProve(t *testing.T) {
+func TestCircuitAggregatorProofProve(t *testing.T) {
 	witness := newMockWitness(t)
-	testCircuitProve(t, &CircuitAggregatedProof{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+	testCircuitProve(t, &CircuitAggregatorProof{
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 }
 
@@ -130,7 +130,7 @@ func TestCircuitBallotsCompile(t *testing.T) {
 func TestCircuitBallotsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitBallots{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 }
 
@@ -150,7 +150,7 @@ func TestCircuitMerkleProofsCompile(t *testing.T) {
 func TestCircuitMerkleProofsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleProofs{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 }
 
@@ -170,7 +170,7 @@ func TestCircuitMerkleTransitionsCompile(t *testing.T) {
 func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleTransitions{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 
 	debugLog(t, witness)
@@ -192,7 +192,7 @@ func TestCircuitLeafHashesCompile(t *testing.T) {
 func TestCircuitLeafHashesProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitLeafHashes{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatedProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
 	}, witness)
 
 	debugLog(t, witness)
@@ -218,7 +218,7 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	inputsHash, err := s.AggregatedWitnessHash()
+	inputsHash, err := s.AggregatorWitnessHash()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,8 +227,7 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	witness.AggregatedProof = *proof
+	witness.AggregatorProof = *proof
 	return witness
 }
 

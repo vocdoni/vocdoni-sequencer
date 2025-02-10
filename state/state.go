@@ -342,7 +342,7 @@ func (o *State) EncryptionKey() circuits.EncryptionKey[*big.Int] {
 
 func (o *State) VoterHashesInputs() []*big.Int {
 	// all of the following values compose the preimage that is hashed
-	// to produce the public input needed to verify AggregatedProof.
+	// to produce the public input needed to verify AggregatorProof.
 	// ProcessID
 	// CensusRoot
 	// BallotMode
@@ -374,7 +374,7 @@ func (o *State) VoterHashesInputs() []*big.Int {
 	return inputs
 }
 
-func (o *State) AggregatedWitnessHash() (*big.Int, error) {
+func (o *State) AggregatorWitnessHash() (*big.Int, error) {
 	subhashes := []*big.Int{}
 	for _, v := range o.PaddedVotes() {
 		inputs := []*big.Int{}

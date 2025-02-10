@@ -63,8 +63,8 @@ func VoteVerifierInputs(api frontend.API,
 	return inputs
 }
 
-// AggregatedWitnessInputs returns all values that are hashed
-// to produce the public input needed to verify AggregatedProof,
+// AggregatorWitnessInputs returns all values that are hashed
+// to produce the public input needed to verify AggregatorProof,
 // in a predefined order:
 //
 //	ProcessID
@@ -75,7 +75,7 @@ func VoteVerifierInputs(api frontend.API,
 //	Ballots
 //	Addressess
 //	Commitments
-func AggregatedWitnessInputs(api frontend.API,
+func AggregatorWitnessInputs(api frontend.API,
 	process Process[emulated.Element[sw_bn254.ScalarField]],
 	votes []EmulatedVote[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
@@ -117,8 +117,8 @@ func CalculateVotersHashes(api frontend.API,
 	return VotersHashes{votersHashes}
 }
 
-// AggregatedWitnessInputsAsVars returns all values that are hashed
-// to produce the public input needed to verify AggregatedProof,
+// AggregatorWitnessInputsAsVars returns all values that are hashed
+// to produce the public input needed to verify AggregatorProof,
 // in a predefined order:
 //
 //	ProcessID
@@ -129,11 +129,11 @@ func CalculateVotersHashes(api frontend.API,
 //	Ballots
 //	Addressess
 //	Commitments
-func AggregatedWitnessInputsAsVars(api frontend.API,
+func AggregatorWitnessInputsAsVars(api frontend.API,
 	process Process[frontend.Variable],
 	votes []Vote[frontend.Variable],
 ) []frontend.Variable {
-	// TODO: dedup AggregatedWitnessInputs and AggregatedWitnessInputsAsVars somehow
+	// TODO: dedup AggregatorWitnessInputs and AggregatorWitnessInputsAsVars somehow
 	inputs := []frontend.Variable{}
 	inputs = append(inputs, process.ID)
 	inputs = append(inputs, process.CensusRoot)

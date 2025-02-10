@@ -18,7 +18,7 @@ import (
 
 var (
 	HashFn           = utils.MiMCHasher
-	AggregatedHashFn = MiMC7Hasher
+	AggregatorHashFn = MiMC7Hasher
 )
 
 // MiMC7Hasher function calculates the mimc7 hash of the provided inputs. It
@@ -53,7 +53,7 @@ type Circuit struct {
 	VotesProofs   VotesProofs
 	ResultsProofs ResultsProofs
 
-	AggregatedProof circuits.InnerProofBW6761
+	AggregatorProof circuits.InnerProofBW6761
 }
 
 type Results struct {
@@ -87,7 +87,7 @@ type Vote struct {
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	circuit.VerifyAggregatedProof(api)
+	circuit.VerifyAggregatorProof(api)
 	circuit.VerifyMerkleProofs(api, HashFn)
 	circuit.VerifyMerkleTransitions(api, HashFn)
 	circuit.VerifyLeafHashes(api, HashFn)
@@ -102,7 +102,7 @@ func (circuit Circuit) CalculateAggregatorWitness(api frontend.API) (groth16.Wit
 	return hashes.ToWitnessBW6761(api)
 }
 
-func (circuit Circuit) VerifyAggregatedProof(api frontend.API) {
+func (circuit Circuit) VerifyAggregatorProof(api frontend.API) {
 	witness, err := circuit.CalculateAggregatorWitness(api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create bw6761 witness: ", err)
@@ -113,7 +113,7 @@ func (circuit Circuit) VerifyAggregatedProof(api frontend.API) {
 		circuits.FrontendError(api, "failed to create bw6761 verifier: ", err)
 	}
 	// verify the proof with the hash as input and the fixed verification key
-	if err := verifier.AssertProof(circuit.AggregatedProof.VK, circuit.AggregatedProof.Proof, witness); err != nil {
+	if err := verifier.AssertProof(circuit.AggregatorProof.VK, circuit.AggregatorProof.Proof, witness); err != nil {
 		circuits.FrontendError(api, "failed to verify aggregated proof: ", err)
 	}
 }
@@ -229,7 +229,7 @@ func CircuitPlaceholder() *Circuit {
 
 func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
 	return &Circuit{
-		AggregatedProof: *proof,
+		AggregatorProof: *proof,
 	}
 }
 

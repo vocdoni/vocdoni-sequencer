@@ -45,12 +45,12 @@ type Ballot struct {
 	CensusProof      types.CensusProof          `json:"censusProof"`
 }
 
-type AggregatedBallotBatch struct {
+type AggregatorBallotBatch struct {
 	ProcessID types.HexBytes     `json:"processId"`
 	Proof     groth16.Proof      `json:"proof"`
-	Ballots   []AggregatedBallot `json:"ballots"`
+	Ballots   []AggregatorBallot `json:"ballots"`
 }
-type AggregatedBallot struct {
+type AggregatorBallot struct {
 	Nullifier       types.HexBytes     `json:"nullifiers"`
 	Commitment      types.HexBytes     `json:"commitments"`
 	Address         types.HexBytes     `json:"address"`
