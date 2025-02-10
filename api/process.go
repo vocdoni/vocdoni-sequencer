@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -64,7 +65,7 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	defer st.Close()
 
 	if err := st.Initialize(p.CensusRoot,
-		circuits.BallotModeFromBM(p.BallotMode).Bytes(),
+		circuits.BallotModeToCircuit[*big.Int](p.BallotMode).Bytes(),
 		circuits.EncryptionKeyFromECCPoint(publicKey).Bytes()); err != nil {
 		ErrGenericInternalServerError.Withf("could not initialize state: %v", err).Write(w)
 		return

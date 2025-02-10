@@ -1,6 +1,7 @@
 package census
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -117,4 +118,19 @@ func VerifyProof(key, value, root, siblings []byte) bool {
 		return false
 	}
 	return valid
+}
+
+// BigIntSiblings unpacks a serialized siblings array using the default hash
+// function and returns the individual sibling leaves as big.Ints in
+// little-endian format.
+func BigIntSiblings(siblings []byte) ([]*big.Int, error) {
+	unpackedSiblings, err := arbo.UnpackSiblings(defaultHashFunction, siblings)
+	if err != nil {
+		return nil, err
+	}
+	bigSiblings := []*big.Int{}
+	for _, sibling := range unpackedSiblings {
+		bigSiblings = append(bigSiblings, arbo.BytesToBigInt(sibling))
+	}
+	return bigSiblings, nil
 }

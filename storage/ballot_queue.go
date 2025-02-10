@@ -24,9 +24,10 @@ func (s *Storage) PushBallot(b *Ballot) error {
 	return wTx.Commit()
 }
 
-// NextBallot returns the next non-reserved ballot, creates a reservation, and returns it.
-// It returns the ballot, the key, and an error. If no ballots are available, returns ErrNoMoreElements.
-// The key is used to mark the ballot as done after processing and to pass it to the next stage.
+// NextBallot returns the next non-reserved ballot, creates a reservation, and
+// returns it. It returns the ballot, the key, and an error. If no ballots are
+// available, returns ErrNoMoreElements. The key is used to mark the ballot as
+// done after processing and to pass it to the next stage.
 func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -61,8 +62,9 @@ func (s *Storage) NextBallot() (*Ballot, []byte, error) {
 	return &b, chosenKey, nil
 }
 
-// MarkBallotDone called after we have processed the ballot. We push the verified ballot to the next queue.
-// In this scenario, next stage is verifiedBallot so we do not store the original ballot.
+// MarkBallotDone called after we have processed the ballot. We push the
+// verified ballot to the next queue. In this scenario, next stage is
+// verifiedBallot so we do not store the original ballot.
 func (s *Storage) MarkBallotDone(k []byte, vb *VerifiedBallot) error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -92,9 +94,10 @@ func (s *Storage) MarkBallotDone(k []byte, vb *VerifiedBallot) error {
 	return wTx.Commit()
 }
 
-// PullVerifiedBallots returns a list of non-reserved verified ballots for a given processID
-// and creates reservations for them. The maxCount parameter is used to limit the number of results.
-// If no ballots are available, returns ErrNotFound.
+// PullVerifiedBallots returns a list of non-reserved verified ballots for a
+// given processID and creates reservations for them. The maxCount parameter is
+// used to limit the number of results. If no ballots are available, returns
+// ErrNotFound.
 func (s *Storage) PullVerifiedBallots(processID []byte, maxCount int) ([]*VerifiedBallot, [][]byte, error) {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -143,7 +146,8 @@ func (s *Storage) PullVerifiedBallots(processID []byte, maxCount int) ([]*Verifi
 	return res, keys, nil
 }
 
-// CountVerifiedBallots returns the number of verified ballots for a given processID.
+// CountVerifiedBallots returns the number of verified ballots for a given
+// processID.
 func (s *Storage) CountVerifiedBallots(processID []byte) int {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -174,7 +178,8 @@ func (s *Storage) PushBallotBatch(abb *AggregatedBallotBatch) error {
 	return wTx.Commit()
 }
 
-// NextBallotBatch returns the next aggregated ballot batch for a given processID, sets a reservation.
+// NextBallotBatch returns the next aggregated ballot batch for a given
+// processID, sets a reservation.
 func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []byte, error) {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
@@ -226,7 +231,8 @@ func (s *Storage) MarkVerifiedBallotDone(k []byte) error {
 	return nil
 }
 
-// MarkBallotBatchDone called after processing aggregator batch. For simplicity, we just remove it from aggregator queue and reservation.
+// MarkBallotBatchDone called after processing aggregator batch. For simplicity,
+// we just remove it from aggregator queue and reservation.
 func (s *Storage) MarkBallotBatchDone(k []byte) error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
