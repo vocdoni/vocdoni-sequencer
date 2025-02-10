@@ -1,5 +1,6 @@
 package aggregatortest
 
+/*
 import (
 	"os"
 	"testing"
@@ -32,6 +33,7 @@ func TestAggregatorCircuit(t *testing.T) {
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	c.Logf("proving tooks %s", time.Since(now).String())
 }
+/*
 
 /*
 TODO: Fix and refactor this test

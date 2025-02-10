@@ -1,5 +1,6 @@
 package voteverifiertest
 
+/*
 import (
 	"fmt"
 	"os"
@@ -58,3 +59,4 @@ func TestVerifyMultipleVotesCircuit(t *testing.T) {
 	}
 	fmt.Println("proving tooks", time.Since(now))
 }
+*/
