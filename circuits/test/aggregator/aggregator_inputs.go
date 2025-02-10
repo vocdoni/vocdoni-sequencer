@@ -20,10 +20,10 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 )
 
-// AggregateTestResults struct includes relevant data after AggregateCircuit
+// AggregatorTestResults struct includes relevant data after AggregatorCircuit
 // inputs generation, including the encrypted ballots in both formats: matrix
 // and plain (for hashing)
-type AggregateTestResults struct {
+type AggregatorTestResults struct {
 	InputsHash            *big.Int
 	ProcessId             *big.Int
 	CensusRoot            *big.Int
@@ -38,45 +38,45 @@ type AggregateTestResults struct {
 /*
 TODO: Fix and refactor this function
 
-func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error) {
+func LocalInputsForTest(nValidVoters int) (AggregatorTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error) {
 	// dummy vkey
 	dummyVkFd, err := os.Open("dummy.vkey")
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	dummyVk := groth16.NewVerifyingKey(gecc.BLS12_377)
 	if _, err := dummyVk.ReadFrom(dummyVkFd); err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	recursiveDummyVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](dummyVk)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// dummy proof
 	dummyProofFd, err := os.Open("dummy.proof")
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	dummyProof := groth16.NewProof(gecc.BLS12_377)
 	if _, err := dummyProof.ReadFrom(dummyProofFd); err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	recursiveDummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyProof)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// base vkey
 	baseVkFd, err := os.Open("vote_verifier.vkey")
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	baseVk := groth16.NewVerifyingKey(gecc.BLS12_377)
 	if _, err := baseVk.ReadFrom(baseVkFd); err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	recursiveBaseVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](baseVk)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// proofs and witnesses
 	proofs := [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
@@ -84,15 +84,15 @@ func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.Aggr
 		if i < nValidVoters {
 			proofFd, err := os.Open(fmt.Sprintf("vote_verifier_%d.proof", i))
 			if err != nil {
-				return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 			}
 			proof := groth16.NewProof(gecc.BLS12_377)
 			if _, err := proof.ReadFrom(proofFd); err != nil {
-				return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 			}
 			recursiveProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 			if err != nil {
-				return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 			}
 			proofs[i] = recursiveProof
 		} else {
@@ -102,30 +102,30 @@ func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.Aggr
 	// inputs
 	resultsFd, err := os.Open("aggregator_test_inputs.json")
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	results := AggregateTestResults{}
+	results := AggregatorTestResults{}
 	if err := json.NewDecoder(resultsFd).Decode(&results); err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// load constrain system
 	ccs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{})
 	if err != nil {
 		log.Println("error compiling constraint system", err)
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	builder, err := r1cs.NewBuilder(ecc.BLS12_377.ScalarField(), frontend.CompileConfig{
 		CompressThreshold: 300,
 	})
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	ccs, err := builder.Compile()
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	if _, err := ccs.ReadFrom(fdCCS); err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	recursiveSlots := [aggregator.MaxVotes]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
 	for i := 0; i < aggregator.MaxVotes; i++ {
@@ -161,18 +161,18 @@ func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.Aggr
 }
 */
 
-// AggregarorInputsForTest returns the AggregateTestResults, the placeholder
+// AggregatorInputsForTest returns the AggregatorTestResults, the placeholder
 // and the assignments of a AggregatorCircuit for the processId provided
 // generating nValidVoters. If something fails it returns an error.
-func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
-	AggregateTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error,
+func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
+	AggregatorTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error,
 ) {
 	// generate users accounts and census
 	vvData := []voteverifiertest.VoterTestData{}
 	for i := 0; i < nValidVoters; i++ {
 		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
 		vvData = append(vvData, voteverifiertest.VoterTestData{
 			PrivKey: privKey,
@@ -183,16 +183,16 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// generate vote verifier circuit and inputs
 	vvInputs, vvPlaceholder, vvAssigments, err := voteverifiertest.VoteVerifierInputsForTest(vvData, processId)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// compile vote verifier circuit
 	vvCCS, err := frontend.Compile(gecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	vvPk, vvVk, err := groth16.Setup(vvCCS)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	/*
 		TODO: uncomment this block when the LocalInputsForTest function is fixed
@@ -211,26 +211,26 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		// parse the witness to the circuit
 		fullWitness, err := frontend.NewWitness(&vvAssigments[i], gecc.BLS12_377.ScalarField())
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
 		// generate the proof
 		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving proof %d: %w", i, err)
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving proof %d: %w", i, err)
 		}
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
 		// convert the public inputs to the circuit public inputs type
 		publicWitness, err := fullWitness.Public()
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
 		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(gecc.BW6_761.ScalarField(), gecc.BLS12_377.ScalarField()))
 		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 		}
 		/*
 			TODO: uncomment this block when the LocalInputsForTest function is fixed
@@ -265,7 +265,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			}
 			hashInput, err := mimc7.Hash(voterInputs, nil)
 			if err != nil {
-				return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 			}
 			hashInputs = append(hashInputs, hashInput)
 		}
@@ -273,7 +273,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// hash the inputs to generate the inputs hash
 	inputsHash, err := mimc7.Hash(hashInputs, nil)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// init final assignments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
@@ -299,7 +299,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	// create final placeholder
 	finalPlaceholder := aggregator.AggregatorCircuit{
@@ -309,9 +309,9 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// fill placeholder and witness with dummy circuits
 	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters, persist)
 	if err != nil {
-		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	res := AggregateTestResults{
+	res := AggregatorTestResults{
 		InputsHash:       inputsHash,
 		ProcessId:        vvInputs.ProcessID,
 		CensusRoot:       vvInputs.CensusRoot,
@@ -328,11 +328,11 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			// persist the results
 			bRes, err := res.MarshalJSON()
 			if err != nil {
-				log.Println("error marshalling AggregateTestResults", err)
+				log.Println("error marshalling AggregatorTestResults", err)
 				return res, finalPlaceholder, finalAssigments, nil
 			}
 			if err := os.WriteFile("aggregator_test_inputs.json", bRes, 0o644); err != nil {
-				log.Println("error writing AggregateTestResults", err)
+				log.Println("error writing AggregatorTestResults", err)
 			}
 		}
 	*/

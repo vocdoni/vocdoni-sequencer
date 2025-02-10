@@ -40,7 +40,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregarorInputsForTest(processId, nValidVoters, false)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -104,14 +104,13 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 			return nil, nil, nil, err
 		}
 	}
+	if err := s.EndBatch(); err != nil {
+		return nil, nil, nil, err
+	}
 	witness, err := GenerateWitnesses(s)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err := s.EndBatch(); err != nil {
-		return nil, nil, nil, err
-	}
-
 	witness.AggregatorProof.Proof = proofInBLS12377
 
 	// create final placeholder
