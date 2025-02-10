@@ -136,7 +136,7 @@ func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.Aggr
 		DummyVerificationKey: recursiveDummyVk,
 		Proofs:               recursiveSlots,
 	}
-	assigments := aggregator.AggregatorCircuit{
+	assignments := aggregator.AggregatorCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](results.InputsHash),
 		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
 		BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
@@ -157,12 +157,12 @@ func LocalInputsForTest(nValidVoters int) (AggregateTestResults, aggregator.Aggr
 		CensusRoot: emulated.ValueOf[sw_bn254.ScalarField](results.CensusRoot),
 		Proofs:     proofs,
 	}
-	return results, placeholder, assigments, nil
+	return results, placeholder, assignments, nil
 }
 */
 
 // AggregarorInputsForTest returns the AggregateTestResults, the placeholder
-// and the assigments of a AggregatorCircuit for the processId provided
+// and the assignments of a AggregatorCircuit for the processId provided
 // generating nValidVoters. If something fails it returns an error.
 func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	AggregateTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error,
@@ -284,7 +284,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	if err != nil {
 		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	// init final assigments stuff
+	// init final assignments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),

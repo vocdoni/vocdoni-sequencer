@@ -12,7 +12,7 @@ import (
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 )
 
-func Prove(placeholder, assigment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
+func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
 	ccs, err := frontend.Compile(field, r1cs.NewBuilder, placeholder)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("compile error: %w", err)
@@ -21,7 +21,7 @@ func Prove(placeholder, assigment frontend.Circuit, outer *big.Int, field *big.I
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("setup error: %w", err)
 	}
-	fullWitness, err := frontend.NewWitness(assigment, field)
+	fullWitness, err := frontend.NewWitness(assignment, field)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("full witness error: %w", err)
 	}

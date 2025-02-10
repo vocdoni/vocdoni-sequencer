@@ -34,7 +34,7 @@ type StateTransitionTestResults struct {
 }
 
 // StateTransitionInputsForTest returns the StateTransitionTestResults, the placeholder
-// and the assigments of a StateTransitionCircuit for the processId provided
+// and the assignments of a StateTransitionCircuit for the processId provided
 // generating nValidVoters. If something fails it returns an error.
 func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
@@ -84,7 +84,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
 	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
-	// init final assigments stuff
+	// init final assignments stuff
 	s := newState(
 		processId,
 		agInputs.CensusRoot.Bytes(),

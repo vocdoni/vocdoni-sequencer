@@ -43,7 +43,7 @@ type VoterTestData struct {
 }
 
 // VoteVerifierInputsForTest returns the VoteVerifierTestResults, the placeholder
-// and the assigments for a VerifyVoteCircuit including the provided voters. If
+// and the assignments for a VerifyVoteCircuit including the provided voters. If
 // processId is nil, it will be randomly generated. If something fails it
 // returns an error.
 func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
@@ -77,8 +77,8 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	}
 	ek := ballottest.GenEncryptionKeyForTest()
 	encryptionKey := circuits.EncryptionKeyFromECCPoint(ek)
-	// circuits assigments, voters data and proofs
-	var assigments []voteverifier.VerifyVoteCircuit
+	// circuits assignments, voters data and proofs
+	var assignments []voteverifier.VerifyVoteCircuit
 	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}
 	encryptedBallots := []elgamal.Ballot{}
 	var finalProcessID *big.Int
@@ -131,7 +131,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		if err != nil {
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
-		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
+		assignments = append(assignments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
@@ -184,5 +184,5 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				Proof:   circomPlaceholder.Proof,
 				Witness: circomPlaceholder.Witness,
 			},
-		}, assigments, nil
+		}, assignments, nil
 }
