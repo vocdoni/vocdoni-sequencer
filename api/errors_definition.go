@@ -30,10 +30,11 @@ var (
 	ErrInvalidSignature   = Error{Code: 40005, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid signature")}
 	ErrMalformedProcessID = Error{Code: 40006, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("malformed process ID")}
 	ErrProcessNotFound    = Error{Code: 40007, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("process not found")}
+	ErrInvalidCensusProof = Error{Code: 40008, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census proof")}
+	ErrInvalidBallotProof = Error{Code: 40009, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census proof")}
+	ErrInvalidCensusID    = Error{Code: 40010, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census ID")}
+	ErrCensusNotFound     = Error{Code: 40011, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("census not found")}
 
 	ErrMarshalingServerJSONFailed = Error{Code: 50001, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("marshaling (server-side) JSON failed")}
 	ErrGenericInternalServerError = Error{Code: 50002, HTTPstatus: http.StatusInternalServerError, Err: fmt.Errorf("internal server error")}
-
-	ErrInvalidCensusID = Error{Code: 40020, HTTPstatus: http.StatusBadRequest, Err: fmt.Errorf("invalid census ID")}
-	ErrCensusNotFound  = Error{Code: 40021, HTTPstatus: http.StatusNotFound, Err: fmt.Errorf("census not found")}
 )

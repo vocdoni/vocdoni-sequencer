@@ -12,6 +12,8 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
+const CurveType = "bjj_gnark"
+
 var Params babyjubjub.CurveParams
 
 // BJJ is the affine representation of the BabyJubJub group element.
@@ -153,4 +155,8 @@ func (p *BJJ) SetPoint(x, y *big.Int) curve.Point {
 	p.inner.X.SetBigInt(xRTE)
 	p.inner.Y.SetBigInt(yRTE)
 	return p
+}
+
+func (g *BJJ) Type() string {
+	return CurveType
 }

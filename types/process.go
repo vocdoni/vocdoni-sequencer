@@ -79,7 +79,9 @@ type Census struct {
 	CensusURI    string   `json:"censusURI"    cbor:"3,keyasint,omitempty"`
 }
 
-// CensusProof holds the result of a Merkle proof.
+// CensusProof is the struct to represent a proof of inclusion in the census
+// merkle tree. For example, it will be provided by the user to verify that he
+// or she can vote in the process.
 type CensusProof struct {
 	Root     HexBytes `json:"root"`
 	Key      HexBytes `json:"key"`

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/arbo/memdb"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
@@ -128,7 +129,7 @@ func main() {
 		return
 	}
 
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bjj.CurveType)
 	pubKey, _, err := elgamal.GenerateKey(curve)
 	if err != nil {
 		log.Errorw(err, "failed to generate key")

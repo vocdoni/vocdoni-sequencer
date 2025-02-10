@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
@@ -22,7 +23,7 @@ func (a *API) newCensus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) addCensusParticipants(w http.ResponseWriter, r *http.Request) {
-	censusID, err := uuid.Parse(r.URL.Query().Get("id"))
+	censusID, err := uuid.Parse(chi.URLParam(r, CensusURLParam))
 	if err != nil {
 		ErrMalformedBody.WithErr(err).Write(w)
 		return
@@ -78,7 +79,7 @@ func (a *API) addCensusParticipants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getCensusParticipants(w http.ResponseWriter, r *http.Request) {
-	censusID, err := uuid.Parse(r.URL.Query().Get("id"))
+	censusID, err := uuid.Parse(chi.URLParam(r, CensusURLParam))
 	if err != nil {
 		ErrMalformedBody.WithErr(err).Write(w)
 		return
@@ -116,7 +117,7 @@ func (a *API) getCensusParticipants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getCensusRoot(w http.ResponseWriter, r *http.Request) {
-	censusID, err := uuid.Parse(r.URL.Query().Get("id"))
+	censusID, err := uuid.Parse(chi.URLParam(r, CensusURLParam))
 	if err != nil {
 		ErrInvalidCensusID.WithErr(err).Write(w)
 		return
@@ -134,45 +135,30 @@ func (a *API) getCensusRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getCensusSize(w http.ResponseWriter, r *http.Request) {
-	rootStr := r.URL.Query().Get("root")
-	idStr := r.URL.Query().Get("id")
 	size := 0
-	if idStr != "" {
-		censusID, err := uuid.Parse(r.URL.Query().Get("id"))
-		if err != nil {
-			ErrInvalidCensusID.WithErr(err).Write(w)
-			return
-		}
-
+	if censusID, err := uuid.Parse(chi.URLParam(r, CensusURLParam)); err == nil {
 		ref, err := a.storage.CensusDB().Load(censusID)
 		if err != nil {
 			ErrGenericInternalServerError.WithErr(err).Write(w)
 			return
 		}
 		size = ref.Size()
-	} else if rootStr != "" {
-		root, err := hex.DecodeString(rootStr)
-		if err != nil {
-			ErrInvalidCensusID.WithErr(err).Write(w)
-			return
-		}
-		size, err = a.storage.CensusDB().SizeByRoot(root)
-		if err != nil {
+	} else if root, err := hex.DecodeString(chi.URLParam(r, CensusURLParam)); err == nil {
+		if size, err = a.storage.CensusDB().SizeByRoot(root); err != nil {
 			ErrGenericInternalServerError.WithErr(err).Write(w)
 			return
 		}
 	} else {
-		ErrInvalidCensusID.Write(w)
+		ErrInvalidCensusID.WithErr(err).Write(w)
 		return
 	}
-
 	httpWriteJSON(w, map[string]interface{}{
 		"size": size,
 	})
 }
 
 func (a *API) deleteCensus(w http.ResponseWriter, r *http.Request) {
-	censusID, err := uuid.Parse(r.URL.Query().Get("id"))
+	censusID, err := uuid.Parse(chi.URLParam(r, CensusURLParam))
 	if err != nil {
 		ErrInvalidCensusID.WithErr(err).Write(w)
 		return
@@ -187,7 +173,7 @@ func (a *API) deleteCensus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getCensusProof(w http.ResponseWriter, r *http.Request) {
-	rootHex := r.URL.Query().Get("root")
+	rootHex := chi.URLParam(r, CensusURLParam)
 	root, err := hex.DecodeString(rootHex)
 	if err != nil {
 		ErrInvalidCensusID.WithErr(err).Write(w)

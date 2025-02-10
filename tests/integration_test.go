@@ -3,8 +3,12 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/vocdoni/vocdoni-z-sandbox/api"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -18,21 +22,19 @@ func TestIntegration(t *testing.T) {
 
 	// Setup
 	ctx := context.Background()
-	api, contracts := NewTestService(t, ctx)
-	_, port := api.HostPort()
+	apiSrv, contracts := NewTestService(t, ctx)
+	_, port := apiSrv.HostPort()
 	cli, err := NewTestClient(port)
 	c.Assert(err, qt.IsNil)
 
-	t.Run("create organization", func(t *testing.T) {
+	c.Run("create organization", func(c *qt.C) {
 		orgAddr := createOrganization(c, contracts)
 		t.Logf("Organization address: %s", orgAddr.String())
 	})
 
-	t.Run("create process", func(t *testing.T) {
-		c := qt.New(t)
-
+	c.Run("create process", func(c *qt.C) {
 		// Create census with 10 participants
-		root, participants, signers := createCensus(c, cli, 100)
+		root, participants, signers := createCensus(c, cli, 10)
 
 		// Generate proof for first participant
 		proof := generateCensusProof(c, cli, root, participants[0].Key)
@@ -54,7 +56,42 @@ func TestIntegration(t *testing.T) {
 			MinTotalCost:    new(types.BigInt).SetUint64(100),
 		}
 
-		pid := createProcess(c, contracts, cli, root, ballotMode)
+		pid, _ := createProcess(c, contracts, cli, root, ballotMode)
 		t.Logf("Process ID: %s", pid.String())
+	})
+
+	c.Run("create vote", func(c *qt.C) {
+		// create census with 10 participants
+		root, participants, signers := createCensus(c, cli, 10)
+		// create process
+		mockMode := circuits.MockBallotMode()
+		ballotMode := types.BallotMode{
+			MaxCount:        uint8(mockMode.MaxCount.Uint64()),
+			ForceUniqueness: mockMode.ForceUniqueness.Uint64() == 1,
+			MaxValue:        (*types.BigInt)(mockMode.MaxValue),
+			MinValue:        (*types.BigInt)(mockMode.MaxValue),
+			MaxTotalCost:    (*types.BigInt)(mockMode.MaxTotalCost),
+			MinTotalCost:    (*types.BigInt)(mockMode.MinTotalCost),
+			CostFromWeight:  mockMode.CostFromWeight.Uint64() == 1,
+			CostExponent:    uint8(mockMode.CostExp.Uint64()),
+		}
+		pid, encryptionKey := createProcess(c, contracts, cli, root, ballotMode)
+		// generate a vote for the first participant
+		vote := createVote(c, pid, encryptionKey, participants[0].Key, signers[0])
+		// generate census proof for first participant
+		censusProof := generateCensusProof(c, cli, root, participants[0].Key)
+		c.Assert(censusProof, qt.Not(qt.IsNil))
+		c.Assert(censusProof.Siblings, qt.IsNotNil)
+		vote.CensusProof = *censusProof
+
+		// load ballot proof artifacts
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
+
+		body, status, err := cli.Request("POST", vote, nil, api.VotesEndpoint)
+		c.Assert(err, qt.IsNil)
+		c.Assert(status, qt.Equals, 200)
+		c.Log("Vote created", string(body))
 	})
 }

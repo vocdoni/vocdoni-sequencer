@@ -47,7 +47,7 @@ Creates a new voting process setup and returns it. The process is not stored.
 }
 ```
 
-#### GET /process?id=000005390056d6ed515b2e0af39bb068f587d0de83facd1b0000000000000003
+#### GET /process/000005390056d6ed515b2e0af39bb068f587d0de83facd1b0000000000000003
 Gets information about an existing voting process. It must exist in the smart contract.
 
 **Response Body**:
@@ -139,10 +139,10 @@ Creates a new census.
 }
 ```
 
-#### POST /census/participants?id=5fac16ce-3555-41a1-9ad9-a9176e8d08be
+#### POST /census/5fac16ce-3555-41a1-9ad9-a9176e8d08be/participants
 Adds participants to an existing census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 - id: Census UUID
 
 **Request Body**:
@@ -159,10 +159,10 @@ Adds participants to an existing census.
 
 **Response**: Empty response with HTTP 200 OK status
 
-#### GET /census/participants?id=5fac16ce-3555-41a1-9ad9-a9176e8d08be
+#### GET /census/5fac16ce-3555-41a1-9ad9-a9176e8d08be/participants
 Gets the list of participants in a census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 - id: Census UUID
 
 **Response Body**:
@@ -177,10 +177,10 @@ Gets the list of participants in a census.
 }
 ```
 
-#### GET /census/root?id=5fac16ce-3555-41a1-9ad9-a9176e8d08be
+#### GET /census/5fac16ce-3555-41a1-9ad9-a9176e8d08be/root
 Gets the Merkle root of a census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 - id: Census UUID
 
 **Response Body**:
@@ -190,10 +190,10 @@ Gets the Merkle root of a census.
 }
 ```
 
-#### GET /census/size?id=5fac16ce-3555-41a1-9ad9-a9176e8d08be
+#### GET /census/5fac16ce-3555-41a1-9ad9-a9176e8d08be/size
 Gets the number of participants in a census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 Accepts one of both:
 - id: Census UUID
 - root: Census merkle root (hex encoded)
@@ -205,19 +205,21 @@ Accepts one of both:
 }
 ```
 
-#### DELETE /census?id=5fac16ce-3555-41a1-9ad9-a9176e8d08be
+#### DELETE /census/5fac16ce-3555-41a1-9ad9-a9176e8d08be
 Deletes a census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 - id: Census UUID
 
 **Response**: Empty response with HTTP 200 OK status
 
-#### GET /census/proof?root=bb7f7eef18b85b131...&key=4179e431856a710bd...
+#### GET /census/bb7f7eef18b85b131.../proof?key=4179e431856a710bd...
 Gets a Merkle proof for a participant in a census.
 
-**URL Parameters**:
+**URL Path Parameters**:
 - root: Census merkle root (hex encoded)
+
+**URL Parameters**:
 - key: Participant key (hex encoded)
 
 **Response Body**:
@@ -238,6 +240,61 @@ All endpoints may return error responses with the following format:
 ```json
 {
   "error": "string"
+}
+```
+
+Common HTTP status codes:
+- 200: Success
+- 400: Bad Request
+- 404: Not Found
+- 500: Internal Server Error
+
+### Vote Management
+
+#### POST /vote
+Example: `POST /vote`
+Register new vote.
+
+**Response Body**:
+```json
+{
+  "processId": "hexBytes",
+  "commitment": "hexBytes",
+  "nullifier": "hexBytes",
+  "censusProof": {
+    "root": "hexBytes",
+    "key": "hexBytes",
+    "value": "hexBytes",
+    "siblings": "hexBytes",
+    "weight": "bigInt",
+  },
+  "ballot": {
+    "curveType": "string",
+    "ciphertexts": [
+      {
+        "c1": {
+          "x": "bigInt",
+          "y": "bigInt",
+        },
+        "c2": {
+          "x": "bigInt",
+          "y": "bigInt",
+        },
+      }
+    ]
+  },
+  "ballotProof": {
+    "pi_a": "[]string",
+    "pi_b": "[][]string",
+    "pi_c": "[]string",
+    "protocol": "string",
+  },
+  "ballotInputsHash": "hexBytes",
+  "publicKey": "hexBytes",
+  "signature": {
+    "r": "hexBytes",
+    "s": "hexBytes",
+  },
 }
 ```
 

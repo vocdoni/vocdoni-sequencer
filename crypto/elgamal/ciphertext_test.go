@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
 
 func TestNewCiphertext(t *testing.T) {
 	c := qt.New(t)
 
-	cipher := NewCiphertext(curves.New(curves.CurveTypeBN254))
+	cipher := NewCiphertext(curves.New(bn254.CurveType))
 	c.Assert(cipher, qt.Not(qt.IsNil))
 	c.Assert(cipher.C1, qt.Not(qt.IsNil))
 	c.Assert(cipher.C2, qt.Not(qt.IsNil))
@@ -21,7 +22,7 @@ func TestCiphertext_Encrypt(t *testing.T) {
 	c := qt.New(t)
 
 	// Create a test key pair
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 	publicKey, _, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
 
@@ -47,7 +48,7 @@ func TestCiphertext_Add(t *testing.T) {
 	c := qt.New(t)
 
 	// Create test ciphertexts
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 	publicKey, _, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
 
@@ -81,7 +82,7 @@ func TestCiphertext_SerializeDeserialize(t *testing.T) {
 	c := qt.New(t)
 
 	// Create a test ciphertext
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 	publicKey, _, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
 
@@ -118,7 +119,7 @@ func TestCiphertext_MarshalUnmarshal(t *testing.T) {
 	c := qt.New(t)
 
 	// Create a test ciphertext
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 	publicKey, _, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
 
@@ -155,7 +156,7 @@ func TestCiphertext_String(t *testing.T) {
 	c := qt.New(t)
 
 	// Create a test ciphertext with properly initialized points
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 	publicKey, _, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
 
@@ -175,7 +176,7 @@ func TestCiphertext_String(t *testing.T) {
 func TestCiphertext_DeserializeError(t *testing.T) {
 	c := qt.New(t)
 
-	cipher := NewCiphertext(curves.New(curves.CurveTypeBN254))
+	cipher := NewCiphertext(curves.New(bn254.CurveType))
 
 	// Test with invalid length, should panic
 	c.Assert(cipher.Deserialize(make([]byte, 127)), // Should be 128

@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
 
 func TestGenerateKey(t *testing.T) {
 	c := qt.New(t)
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 
 	publicKey, privateKey, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
@@ -26,7 +27,7 @@ func TestGenerateKey(t *testing.T) {
 
 func TestEncryptDecrypt(t *testing.T) {
 	c := qt.New(t)
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 
 	publicKey, privateKey, err := GenerateKey(curve)
 	c.Assert(err, qt.IsNil)
@@ -55,7 +56,7 @@ func TestCheckK(t *testing.T) {
 	c := qt.New(t)
 
 	// Setup a curve point
-	curve := curves.New(curves.CurveTypeBN254)
+	curve := curves.New(bn254.CurveType)
 
 	// Generate a key pair
 	pubKey, privKey, err := GenerateKey(curve)

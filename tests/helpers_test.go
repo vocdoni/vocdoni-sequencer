@@ -11,12 +11,17 @@ import (
 	"testing"
 	"time"
 
+	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/ethereum/go-ethereum/common"
 	qt "github.com/frankban/quicktest"
 	tc "github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/api/client"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	ballotprooftest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/service"
@@ -86,7 +91,7 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 
 func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant, []*ethereum.SignKeys) {
 	// Create a new census
-	body, code, err := cli.Request(http.MethodPost, nil, nil, "census")
+	body, code, err := cli.Request(http.MethodPost, nil, nil, api.NewCensusEndpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
@@ -105,18 +110,20 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 		key := signer.Address().Bytes()
 		censusParticipants.Participants = append(censusParticipants.Participants, &api.CensusParticipant{
 			Key:    key,
-			Weight: new(types.BigInt).SetUint64(1),
+			Weight: new(types.BigInt).SetUint64(circuits.MockWeight),
 		})
 		signers = append(signers, signer)
 	}
 
 	// Add participants to census
-	_, code, err = cli.Request(http.MethodPost, censusParticipants, []string{"id", resp.Census.String()}, "census", "participants")
+	addEnpoint := api.EndpointWithParam(api.AddCensusParticipantsEndpoint, api.CensusURLParam, resp.Census.String())
+	_, code, err = cli.Request(http.MethodPost, censusParticipants, nil, addEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
 	// Get census root
-	body, code, err = cli.Request(http.MethodGet, nil, []string{"id", resp.Census.String()}, "census", "root")
+	getRootEnpoint := api.EndpointWithParam(api.GetCensusRootEndpoint, api.CensusURLParam, resp.Census.String())
+	body, code, err = cli.Request(http.MethodGet, nil, nil, getRootEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
@@ -129,10 +136,8 @@ func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.Cen
 
 func generateCensusProof(c *qt.C, cli *client.HTTPclient, root []byte, key []byte) *types.CensusProof {
 	// Get proof for the key
-	body, code, err := cli.Request(http.MethodGet, nil, []string{
-		"root", hex.EncodeToString(root),
-		"key", hex.EncodeToString(key),
-	}, "census", "proof")
+	getProofEnpoint := api.EndpointWithParam(api.GetCensusProofEndpoint, api.CensusURLParam, hex.EncodeToString(root))
+	body, code, err := cli.Request(http.MethodGet, nil, []string{"key", hex.EncodeToString(key)}, getProofEnpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK)
 
@@ -156,7 +161,7 @@ func createOrganization(c *qt.C, contracts *web3.Contracts) common.Address {
 	return orgAddr
 }
 
-func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, censusRoot []byte, ballotMode types.BallotMode) *types.ProcessID {
+func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, censusRoot []byte, ballotMode types.BallotMode) (*types.ProcessID, *types.EncryptionKey) {
 	// Create test process request
 	nonce, err := contracts.AccountNonce()
 	c.Assert(err, qt.IsNil)
@@ -173,7 +178,7 @@ func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, c
 		Signature:  signature,
 	}
 
-	body, code, err := cli.Request(http.MethodPost, process, nil, "process")
+	body, code, err := cli.Request(http.MethodPost, process, nil, api.ProcessesEndpoint)
 	c.Assert(err, qt.IsNil)
 	c.Assert(code, qt.Equals, http.StatusOK, qt.Commentf("response body %s", string(body)))
 
@@ -183,19 +188,19 @@ func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, c
 	c.Assert(resp.ProcessID, qt.Not(qt.IsNil))
 	c.Assert(resp.EncryptionPubKey[0], qt.Not(qt.IsNil))
 	c.Assert(resp.EncryptionPubKey[1], qt.Not(qt.IsNil))
-
+	encryptionKeys := &types.EncryptionKey{
+		X: (*big.Int)(&resp.EncryptionPubKey[0]),
+		Y: (*big.Int)(&resp.EncryptionPubKey[1]),
+	}
 	pid, txHash, err := contracts.CreateProcess(&types.Process{
 		Status:         0,
 		OrganizationId: contracts.AccountAddress(),
-		EncryptionKey: &types.EncryptionKey{
-			X: (*big.Int)(&resp.EncryptionPubKey[0]),
-			Y: (*big.Int)(&resp.EncryptionPubKey[1]),
-		},
-		StateRoot:   resp.StateRoot,
-		StartTime:   time.Now().Add(30 * time.Second),
-		Duration:    time.Hour,
-		MetadataURI: "https://example.com/metadata",
-		BallotMode:  &ballotMode,
+		EncryptionKey:  encryptionKeys,
+		StateRoot:      resp.StateRoot,
+		StartTime:      time.Now().Add(30 * time.Second),
+		Duration:       time.Hour,
+		MetadataURI:    "https://example.com/metadata",
+		BallotMode:     &ballotMode,
 		Census: &types.Census{
 			CensusRoot:   censusRoot,
 			MaxVotes:     new(types.BigInt).SetUint64(1000),
@@ -208,5 +213,36 @@ func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, c
 	err = contracts.WaitTx(*txHash, time.Second*15)
 	c.Assert(err, qt.IsNil)
 
-	return pid
+	return pid, encryptionKeys
+}
+
+func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKey,
+	address types.HexBytes, signer *ethereum.SignKeys,
+) api.Vote {
+	encKey := new(bjj.BJJ).SetPoint(encryptionKey.X, encryptionKey.Y)
+	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), encKey)
+	c.Assert(err, qt.IsNil)
+	// convert the circom inputs hash to the field of the curve used by the
+	// circuit as input for MIMC hash
+	blsCircomInputsHash := crypto.BigIntToMIMCHash(votedata.InputsHash, gecc.BLS12_377.ScalarField())
+	// sign the inputs hash with the private key
+	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
+	c.Assert(err, qt.IsNil)
+
+	circomProof, _, err := circuits.Circom2GnarkProof(votedata.Proof, votedata.PubInputs)
+	c.Assert(err, qt.IsNil)
+
+	return api.Vote{
+		ProcessID:        pid.Marshal(),
+		Commitment:       votedata.Commitment.Bytes(),
+		Nullifier:        votedata.Nullifier.Bytes(),
+		Ballot:           votedata.EncryptedFields,
+		BallotProof:      circomProof,
+		BallotInputsHash: votedata.InputsHash.Bytes(),
+		PublicKey:        signer.PublicKey(),
+		Signature: types.BallotSignature{
+			R: rSign.Bytes(),
+			S: sSign.Bytes(),
+		},
+	}
 }

@@ -66,35 +66,38 @@ func (a *API) registerHandlers() {
 	// - POST /process: No parameters
 	// - GET /process: No parameters
 	// - POST /census: No parameters
-	// - POST /census/participants?id=<uuid>: Parameters: id
-	// - GET /census/participants?id=<uuid>: Parameters: id
-	// - GET /census/root?id=<uuid>: Parameters: id
-	// - GET /census/size?id=<uuid>|root=<hex>: Parameters: id or root
-	// - DELETE /census?id=<uuid>: Parameters: id
-	// - GET /census/proof?root=<hex>&key=<key>: Parameters: id, key
+	// - POST /census/<uuid>/participants: No parameters
+	// - GET /census/<uuid>/participants: No parameters
+	// - GET /census/<uuid>/root: No parameters
+	// - GET /census/<uuid or root>/size: No parameters
+	// - DELETE /census/<uuid>: No parameters
+	// - GET /census/<root>/proof?key=<key>: Parameters: key
 	log.Infow("register handler", "endpoint", PingEndpoint, "method", "GET")
 	a.router.Get(PingEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		httpWriteOK(w)
 	})
-	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "POST")
-	a.router.Post(ProcessEndpoint, a.newProcess)
+	// processes endpoints
+	log.Infow("register handler", "endpoint", ProcessesEndpoint, "method", "POST")
+	a.router.Post(ProcessesEndpoint, a.newProcess)
 	log.Infow("register handler", "endpoint", ProcessEndpoint, "method", "GET")
 	a.router.Get(ProcessEndpoint, a.process)
-
-	// Census endpoints
+	// votes endpoints
+	log.Infow("register handler", "endpoint", VotesEndpoint, "method", "POST")
+	a.router.Post(VotesEndpoint, a.newVote)
+	// census endpoints
 	log.Infow("register handler", "endpoint", NewCensusEndpoint, "method", "POST")
 	a.router.Post(NewCensusEndpoint, a.newCensus)
-	log.Infow("register handler", "endpoint", AddCensusParticipantsEndpoint, "method", "POST", "parameters", "id")
+	log.Infow("register handler", "endpoint", AddCensusParticipantsEndpoint, "method", "POST")
 	a.router.Post(AddCensusParticipantsEndpoint, a.addCensusParticipants)
-	log.Infow("register handler", "endpoint", GetCensusParticipantsEndpoint, "method", "GET", "parameters", "id")
+	log.Infow("register handler", "endpoint", GetCensusParticipantsEndpoint, "method", "GET")
 	a.router.Get(GetCensusParticipantsEndpoint, a.getCensusParticipants)
-	log.Infow("register handler", "endpoint", GetCensusRootEndpoint, "method", "GET", "parameters", "id")
+	log.Infow("register handler", "endpoint", GetCensusRootEndpoint, "method", "GET")
 	a.router.Get(GetCensusRootEndpoint, a.getCensusRoot)
-	log.Infow("register handler", "endpoint", GetCensusSizeEndpoint, "method", "GET", "parameters", "id")
+	log.Infow("register handler", "endpoint", GetCensusSizeEndpoint, "method", "GET")
 	a.router.Get(GetCensusSizeEndpoint, a.getCensusSize)
-	log.Infow("register handler", "endpoint", DeleteCensusEndpoint, "method", "DELETE", "parameters", "id")
+	log.Infow("register handler", "endpoint", DeleteCensusEndpoint, "method", "DELETE")
 	a.router.Delete(DeleteCensusEndpoint, a.deleteCensus)
-	log.Infow("register handler", "endpoint", GetCensusProofEndpoint, "method", "GET", "parameters", "id, key")
+	log.Infow("register handler", "endpoint", GetCensusProofEndpoint, "method", "GET", "parameters", "key")
 	a.router.Get(GetCensusProofEndpoint, a.getCensusProof)
 }
 

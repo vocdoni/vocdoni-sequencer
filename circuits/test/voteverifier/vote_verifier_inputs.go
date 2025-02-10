@@ -16,6 +16,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"go.vocdoni.io/dvote/util"
 )
@@ -95,7 +96,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		encryptedBallots = append(encryptedBallots, *voterProof.EncryptedFields)
 		// convert the circom inputs hash to the field of the curve used by the
 		// circuit as input for MIMC hash
-		blsCircomInputsHash := circuits.BigIntToMIMCHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
+		blsCircomInputsHash := crypto.BigIntToMIMCHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballottest.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
@@ -126,6 +127,10 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		}
 		inputsHashes = append(inputsHashes, inputsHash)
 		// compose circuit placeholders
+		recursiveProof, err := circuits.Circom2GnarkProofForRecursion(ballottest.TestCircomVerificationKey, voterProof.Proof, voterProof.PubInputs)
+		if err != nil {
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+		}
 		assigments = append(assigments, voteverifier.VerifyVoteCircuit{
 			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
@@ -157,9 +162,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			},
 			// circom proof
 			CircomProof: circuits.InnerProofBN254{
-				VK:      voterProof.Proof.Vk,
-				Proof:   voterProof.Proof.Proof,
-				Witness: voterProof.Proof.PublicInputs,
+				VK:      recursiveProof.Vk,
+				Proof:   recursiveProof.Proof,
+				Witness: recursiveProof.PublicInputs,
 			},
 		})
 	}

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/vocdoni/arbo/memdb"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
@@ -40,7 +42,7 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate the elgamal key
-	publicKey, privateKey, err := elgamal.GenerateKey(curves.New(curves.CurveTypeBN254))
+	publicKey, privateKey, err := elgamal.GenerateKey(curves.New(bjj.CurveType))
 	if err != nil {
 		ErrGenericInternalServerError.Withf("could not generate elgamal key: %v", err).Write(w)
 		return
@@ -91,10 +93,10 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 }
 
 // getProcess retrieves a voting process
-// GET /process?id=<processId>
+// GET /process/{processId}
 func (a *API) process(w http.ResponseWriter, r *http.Request) {
 	// Unmarshal the process ID
-	pidBytes, err := hex.DecodeString(r.URL.Query().Get("id"))
+	pidBytes, err := hex.DecodeString(chi.URLParam(r, ProcessURLParam))
 	if err != nil {
 		ErrMalformedProcessID.Withf("could not decode process ID: %v", err).Write(w)
 		return

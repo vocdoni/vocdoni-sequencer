@@ -9,23 +9,16 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 )
 
-const (
-	CurveTypeBabyJubJub      = "bjj_gnark" // Default bjj curve type
-	CurveTypeBabyJubJubGnark = "bjj_gnark"
-	CurveTypeBabyJubJubIden3 = "bjj_iden3"
-	CurveTypeBN254           = "bn254"
-)
-
 // New creates a new instance of a Curve implementation based on the provided type string.
 // The supported types are defined as constants in this package.
 // If the type is not supported, it will panic.
 func New(curveType string) ecc.Point {
 	switch curveType {
-	case CurveTypeBabyJubJubGnark:
+	case bjj_gnark.CurveType:
 		return &bjj_gnark.BJJ{}
-	case CurveTypeBN254:
+	case bn254.CurveType:
 		return &bn254.G1{}
-	case CurveTypeBabyJubJubIden3:
+	case bjj_iden3.CurveType:
 		return &bjj_iden3.BJJ{}
 	default:
 		panic(fmt.Sprintf("unsupported curve type: %s", curveType))

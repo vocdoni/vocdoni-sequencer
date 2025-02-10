@@ -6,7 +6,13 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
+// Artifacts contains the circuit artifacts for the aggregator circuit, which
+// includes the proving and verification keys.
 var Artifacts = circuits.NewCircuitArtifacts(
+	&circuits.Artifact{
+		RemoteURL: config.AgregatorCircuitURL,
+		Hash:      types.HexStringToHexBytes(config.AggregatorCircuitHash),
+	},
 	&circuits.Artifact{
 		RemoteURL: config.AggregatorProvingKeyURL,
 		Hash:      types.HexStringToHexBytes(config.AggregatorProvingKeyHash),
@@ -15,12 +21,4 @@ var Artifacts = circuits.NewCircuitArtifacts(
 		RemoteURL: config.AggregatorVerificationKeyURL,
 		Hash:      types.HexStringToHexBytes(config.AggregatorVerificationKeyHash),
 	},
-)
-
-var DummyArtifacts = circuits.NewCircuitArtifacts(
-	&circuits.Artifact{
-		RemoteURL: config.DummyProvingKeyURL,
-		Hash:      types.HexStringToHexBytes(config.DummyProvingKeyHash),
-	},
-	nil,
 )
