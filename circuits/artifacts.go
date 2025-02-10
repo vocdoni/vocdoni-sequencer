@@ -4,19 +4,17 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
-
-const downloadCircuitsTimeout = time.Minute * 5
 
 // BaseDir is the path where the artifact cache is expected to be found. If the
 // artifacts are not found there, they will be downloaded and stored. It can be
@@ -32,75 +30,81 @@ var BaseDir = filepath.Join(".cache", "circuits-artifacts")
 // of the content to ensure its integrity.
 type Artifact struct {
 	RemoteURL string
-	Hash      types.HexBytes
-	Content   types.HexBytes
+	Hash      []byte
+	Content   []byte
 }
 
-// Load method checks if the key content is already loaded, if not, it will
-// try to load it from the local cache or download it from the remote URL
-// provided. If the content is downloaded, it will be stored locally. It also
-// checks the hash of the content to ensure its integrity. If the key is not
-// already loaded, it returns an error if the hash is not provided, the remote
-// URL is not provided, or the content cannot be loaded locally, downloaded or
-// written to a local file. It also returns an error if the hash of the content
-// does not match the hash provided.
-func (k *Artifact) Load(ctx context.Context) error {
-	// if the key has content, it is already loaded and it will return
+// Load method checks if the artifact content is already loaded, if not, it will
+// try to load it from the local storage. It also checks the hash of the content
+// to ensure its integrity. It returns an error if the artifact is already
+// loaded but the hash is not set or it does not match with the content.
+func (k *Artifact) Load() error {
+	// if the artifact has content, it is already loaded and it will return
 	if len(k.Content) != 0 {
 		return nil
 	}
-	// if the key has no content, it must have its hash set to check the
+	// if the artifact has no content, it must have its hash set to check the
 	// content when it is loaded
 	if len(k.Hash) == 0 {
 		return fmt.Errorf("key hash not provided")
 	}
-	// create a flag to check if the content should be written to a local
-	// file or not
-	shouldBeWritten := false
 	// check if the content is already stored locally by hash and load it
-	content, err := loadLocal(k.Hash.String())
+	content, err := load(hex.EncodeToString(k.Hash))
 	if err != nil {
 		return err
 	}
-	// if the content is not stored locally, it must be downloaded
+	// return an error if the content is nil
 	if content == nil {
-		// if the remote url is not provided, the key cannot be loaded so
-		// it will return an error
-		if k.RemoteURL == "" {
-			return fmt.Errorf("key not loaded and remote url not provided")
-		}
-		// download the content from the remote url
-		if content, err = loadRemote(ctx, k.RemoteURL); err != nil {
-			return err
-		}
-		// mark the content to be written to a local file
-		shouldBeWritten = true
+		return fmt.Errorf("no content found")
 	}
 	// check the hash of the loaded content
 	if err := checkHash(content, k.Hash); err != nil {
 		return err
 	}
+	// set the content of the artifact
 	k.Content = content
-	// if the content should be written, store it locally
-	if shouldBeWritten {
-		if err := storeLocal(content, k.Hash.String()); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// CircuitArtifacts is a struct that holds the proving and verifying keys of a
-// zkSNARK circuit. It provides a method to load the keys from the local cache
-// or download them from the remote URLs provided.
+// Download method downloads the content of the artifact from the remote URL,
+// checks the hash of the content and stores it locally. It returns an error if
+// the remote URL is not provided or the content cannot be downloaded, or if the
+// hash of the content does not match. If the content is already loaded, it will
+// return.
+func (k *Artifact) Download(ctx context.Context) error {
+	// if the remote url is not provided, the artifact cannot be loaded so
+	// it will return an error
+	if k.RemoteURL == "" {
+		return fmt.Errorf("key not loaded and remote url not provided")
+	}
+	// if the artifact is already loaded, it will return
+	if err := k.Load(); err == nil {
+		return nil
+	}
+
+	// download the content from the remote url
+	content, err := download(ctx, k.RemoteURL)
+	if err != nil {
+		return err
+	}
+	// check the hash of the loaded content
+	if err := checkHash(content, k.Hash); err != nil {
+		return err
+	}
+	return store(content, hex.EncodeToString(k.Hash))
+}
+
+// CircuitArtifacts is a struct that holds the artifacts of a zkSNARK circuit
+// (definition, proving and verification key). It provides a method to load the
+// keys from the local cache or download them from the remote URLs provided.
 type CircuitArtifacts struct {
 	circuitDefinition *Artifact
 	provingKey        *Artifact
 	verifyingKey      *Artifact
 }
 
-// NewCircuitArtifacts creates a new CircuitArtifacts struct with the proving
-// and verifying keys provided.
+// NewCircuitArtifacts creates a new CircuitArtifacts struct with the circuit
+// artifacts provided. It returns the struct with the artifacts set.
 func NewCircuitArtifacts(circuit, provingKey, verifyingKey *Artifact) *CircuitArtifacts {
 	return &CircuitArtifacts{
 		circuitDefinition: circuit,
@@ -109,32 +113,47 @@ func NewCircuitArtifacts(circuit, provingKey, verifyingKey *Artifact) *CircuitAr
 	}
 }
 
-// LoadAll method loads the proving and verifying keys creating a context with
-// a timeout of 5 minutes. It returns an error if the proving or verifying keys
-// cannot be loaded.
+// LoadAll method loads the circuit artifacts creating a context with a timeout
+// of 5 minutes. It returns an error if the proving or verifying keys cannot be
+// loaded.
 func (ca *CircuitArtifacts) LoadAll() error {
-	ctx, cancel := context.WithTimeout(context.Background(), downloadCircuitsTimeout)
-	defer cancel()
 	if ca.circuitDefinition != nil {
-		if err := ca.circuitDefinition.Load(ctx); err != nil {
+		if err := ca.circuitDefinition.Load(); err != nil {
 			return fmt.Errorf("error loading circuit definition: %w", err)
 		}
 	}
 	if ca.provingKey != nil {
-		if err := ca.provingKey.Load(ctx); err != nil {
+		if err := ca.provingKey.Load(); err != nil {
 			return fmt.Errorf("error loading proving key: %w", err)
 		}
 	}
 	if ca.verifyingKey != nil {
-		if err := ca.verifyingKey.Load(ctx); err != nil {
+		if err := ca.verifyingKey.Load(); err != nil {
 			return fmt.Errorf("error loading verifying key: %w", err)
 		}
 	}
 	return nil
 }
 
-// CircuitDefinition returns the content of the circuit definition as types.HexBytes.
-// If the circuit definition is not loaded, it returns nil.
+// DownloadAll method downloads the circuit artifacts with the provided context.
+// It returns an error if any of the artifacts cannot be downloaded.
+func (ca *CircuitArtifacts) DownloadAll(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if err := ca.circuitDefinition.Download(ctx); err != nil {
+		return fmt.Errorf("error downloading circuit definition: %w", err)
+	}
+	if err := ca.provingKey.Download(ctx); err != nil {
+		return fmt.Errorf("error downloading proving key: %w", err)
+	}
+	if err := ca.verifyingKey.Download(ctx); err != nil {
+		return fmt.Errorf("error downloading verifying key: %w", err)
+	}
+	return nil
+}
+
+// CircuitDefinition returns the content of the circuit definition as
+// types.HexBytes. If the circuit definition is not loaded, it returns nil.
 func (ca *CircuitArtifacts) CircuitDefinition() types.HexBytes {
 	if ca.circuitDefinition == nil {
 		return nil
@@ -160,7 +179,7 @@ func (ca *CircuitArtifacts) VerifyingKey() types.HexBytes {
 	return ca.verifyingKey.Content
 }
 
-func loadLocal(name string) ([]byte, error) {
+func load(name string) ([]byte, error) {
 	// check if BaseDir exists and create it if it does not
 	if _, err := os.Stat(BaseDir); err != nil {
 		if os.IsNotExist(err) {
@@ -192,7 +211,7 @@ func loadLocal(name string) ([]byte, error) {
 	return content, nil
 }
 
-func loadRemote(ctx context.Context, fileUrl string) ([]byte, error) {
+func download(ctx context.Context, fileUrl string) ([]byte, error) {
 	if _, err := url.Parse(fileUrl); err != nil {
 		return nil, fmt.Errorf("error parsing the file URL provided: %w", err)
 	}
@@ -204,13 +223,11 @@ func loadRemote(ctx context.Context, fileUrl string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer func() {
 		if err := res.Body.Close(); err != nil {
 			log.Warnf("error closing body response %v", err)
 		}
 	}()
-
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error on download file %s: http status: %d", fileUrl, res.StatusCode)
 	}
@@ -238,7 +255,7 @@ func checkHash(content, expected []byte) error {
 	return nil
 }
 
-func storeLocal(content []byte, name string) error {
+func store(content []byte, name string) error {
 	path := filepath.Join(BaseDir, name)
 	if content == nil {
 		return fmt.Errorf("no content provided")

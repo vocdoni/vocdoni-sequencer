@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestLoadKey(t *testing.T) {
+func TestLoadArtifact(t *testing.T) {
 	c := qt.New(t)
 	// create a dummy key server
 	server := testDummyKeyServer()
@@ -56,21 +56,23 @@ func TestLoadKey(t *testing.T) {
 	// create a dummy key
 	remoteURL, err := url.JoinPath(server.URL, dummyPath)
 	c.Assert(err, qt.IsNil)
-	dummyKey := &Artifact{
+	dummyArtifact := &Artifact{
 		RemoteURL: remoteURL,
 		Hash:      expectedHash,
 	}
+	// test no downloaded file
+	c.Assert(dummyArtifact.Load(), qt.IsNotNil)
+	// test downloaded file
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// test no downloaded file
-	c.Assert(dummyKey.Load(ctx), qt.IsNil)
-	c.Assert([]byte(dummyKey.Content), qt.DeepEquals, dummyKeyContent)
+	c.Assert(dummyArtifact.Download(ctx), qt.IsNil)
+	c.Assert([]byte(dummyArtifact.Content), qt.DeepEquals, dummyArtifact.Content)
 	// test downloaded file but no locally stored file
-	dummyKey.Content = nil
-	c.Assert(dummyKey.Load(ctx), qt.IsNil)
-	c.Assert([]byte(dummyKey.Content), qt.DeepEquals, dummyKeyContent)
+	dummyArtifact.Content = nil
+	c.Assert(dummyArtifact.Load(), qt.IsNil)
+	c.Assert([]byte(dummyArtifact.Content), qt.DeepEquals, dummyArtifact.Content)
 	// test wrong hash
-	dummyKey.Content = nil
-	dummyKey.Hash = []byte("wrong hash")
-	c.Assert(dummyKey.Load(ctx), qt.IsNotNil)
+	dummyArtifact.Content = nil
+	dummyArtifact.Hash = []byte("wrong hash")
+	c.Assert(dummyArtifact.Load(), qt.IsNotNil)
 }

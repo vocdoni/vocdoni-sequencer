@@ -3,10 +3,12 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -81,6 +83,11 @@ func TestIntegration(t *testing.T) {
 		c.Assert(censusProof, qt.Not(qt.IsNil))
 		c.Assert(censusProof.Siblings, qt.IsNotNil)
 		vote.CensusProof = *censusProof
+
+		// load ballot proof artifacts
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
 
 		body, status, err := cli.Request("POST", vote, nil, api.VotesEndpoint)
 		c.Assert(err, qt.IsNil)
