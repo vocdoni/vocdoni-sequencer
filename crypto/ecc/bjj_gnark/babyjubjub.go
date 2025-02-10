@@ -8,7 +8,6 @@ import (
 
 	babyjubjub "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
@@ -138,22 +137,20 @@ func (p *BJJ) UnmarshalJSON(buf []byte) error {
 }
 
 // Point returns the X and Y coordinates of the elliptic curve element in
-// Twisted Edwards coordinates.
+// Reduced Twisted Edwards coordinates.
 func (p *BJJ) Point() (*big.Int, *big.Int) {
 	x, y := new(big.Int), new(big.Int)
 	p.inner.X.BigInt(x)
 	p.inner.Y.BigInt(y)
-	return format.FromRTEtoTE(x, y)
+	return x, y
 }
 
 // SetPoint sets the elliptic curve element from the X and Y coordinates in
-// Twisted Edwards coordinates.
+// Reduced Twisted Edwards coordinates.
 func (p *BJJ) SetPoint(x, y *big.Int) curve.Point {
-	// Convert TE x to RTE x'
-	xRTE, yRTE := format.FromTEtoRTE(x, y)
 	p = &BJJ{inner: new(babyjubjub.PointAffine)}
-	p.inner.X.SetBigInt(xRTE)
-	p.inner.Y.SetBigInt(yRTE)
+	p.inner.X.SetBigInt(x)
+	p.inner.Y.SetBigInt(y)
 	return p
 }
 

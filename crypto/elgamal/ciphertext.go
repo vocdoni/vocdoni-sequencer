@@ -15,7 +15,6 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
@@ -246,9 +245,8 @@ func (z *Ciphertext) Add(x, y *Ciphertext) *Ciphertext {
 // in reduced twisted edwards form.
 func (z *Ciphertext) Serialize() []byte {
 	var buf bytes.Buffer
-	// TODO: we wouldn't need the format conversion if Point() returns the correct format
-	c1x, c1y := format.FromTEtoRTE(z.C1.Point())
-	c2x, c2y := format.FromTEtoRTE(z.C2.Point())
+	c1x, c1y := z.C1.Point()
+	c2x, c2y := z.C2.Point()
 	for _, bi := range []*big.Int{c1x, c1y, c2x, c2y} {
 		buf.Write(arbo.BigIntToBytes(sizeCoord, bi))
 	}
@@ -270,15 +268,14 @@ func (z *Ciphertext) Deserialize(data []byte) error {
 		return arbo.BytesToBigInt(data[offset : offset+sizeCoord])
 	}
 	// Deserialize each field
-	// TODO: we wouldn't need the format conversion if SetPoint() accepts the correct format
-	z.C1 = z.C1.SetPoint(format.FromRTEtoTE(
+	z.C1 = z.C1.SetPoint(
 		readBigInt(0*sizeCoord),
 		readBigInt(1*sizeCoord),
-	))
-	z.C2 = z.C2.SetPoint(format.FromRTEtoTE(
+	)
+	z.C2 = z.C2.SetPoint(
 		readBigInt(2*sizeCoord),
 		readBigInt(3*sizeCoord),
-	))
+	)
 	return nil
 }
 
@@ -303,9 +300,9 @@ func (z *Ciphertext) String() string {
 // ToGnark returns z as the struct used by gnark,
 // with the points in reduced twisted edwards format
 func (z *Ciphertext) ToGnark() *gelgamal.Ciphertext {
-	// TODO: we wouldn't need the format conversion if Point() returns the correct format
-	c1x, c1y := format.FromTEtoRTE(z.C1.Point())
-	c2x, c2y := format.FromTEtoRTE(z.C2.Point())
+	// TODO: panic if z.C1 or z.C2 is not TE
+	c1x, c1y := z.C1.Point()
+	c2x, c2y := z.C2.Point()
 	return &gelgamal.Ciphertext{
 		C1: twistededwards.Point{X: c1x, Y: c1y},
 		C2: twistededwards.Point{X: c2x, Y: c2y},
