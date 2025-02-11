@@ -1,6 +1,7 @@
 package circuits
 
 import (
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
@@ -8,21 +9,25 @@ import (
 )
 
 // These are the curves used by each step
+//
+//	### 1. ballotproof
+//	native bn254
+//	### 2. voteverifier
+//	native bls12377
+//	inner  bn254
+//	### 3. aggregator
+//	native bw6761
+//	inner  bls12377
+//	### 4. statetransition
+//	native bn254
+//	inner  bw6761
 
-// ### 1. ballotproof
-// native bn254
-
-// ### 2. voteverifier
-// native bls12377
-// inner bn254
-
-// ### 3. aggregator
-// native bw6761
-// inner bls12377
-
-// ### 4. statetransition
-// native bn254
-// inner bw6761
+var (
+	BallotProofCurve     = ecc.BN254     // ecc.BN254
+	VoteVerifierCurve    = ecc.BLS12_377 // ecc.BLS12_377
+	AggregatorCurve      = ecc.BW6_761   // ecc.BW6_761
+	StateTransitionCurve = ecc.BN254     // ecc.BN254
+)
 
 type InnerProofBN254 struct {
 	Proof groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]

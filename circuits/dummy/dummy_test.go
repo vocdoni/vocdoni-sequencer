@@ -3,7 +3,6 @@ package dummy
 import (
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
@@ -20,7 +19,7 @@ func TestSameCircuitsInfo(t *testing.T) {
 	circomPlaceholder, err := circuits.Circom2GnarkPlaceholder(ballottest.TestCircomVerificationKey)
 	c.Assert(err, qt.IsNil)
 	// compile the main circuit
-	mainCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
+	mainCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
 		CircomProof: circuits.InnerProofBN254{
 			VK:    circomPlaceholder.Vk,
 			Proof: circomPlaceholder.Proof,
@@ -29,7 +28,7 @@ func TestSameCircuitsInfo(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	mainVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](mainCCS)
 
-	dummyCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, Placeholder(mainCCS))
+	dummyCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, Placeholder(mainCCS))
 	c.Assert(err, qt.IsNil)
 	dummyVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](dummyCCS)
 

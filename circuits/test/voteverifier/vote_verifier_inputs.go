@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gnarkecdsa "github.com/consensys/gnark/std/signature/ecdsa"
@@ -96,7 +95,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		ballots = append(ballots, *voterProof.Ballot)
 		// convert the circom inputs hash to the field of the curve used by the
 		// circuit as input for MIMC hash
-		blsCircomInputsHash := crypto.SignatureHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
+		blsCircomInputsHash := crypto.SignatureHash(voterProof.InputsHash, circuits.VoteVerifierCurve.ScalarField())
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballottest.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {

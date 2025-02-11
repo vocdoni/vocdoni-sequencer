@@ -3,7 +3,6 @@ package statetransition
 import (
 	"fmt"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
@@ -236,7 +235,7 @@ func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
 func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
 	_, _, proof, vk, err := dummy.Prove(
 		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
-		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField(), false)
+		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
 	if err != nil {
 		return nil, err
 	}

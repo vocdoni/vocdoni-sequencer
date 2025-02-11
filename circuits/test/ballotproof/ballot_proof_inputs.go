@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -117,16 +116,16 @@ func GenBallotFieldsForTest(n, max, min int, unique bool) [circuits.FieldsPerBal
 // while the nullifier is generated using the commitment and secret value.
 func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(address)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(processID)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	nullifier, err := poseidon.Hash([]*big.Int{
 		commitment,
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -197,8 +196,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
-	ffProcessID := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
+	ffAddress := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{ffProcessID}
 	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
@@ -234,7 +233,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"cipherfields":     circuits.BigIntArrayToStringArray(BallotFromRTEtoTE(ballot).BigInts(), circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
+		"secret":           crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)

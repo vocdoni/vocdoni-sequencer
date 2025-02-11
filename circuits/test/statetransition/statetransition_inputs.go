@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -37,7 +36,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 	// compile aggregator circuit
-	agCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, agPlaceholder)
+	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -46,12 +45,14 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 	// parse the witness to the circuit
-	fullWitness, err := frontend.NewWitness(agWitness, ecc.BLS12_377.ScalarField())
+	fullWitness, err := frontend.NewWitness(agWitness, circuits.AggregatorCurve.ScalarField())
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// generate the proof
-	proof, err := groth16.Prove(agCCS, agPk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	proof, err := groth16.Prove(agCCS, agPk, fullWitness, stdgroth16.GetNativeProverOptions(
+		circuits.StateTransitionCurve.ScalarField(),
+		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("err proving proof: %w", err)
 	}
@@ -65,7 +66,9 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	err = groth16.Verify(proof, agVk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	err = groth16.Verify(proof, agVk, publicWitness, stdgroth16.GetNativeVerifierOptions(
+		circuits.StateTransitionCurve.ScalarField(),
+		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -30,7 +29,7 @@ func testCircuitCompile(t *testing.T, c frontend.Circuit) {
 	}
 	// enable log to see nbConstraints
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
-	if _, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, c); err != nil {
+	if _, err := frontend.Compile(circuits.StateTransitionCurve.ScalarField(), r1cs.NewBuilder, c); err != nil {
 		panic(err)
 	}
 }
@@ -43,7 +42,7 @@ func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 	assert.ProverSucceeded(
 		circuit,
 		witness,
-		test.WithCurves(ecc.BN254),
+		test.WithCurves(circuits.StateTransitionCurve),
 		test.WithBackends(backend.GROTH16))
 }
 
