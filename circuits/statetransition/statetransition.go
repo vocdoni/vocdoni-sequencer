@@ -234,7 +234,7 @@ func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
 }
 
 func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
-	_, witness, proof, vk, err := dummy.Prove(
+	_, _, proof, vk, err := dummy.Prove(
 		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
 		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField(), false)
 	if err != nil {
@@ -245,10 +245,6 @@ func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, 
 	if err != nil {
 		return nil, fmt.Errorf("dummy proof value error: %w", err)
 	}
-	dummyWitness, err := groth16.ValueOfWitness[sw_bw6761.ScalarField](witness)
-	if err != nil {
-		return nil, fmt.Errorf("dummy witness value error: %w", err)
-	}
 	// set fixed dummy vk in the placeholders
 	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
 	if err != nil {
@@ -256,8 +252,7 @@ func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, 
 	}
 
 	return &circuits.InnerProofBW6761{
-		Proof:   dummyProof,
-		Witness: dummyWitness,
-		VK:      dummyVK,
+		Proof: dummyProof,
+		VK:    dummyVK,
 	}, nil
 }
