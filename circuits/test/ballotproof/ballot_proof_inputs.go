@@ -206,18 +206,17 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	ffAddress := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
 	ffProcessID := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
-	bigCircomInputs := []*big.Int{}
+	bigCircomInputs := []*big.Int{ffProcessID}
 	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
 	bigCircomInputs = append(bigCircomInputs,
-		ffAddress,
-		big.NewInt(int64(circuits.MockWeight)),
-		ffProcessID,
 		circomEncryptionKeyX,
 		circomEncryptionKeyY,
-		nullifier,
+		ffAddress,
 		commitment,
+		nullifier,
 	)
 	bigCircomInputs = append(bigCircomInputs, teBallot...)
+	bigCircomInputs = append(bigCircomInputs, big.NewInt(int64(circuits.MockWeight)))
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	if err != nil {
 		return nil, err

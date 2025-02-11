@@ -10,6 +10,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/gnark-crypto-primitives/elgamal"
+	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
@@ -121,6 +122,19 @@ func (k EncryptionKey[T]) Serialize() []T {
 	return []T{k.PubKey[0], k.PubKey[1]}
 }
 
+// SerializeAsTE returns the EncryptionKey in Twisted Edwards format
+func (kt EncryptionKey[T]) SerializeAsTE(api frontend.API) []emulated.Element[sw_bn254.ScalarField] {
+	k, ok := any(kt).(EncryptionKey[emulated.Element[sw_bn254.ScalarField]])
+	if !ok {
+		panic("EncryptionKey type assertion failed")
+	}
+	kTE0, kTE1, err := twistededwards.FromEmulatedRTEtoTE(api, k.PubKey[0], k.PubKey[1])
+	if err != nil {
+		FrontendError(api, "failed to convert encryption key to RTE", err)
+	}
+	return []emulated.Element[sw_bn254.ScalarField]{kTE0, kTE1}
+}
+
 // Bytes returns 2*32 bytes representing PubKey components.
 // Returns an empty slice if T is not *big.Int.
 func (k EncryptionKey[T]) Bytes() []byte {
@@ -215,12 +229,35 @@ type Process[T any] struct {
 	EncryptionKey EncryptionKey[T]
 }
 
+// Serialize returns a slice with the process parameters in order
+//
+//	Process.ID
+//	Process.CensusRoot
+//	Process.BallotMode
+//	Process.EncryptionKey
 func (p Process[T]) Serialize() []T {
 	list := []T{}
 	list = append(list, p.ID)
 	list = append(list, p.CensusRoot)
 	list = append(list, p.BallotMode.Serialize()...)
 	list = append(list, p.EncryptionKey.Serialize()...)
+	return list
+}
+
+// SerializeForBallotProof returns a slice with the process parameters in order
+//
+//	Process.ID
+//	Process.BallotMode
+//	Process.EncryptionKey (in Twisted Edwards format)
+func (pt Process[T]) SerializeForBallotProof(api frontend.API) []emulated.Element[sw_bn254.ScalarField] {
+	p, ok := any(pt).(Process[emulated.Element[sw_bn254.ScalarField]])
+	if !ok {
+		panic("Process type assertion failed")
+	}
+	list := []emulated.Element[sw_bn254.ScalarField]{}
+	list = append(list, p.ID)
+	list = append(list, p.BallotMode.Serialize()...)
+	list = append(list, p.EncryptionKey.SerializeAsTE(api)...)
 	return list
 }
 
@@ -338,22 +375,46 @@ type EmulatedCiphertext[F emulated.FieldParams] struct {
 type EmulatedBallot[F emulated.FieldParams] [FieldsPerBallot]EmulatedCiphertext[F]
 
 // EmulatedVote is a copy of the Vote struct, but using the emulated.Element
-// type as generic type for the Nullifier, Address and Commitment fields, and
+// type as generic type for the Address, Commitment and Nullifier fields, and
 // the EmulatedBallot type for the Ballot field.
 type EmulatedVote[F emulated.FieldParams] struct {
-	Nullifier  emulated.Element[F]
-	Ballot     EmulatedBallot[F]
 	Address    emulated.Element[F]
 	Commitment emulated.Element[F]
+	Nullifier  emulated.Element[F]
+	Ballot     EmulatedBallot[F]
 }
 
 // Serialize returns a slice with the vote parameters in order
+//
+//	EmulatedVote.Nullifier
+//	EmulatedVote.Ballot
+//	EmulatedVote.Address
+//	EmulatedVote.Commitment
 func (z *EmulatedVote[F]) Serialize() []emulated.Element[F] {
 	list := []emulated.Element[F]{}
-	list = append(list, z.Nullifier)
-	list = append(list, z.Ballot.Serialize()...)
 	list = append(list, z.Address)
 	list = append(list, z.Commitment)
+	list = append(list, z.Nullifier)
+	list = append(list, z.Ballot.Serialize()...)
+	return list
+}
+
+// SerializeForBallotProof returns a slice with the vote parameters in order
+//
+//	EmulatedVote.Address
+//	EmulatedVote.Commitment
+//	EmulatedVote.Nullifier
+//	EmulatedVote.Ballot (in Twisted Edwards format)
+func (zt *EmulatedVote[F]) SerializeForBallotProof(api frontend.API) []emulated.Element[sw_bn254.ScalarField] {
+	z, ok := any(zt).(*EmulatedVote[sw_bn254.ScalarField])
+	if !ok {
+		panic("EmulatedVote type assertion failed")
+	}
+	list := []emulated.Element[sw_bn254.ScalarField]{}
+	list = append(list, z.Address)
+	list = append(list, z.Commitment)
+	list = append(list, z.Nullifier)
+	list = append(list, z.Ballot.SerializeAsTE(api)...)
 	return list
 }
 
@@ -380,6 +441,33 @@ func (z *EmulatedBallot[F]) Serialize() []emulated.Element[F] {
 			zi.C1.Y,
 			zi.C2.X,
 			zi.C2.Y)
+	}
+	return list
+}
+
+// SerializeAsTE returns a slice with the C1.X, C1.Y, C2.X, C2.Y in order,
+// in Twisted Edwards format (rather than Reduced Twisted Edwards)
+func (zt *EmulatedBallot[F]) SerializeAsTE(api frontend.API) []emulated.Element[sw_bn254.ScalarField] {
+	z, ok := any(zt).(*EmulatedBallot[sw_bn254.ScalarField])
+	if !ok {
+		panic("EmulatedBallot type assertion failed")
+	}
+	list := []emulated.Element[sw_bn254.ScalarField]{}
+	for _, zi := range z {
+		c1xTE, c1yTE, err := twistededwards.FromEmulatedRTEtoTE(api, zi.C1.X, zi.C1.Y)
+		if err != nil {
+			FrontendError(api, "failed to convert coords to RTE", err)
+		}
+		c2xTE, c2yTE, err := twistededwards.FromEmulatedRTEtoTE(api, zi.C2.X, zi.C2.Y)
+		if err != nil {
+			FrontendError(api, "failed to convert coords to RTE", err)
+		}
+		list = append(list,
+			c1xTE,
+			c1yTE,
+			c2xTE,
+			c2yTE,
+		)
 	}
 	return list
 }

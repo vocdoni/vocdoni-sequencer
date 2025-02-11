@@ -246,8 +246,8 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	}
 	// compute public inputs hash
 	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
-	commonInputs = append(commonInputs, vvInputs.EncryptionPubKey.Serialize()...)
 	commonInputs = append(commonInputs, circuits.MockBallotMode().Serialize()...)
+	commonInputs = append(commonInputs, vvInputs.EncryptionPubKey.Serialize()...)
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, circuits.VotesPerBatch)
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
@@ -257,7 +257,7 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		if i < nValidVoters {
 			hashInputs = append(hashInputs, vvInputs.InputsHashes[i])
 		} else {
-			voterInputs := append(commonInputs, addresses[i], nullifiers[i], commitments[i])
+			voterInputs := append(commonInputs, addresses[i], commitments[i], nullifiers[i])
 			// TODO: move this to a helper function
 			// Dummy encrypted ballots [FieldsPerBallot]{0,1,0,1} for invalid voters
 			for j := 0; j < circuits.FieldsPerBallot; j++ {
