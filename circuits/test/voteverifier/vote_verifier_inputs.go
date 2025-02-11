@@ -96,7 +96,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		encryptedBallots = append(encryptedBallots, *voterProof.EncryptedFields)
 		// convert the circom inputs hash to the field of the curve used by the
 		// circuit as input for MIMC hash
-		blsCircomInputsHash := crypto.BigIntToMIMCHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
+		blsCircomInputsHash := crypto.SignatureHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballottest.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
@@ -132,7 +132,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
 		assignments = append(assignments, voteverifier.VerifyVoteCircuit{
-			// InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
 			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
@@ -162,9 +161,8 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			},
 			// circom proof
 			CircomProof: circuits.InnerProofBN254{
-				VK:      recursiveProof.Vk,
-				Proof:   recursiveProof.Proof,
-				Witness: recursiveProof.PublicInputs,
+				VK:    recursiveProof.Vk,
+				Proof: recursiveProof.Proof,
 			},
 		})
 	}
@@ -180,9 +178,8 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			EncryptedBallots: encryptedBallots,
 		}, voteverifier.VerifyVoteCircuit{
 			CircomProof: circuits.InnerProofBN254{
-				VK:      circomPlaceholder.Vk,
-				Proof:   circomPlaceholder.Proof,
-				Witness: circomPlaceholder.Witness,
+				VK:    circomPlaceholder.Vk,
+				Proof: circomPlaceholder.Proof,
 			},
 		}, assignments, nil
 }

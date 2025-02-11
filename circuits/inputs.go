@@ -4,20 +4,20 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
+	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards"
 )
 
-// CircomInputs returns all values that are hashed
-// to produce the public input needed to verify CircomProof,
-// in a predefined order:
+// CircomInputs returns all values that are hashed to produce the public input
+// needed to verify CircomProof, in a predefined order:
 //
 //	BallotMode
 //	Address
 //	UserWeight
 //	ProcessID
-//	EncryptionKey
+//	EncryptionKey (in TE format)
 //	Nullifier
 //	Commitment
-//	Ballot
+//	Ballot (in TE format)
 func CircomInputs(api frontend.API,
 	process Process[emulated.Element[sw_bn254.ScalarField]],
 	vote EmulatedVote[sw_bn254.ScalarField],
@@ -25,26 +25,39 @@ func CircomInputs(api frontend.API,
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
 	inputs = append(inputs, process.BallotMode.Serialize()...)
-	inputs = append(inputs, vote.Address)
-	inputs = append(inputs, userWeight)
-	inputs = append(inputs, process.ID)
-	inputs = append(inputs, process.EncryptionKey.Serialize()...)
-	inputs = append(inputs, vote.Nullifier)
-	inputs = append(inputs, vote.Commitment)
-	inputs = append(inputs, vote.Ballot.Serialize()...)
+	inputs = append(inputs, vote.Address, userWeight, process.ID)
+	ekx, eky, err := twistededwards.FromEmulatedRTEtoTE(api,
+		process.EncryptionKey.PubKey[0],
+		process.EncryptionKey.PubKey[1],
+	)
+	if err != nil {
+		FrontendError(api, "failed to convert encryption key to RTE", err)
+	}
+	inputs = append(inputs, ekx, eky)
+	inputs = append(inputs, vote.Nullifier, vote.Commitment)
+	for _, field := range vote.Ballot {
+		c1x, c1y, err := twistededwards.FromEmulatedRTEtoTE(api, field.C1.X, field.C1.Y)
+		if err != nil {
+			FrontendError(api, "failed to convert encrypted field to RTE", err)
+		}
+		c2x, c2y, err := twistededwards.FromEmulatedRTEtoTE(api, field.C2.X, field.C2.Y)
+		if err != nil {
+			FrontendError(api, "failed to convert encrypted field to RTE", err)
+		}
+		inputs = append(inputs, c1x, c1y, c2x, c2y)
+	}
 	return inputs
 }
 
-// VoteVerifierInputs returns all values that are hashed
-// to produce the public input needed to verify VoteVerifier,
-// in a predefined order:
+// VoteVerifierInputs returns all values that are hashed to produce the public
+// input needed to verify VoteVerifier, in a predefined order:
 //
 //	ProcessID
 //	CensusRoot
+//	EncryptionKey (in RTE format)
 //	BallotMode
-//	EncryptionKey
 //	Nullifier
-//	Ballot
+//	Ballot (in RTE format)
 //	Address
 //	Commitment
 func VoteVerifierInputs(api frontend.API,
@@ -52,27 +65,23 @@ func VoteVerifierInputs(api frontend.API,
 	vote EmulatedVote[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
-	inputs = append(inputs, process.ID)
-	inputs = append(inputs, process.CensusRoot)
+	inputs = append(inputs, process.ID, process.CensusRoot)
 	inputs = append(inputs, process.EncryptionKey.Serialize()...)
 	inputs = append(inputs, process.BallotMode.Serialize()...)
-	inputs = append(inputs, vote.Address)
-	inputs = append(inputs, vote.Nullifier)
-	inputs = append(inputs, vote.Commitment)
+	inputs = append(inputs, vote.Address, vote.Nullifier, vote.Commitment)
 	inputs = append(inputs, vote.Ballot.Serialize()...)
 	return inputs
 }
 
-// AggregatorWitnessInputs returns all values that are hashed
-// to produce the public input needed to verify AggregatorProof,
-// in a predefined order:
+// AggregatorWitnessInputs returns all values that are hashed to produce the
+// public input needed to verify AggregatorProof, in a predefined order:
 //
 //	ProcessID
 //	CensusRoot
 //	BallotMode
-//	EncryptionKey
+//	EncryptionKey (in RTE format)
 //	Nullifiers
-//	Ballots
+//	Ballots (in RTE format)
 //	Addressess
 //	Commitments
 func AggregatorWitnessInputs(api frontend.API,
@@ -80,8 +89,7 @@ func AggregatorWitnessInputs(api frontend.API,
 	votes []EmulatedVote[sw_bn254.ScalarField],
 ) []emulated.Element[sw_bn254.ScalarField] {
 	inputs := []emulated.Element[sw_bn254.ScalarField]{}
-	inputs = append(inputs, process.ID)
-	inputs = append(inputs, process.CensusRoot)
+	inputs = append(inputs, process.ID, process.CensusRoot)
 	inputs = append(inputs, process.BallotMode.Serialize()...)
 	inputs = append(inputs, process.EncryptionKey.Serialize()...)
 	for _, v := range votes {
@@ -105,14 +113,8 @@ func CalculateVotersHashes(api frontend.API,
 ) VotersHashes {
 	// initialize the hashes of the voters
 	votersHashes := [VotesPerBatch]emulated.Element[sw_bn254.ScalarField]{}
-	// group common inputs
-	commonInputs := process.Serialize()
-	// iterate over the voters
 	for i := 0; i < VotesPerBatch; i++ {
-		// group remaining inputs, those that are unique for each voter
-		voterInputs := append(commonInputs, votes[i].Serialize()...)
-		// calculate the voter hash and store it
-		votersHashes[i] = VoterHashFn(api, voterInputs...)
+		votersHashes[i] = VoterHashFn(api, VoteVerifierInputs(api, process, votes[i])...)
 	}
 	return VotersHashes{votersHashes}
 }

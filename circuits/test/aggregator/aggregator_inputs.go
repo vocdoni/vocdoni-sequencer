@@ -206,13 +206,8 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		}
 	*/
 	// generate voters proofs
-	totalPlainEncryptedBallots := []*big.Int{}
 	proofs := [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
 	for i := range vvAssigments {
-		// flat encrypted ballots
-		for _, b := range vvInputs.EncryptedBallots {
-			totalPlainEncryptedBallots = append(totalPlainEncryptedBallots, b.BigInts()...)
-		}
 		// parse the witness to the circuit
 		fullWitness, err := frontend.NewWitness(&vvAssigments[i], gecc.BLS12_377.ScalarField())
 		if err != nil {
@@ -250,34 +245,30 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		*/
 	}
 	// compute public inputs hash
-	commonInputs := []*big.Int{
-		vvInputs.ProcessID,
-		vvInputs.CensusRoot,
-	}
+	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
 	commonInputs = append(commonInputs, vvInputs.EncryptionPubKey.Serialize()...)
 	commonInputs = append(commonInputs, circuits.MockBallotMode().Serialize()...)
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, circuits.VotesPerBatch)
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
 	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
-	plainEncryptedBallots := circuits.BigIntArrayToN(totalPlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 	hashInputs := []*big.Int{}
 	for i := 0; i < circuits.VotesPerBatch; i++ {
-		voterInputs := append(commonInputs, addresses[i], nullifiers[i], commitments[i])
 		if i < nValidVoters {
-			voterInputs = append(voterInputs, vvInputs.EncryptedBallots[i].BigInts()...)
+			hashInputs = append(hashInputs, vvInputs.InputsHashes[i])
 		} else {
+			voterInputs := append(commonInputs, addresses[i], nullifiers[i], commitments[i])
 			// TODO: move this to a helper function
 			// Dummy encrypted ballots [FieldsPerBallot]{0,1,0,1} for invalid voters
 			for j := 0; j < circuits.FieldsPerBallot; j++ {
 				voterInputs = append(voterInputs, big.NewInt(0), big.NewInt(1), big.NewInt(0), big.NewInt(1))
 			}
+			hashInput, err := mimc7.Hash(voterInputs, nil)
+			if err != nil {
+				return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			}
+			hashInputs = append(hashInputs, hashInput)
 		}
-		hashInput, err := mimc7.Hash(voterInputs, nil)
-		if err != nil {
-			return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
-		}
-		hashInputs = append(hashInputs, hashInput)
 	}
 	// hash the inputs to generate the inputs hash
 	inputsHash, err := mimc7.Hash(hashInputs, nil)
@@ -298,10 +289,12 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	}
 	// set voters final witness stuff
 	for i := 0; i < nValidVoters; i++ {
-		finalAssigments.Votes[i].Nullifier = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Nullifiers[i])
-		finalAssigments.Votes[i].Commitment = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Commitments[i])
-		finalAssigments.Votes[i].Address = emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Addresses[i])
-		finalAssigments.Votes[i].Ballot = *vvInputs.EncryptedBallots[i].ToGnarkEmulatedBN254()
+		finalAssigments.Votes[i] = circuits.EmulatedVote[sw_bn254.ScalarField]{
+			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Nullifiers[i]),
+			Commitment: emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Commitments[i]),
+			Address:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Addresses[i]),
+			Ballot:     *vvInputs.EncryptedBallots[i].ToGnarkEmulatedBN254(),
+		}
 	}
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
@@ -319,15 +312,14 @@ func AggregarorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		return AggregateTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
 	res := AggregateTestResults{
-		InputsHash:            inputsHash,
-		ProcessId:             vvInputs.ProcessID,
-		CensusRoot:            vvInputs.CensusRoot,
-		EncryptionPubKey:      vvInputs.EncryptionPubKey,
-		Nullifiers:            nullifiers,
-		Commitments:           commitments,
-		Addresses:             addresses,
-		EncryptedBallots:      vvInputs.EncryptedBallots,
-		PlainEncryptedBallots: plainEncryptedBallots,
+		InputsHash:       inputsHash,
+		ProcessId:        vvInputs.ProcessID,
+		CensusRoot:       vvInputs.CensusRoot,
+		EncryptionPubKey: vvInputs.EncryptionPubKey,
+		Nullifiers:       nullifiers,
+		Commitments:      commitments,
+		Addresses:        addresses,
+		EncryptedBallots: vvInputs.EncryptedBallots,
 	}
 
 	/*

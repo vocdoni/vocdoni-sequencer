@@ -23,7 +23,7 @@ require (
 	github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4
 	github.com/vocdoni/contracts-z v0.0.0-20250124164653-964d70f468a8
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250131175027-569f9935e2ab
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250210155802-bbf571616e03
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 )
 

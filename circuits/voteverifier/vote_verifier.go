@@ -115,18 +115,10 @@ func censusKeyValue(api frontend.API, address, weight emulated.Element[sw_bn254.
 	return key, value, nil
 }
 
-// checkCircomInputsHash circuit method hashes the inputs provided by the user
-// and compares them with the unique public input of the circom circuit. As
-// a circuit method, it does not return any value, but it asserts that the hash
-// of the inputs matches the unique public input of the circom circuit. The
-// inputs hash is calculated by hashing all the private-public inputs provided
-// by the user, except the user weight (private input), and the siblings and
-// the census root which is not a input of the circom circuit. The order of
-// the inputs should match the order of the inputs of the circom circuit.
-func (c VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
-	// ensure that the circom public inputs hash only contains a single public
-	// input (the hash of all the public-private inputs)
-	api.AssertIsEqual(len(c.CircomProof.Witness.Public), 1)
+// circomWitness circuit method calculates the witness of the circom circuit
+// with the public-private inputs provided by the user. It hashes the inputs
+// and generates the unique public input of the circom circuit.
+func (c VerifyVoteCircuit) circomWitness(api frontend.API) groth16.Witness[sw_bn254.ScalarField] {
 	// hash the circom public-private inputs and compare them with the unique
 	// public input of the circom circuit
 	hFn, err := mimc7.NewMiMC(api)
@@ -134,7 +126,9 @@ func (c VerifyVoteCircuit) checkCircomInputsHash(api frontend.API) {
 		circuits.FrontendError(api, "failed to create emulated MiMC hash function: ", err)
 	}
 	hFn.Write(circuits.CircomInputs(api, c.Process, c.Vote, c.UserWeight)...)
-	hFn.AssertSumIsEqual(c.CircomProof.Witness.Public[0])
+	return groth16.Witness[sw_bn254.ScalarField]{
+		Public: []emulated.Element[sw_bn254.ScalarField]{hFn.Sum()},
+	}
 }
 
 // checkInputsHash circuit method hashes the inputs provided by the user and
@@ -196,7 +190,7 @@ func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 		circuits.FrontendError(api, "failed to create BN254 verifier", err)
 	}
 	if err := verifier.AssertProof(c.CircomProof.VK, c.CircomProof.Proof,
-		c.CircomProof.Witness, groth16.WithCompleteArithmetic(),
+		c.circomWitness(api), groth16.WithCompleteArithmetic(),
 	); err != nil {
 		circuits.FrontendError(api, "failed to verify circom proof", err)
 		api.AssertIsEqual(0, 1)
@@ -236,8 +230,6 @@ func (c VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
 func (c VerifyVoteCircuit) Define(api frontend.API) error {
 	// check the hash of the inputs provided by the user
 	c.checkInputsHash(api)
-	// check the hash of the circom inputs provided by the user
-	c.checkCircomInputsHash(api)
 	// verify the signature of the public inputs
 	c.verifySigForAddress(api)
 	// verify the census proof
