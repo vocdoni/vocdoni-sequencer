@@ -36,7 +36,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
 	// compile aggregator circuit
-	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
+	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, &agPlaceholder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("aggregator compile: %w", err)
 	}
