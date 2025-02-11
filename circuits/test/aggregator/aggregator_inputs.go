@@ -21,18 +21,16 @@ import (
 )
 
 // AggregatorTestResults struct includes relevant data after AggregatorCircuit
-// inputs generation, including the encrypted ballots in both formats: matrix
-// and plain (for hashing)
+// inputs generation
 type AggregatorTestResults struct {
-	InputsHash            *big.Int
-	ProcessId             *big.Int
-	CensusRoot            *big.Int
-	EncryptionPubKey      circuits.EncryptionKey[*big.Int]
-	Nullifiers            []*big.Int
-	Commitments           []*big.Int
-	Addresses             []*big.Int
-	EncryptedBallots      []elgamal.Ballot
-	PlainEncryptedBallots []*big.Int
+	InputsHash       *big.Int
+	ProcessId        *big.Int
+	CensusRoot       *big.Int
+	EncryptionPubKey circuits.EncryptionKey[*big.Int]
+	Nullifiers       []*big.Int
+	Commitments      []*big.Int
+	Addresses        []*big.Int
+	Ballots          []elgamal.Ballot
 }
 
 /*
@@ -248,7 +246,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
 	commonInputs = append(commonInputs, circuits.MockBallotMode().Serialize()...)
 	commonInputs = append(commonInputs, vvInputs.EncryptionPubKey.Serialize()...)
-	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
+	// pad voters inputs (nullifiers, commitments, addresses)
 	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, circuits.VotesPerBatch)
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
 	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
@@ -293,7 +291,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Nullifiers[i]),
 			Commitment: emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Commitments[i]),
 			Address:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Addresses[i]),
-			Ballot:     *vvInputs.EncryptedBallots[i].ToGnarkEmulatedBN254(),
+			Ballot:     *vvInputs.Ballots[i].ToGnarkEmulatedBN254(),
 		}
 	}
 	// fix the vote verifier verification key
@@ -319,7 +317,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		Nullifiers:       nullifiers,
 		Commitments:      commitments,
 		Addresses:        addresses,
-		EncryptedBallots: vvInputs.EncryptedBallots,
+		Ballots:          vvInputs.Ballots,
 	}
 
 	/*

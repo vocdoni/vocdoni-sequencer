@@ -21,7 +21,7 @@
 //   - Nullifier
 //   - Commitment
 //   - Address
-//   - EncryptedBallots
+//   - Ballot
 //   - VerifyProof (generated with the VerifyVoteCircuit)
 package aggregator
 

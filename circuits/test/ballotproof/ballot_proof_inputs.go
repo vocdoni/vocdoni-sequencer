@@ -22,6 +22,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
@@ -160,14 +161,14 @@ func CompileAndGenerateProofForTest(inputs []byte) (string, string, error) {
 // user after ballot proof generation. It includes the value of the given
 // process id and address in the format used inside the circuit.
 type VoterProofResult struct {
-	ProcessID       *big.Int
-	Address         *big.Int
-	Nullifier       *big.Int
-	Commitment      *big.Int
-	EncryptedFields *elgamal.Ballot
-	Proof           string
-	PubInputs       string
-	InputsHash      *big.Int
+	ProcessID  *big.Int
+	Address    *big.Int
+	Nullifier  *big.Int
+	Commitment *big.Int
+	Ballot     *elgamal.Ballot
+	Proof      string
+	PubInputs  string
+	InputsHash *big.Int
 }
 
 // BallotProofForTest function return the information after proving a valid ballot
@@ -189,13 +190,6 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	}
 	// get encryption key point
 	circomEncryptionKeyX, circomEncryptionKeyY := format.FromRTEtoTE(encryptionKey.Point())
-	teBallot := []*big.Int{}
-	for _, c := range ballot.Ciphertexts {
-		tec1x, tec1y := format.FromRTEtoTE(c.C1.Point())
-		tec2x, tec2y := format.FromRTEtoTE(c.C2.Point())
-		teBallot = append(teBallot, tec1x, tec1y, tec2x, tec2y)
-	}
-	teBallot = circuits.BigIntArrayToN(teBallot, circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext)
 
 	// generate and store voter nullifier and commitments
 	secret := util.RandomBytes(16)
@@ -215,7 +209,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		commitment,
 		nullifier,
 	)
-	bigCircomInputs = append(bigCircomInputs, teBallot...)
+	bigCircomInputs = append(bigCircomInputs, BallotFromRTEtoTE(ballot).BigInts()...)
 	bigCircomInputs = append(bigCircomInputs, big.NewInt(int64(circuits.MockWeight)))
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	if err != nil {
@@ -237,7 +231,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"process_id":       ffProcessID.String(),
 		"pk":               []string{circomEncryptionKeyX.String(), circomEncryptionKeyY.String()},
 		"k":                k.String(),
-		"cipherfields":     circuits.BigIntArrayToStringArray(teBallot, circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
+		"cipherfields":     circuits.BigIntArrayToStringArray(BallotFromRTEtoTE(ballot).BigInts(), circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
 		"secret":           crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
@@ -253,13 +247,24 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		return nil, err
 	}
 	return &VoterProofResult{
-		ProcessID:       ffProcessID,
-		Address:         ffAddress,
-		Nullifier:       nullifier,
-		Commitment:      commitment,
-		EncryptedFields: ballot,
-		Proof:           circomProof,
-		PubInputs:       circomPubInputs,
-		InputsHash:      circomInputsHash,
+		ProcessID:  ffProcessID,
+		Address:    ffAddress,
+		Nullifier:  nullifier,
+		Commitment: commitment,
+		Ballot:     ballot,
+		Proof:      circomProof,
+		PubInputs:  circomPubInputs,
+		InputsHash: circomInputsHash,
 	}, nil
+}
+
+func BallotFromRTEtoTE(rteBallot *elgamal.Ballot) *elgamal.Ballot {
+	teBallot := elgamal.NewBallot(curves.New(rteBallot.CurveType))
+	for i := range rteBallot.Ciphertexts {
+		teBallot.Ciphertexts[i].C1 = teBallot.Ciphertexts[i].C1.SetPoint(
+			format.FromRTEtoTE(rteBallot.Ciphertexts[i].C1.Point()))
+		teBallot.Ciphertexts[i].C2 = teBallot.Ciphertexts[i].C2.SetPoint(
+			format.FromRTEtoTE(rteBallot.Ciphertexts[i].C2.Point()))
+	}
+	return teBallot
 }

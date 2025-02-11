@@ -23,14 +23,13 @@ import (
 // StateTransitionTestResults struct includes relevant data after StateTransitionCircuit
 // inputs generation
 type StateTransitionTestResults struct {
-	ProcessId             *big.Int
-	CensusRoot            *big.Int
-	EncryptionPubKey      circuits.EncryptionKey[*big.Int]
-	Nullifiers            []*big.Int
-	Commitments           []*big.Int
-	Addresses             []*big.Int
-	EncryptedBallots      []elgamal.Ballot
-	PlainEncryptedBallots []*big.Int
+	ProcessId        *big.Int
+	CensusRoot       *big.Int
+	EncryptionPubKey circuits.EncryptionKey[*big.Int]
+	Nullifiers       []*big.Int
+	Commitments      []*big.Int
+	Addresses        []*big.Int
+	Ballots          []elgamal.Ballot
 }
 
 // StateTransitionInputsForTest returns the StateTransitionTestResults, the placeholder
@@ -78,11 +77,10 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 
-	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
+	// pad voters inputs (nullifiers, commitments, addresses)
 	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
 	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.VotesPerBatch)
 	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
-	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
 	// init final assignments stuff
 	s := newState(
@@ -94,10 +92,10 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err := s.StartBatch(); err != nil {
 		return nil, nil, nil, err
 	}
-	for i := range agInputs.EncryptedBallots {
+	for i := range agInputs.Ballots {
 		if err := s.AddVote(&state.Vote{
 			Nullifier:  arbo.BigIntToBytes(32, agInputs.Nullifiers[i]),
-			Ballot:     &agInputs.EncryptedBallots[i],
+			Ballot:     &agInputs.Ballots[i],
 			Address:    arbo.BigIntToBytes(32, agInputs.Addresses[i]),
 			Commitment: agInputs.Commitments[i],
 		}); err != nil {
@@ -126,14 +124,13 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	// 	return nil, nil, nil, err
 	// }
 	return &StateTransitionTestResults{
-		ProcessId:             agInputs.ProcessId,
-		CensusRoot:            agInputs.CensusRoot,
-		EncryptionPubKey:      agInputs.EncryptionPubKey,
-		Nullifiers:            nullifiers,
-		Commitments:           commitments,
-		Addresses:             addresses,
-		EncryptedBallots:      agInputs.EncryptedBallots,
-		PlainEncryptedBallots: plainEncryptedBallots,
+		ProcessId:        agInputs.ProcessId,
+		CensusRoot:       agInputs.CensusRoot,
+		EncryptionPubKey: agInputs.EncryptionPubKey,
+		Nullifiers:       nullifiers,
+		Commitments:      commitments,
+		Addresses:        addresses,
+		Ballots:          agInputs.Ballots,
 	}, circuitPlaceholder, witness, nil
 }
 

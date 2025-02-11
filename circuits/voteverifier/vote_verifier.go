@@ -36,7 +36,7 @@
 //   - Nullifier: The nullifier of the votes in the package.
 //   - Commitment: The commitment of the votes in the package.
 //   - ProcessId: The process id of the votes in the package.
-//   - EncryptedBallot: The encrypted votes in the package.
+//   - Ballot: The encrypted votes in the package.
 //   - CensusRoot: The root of the census tree.
 //   - CensusSiblings: The siblings of the address in the census tree.
 //   - Msg: The hash of the public inputs of the ballot proof but as scalar

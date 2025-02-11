@@ -236,7 +236,7 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 		ProcessID:        pid.Marshal(),
 		Commitment:       votedata.Commitment.Bytes(),
 		Nullifier:        votedata.Nullifier.Bytes(),
-		Ballot:           votedata.EncryptedFields,
+		Ballot:           votedata.Ballot,
 		BallotProof:      circomProof,
 		BallotInputsHash: votedata.InputsHash.Bytes(),
 		PublicKey:        signer.PublicKey(),
