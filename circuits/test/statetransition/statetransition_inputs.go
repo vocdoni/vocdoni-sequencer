@@ -11,11 +11,9 @@ import (
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	aggregatortest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/aggregator"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"go.vocdoni.io/dvote/db/metadb"
 )
@@ -23,13 +21,8 @@ import (
 // StateTransitionTestResults struct includes relevant data after StateTransitionCircuit
 // inputs generation
 type StateTransitionTestResults struct {
-	ProcessId        *big.Int
-	CensusRoot       *big.Int
-	EncryptionPubKey circuits.EncryptionKey[*big.Int]
-	Nullifiers       []*big.Int
-	Commitments      []*big.Int
-	Addresses        []*big.Int
-	Ballots          []elgamal.Ballot
+	Process circuits.Process[*big.Int]
+	Votes   []state.Vote
 }
 
 // StateTransitionInputsForTest returns the StateTransitionTestResults, the placeholder
@@ -43,7 +36,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// compile aggregoar circuit
+	// compile aggregator circuit
 	agCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, agPlaceholder)
 	if err != nil {
 		return nil, nil, nil, err
@@ -63,7 +56,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, fmt.Errorf("err proving proof: %w", err)
 	}
 	// convert the proof to the circuit proof type
-	proofInBLS12377, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
+	proofInBW6761, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -77,28 +70,18 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 
-	// pad voters inputs (nullifiers, commitments, addresses)
-	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
-	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.VotesPerBatch)
-	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
-
 	// init final assignments stuff
 	s := newState(
-		processId,
-		agInputs.CensusRoot.Bytes(),
+		agInputs.Process.ID.Bytes(),
+		agInputs.Process.CensusRoot.Bytes(),
 		circuits.MockBallotMode().Bytes(),
-		agInputs.EncryptionPubKey.Bytes())
+		agInputs.Process.EncryptionKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {
 		return nil, nil, nil, err
 	}
-	for i := range agInputs.Ballots {
-		if err := s.AddVote(&state.Vote{
-			Nullifier:  arbo.BigIntToBytes(32, agInputs.Nullifiers[i]),
-			Ballot:     &agInputs.Ballots[i],
-			Address:    arbo.BigIntToBytes(32, agInputs.Addresses[i]),
-			Commitment: agInputs.Commitments[i],
-		}); err != nil {
+	for _, v := range agInputs.Votes {
+		if err := s.AddVote(&v); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -109,7 +92,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	witness.AggregatorProof.Proof = proofInBLS12377
+	witness.AggregatorProof.Proof = proofInBW6761
 
 	// create final placeholder
 	circuitPlaceholder := statetransition.CircuitPlaceholder()
@@ -124,13 +107,8 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	// 	return nil, nil, nil, err
 	// }
 	return &StateTransitionTestResults{
-		ProcessId:        agInputs.ProcessId,
-		CensusRoot:       agInputs.CensusRoot,
-		EncryptionPubKey: agInputs.EncryptionPubKey,
-		Nullifiers:       nullifiers,
-		Commitments:      commitments,
-		Addresses:        addresses,
-		Ballots:          agInputs.Ballots,
+		Process: agInputs.Process,
+		Votes:   agInputs.Votes,
 	}, circuitPlaceholder, witness, nil
 }
 

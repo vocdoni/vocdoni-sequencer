@@ -13,24 +13,21 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/iden3/go-iden3-crypto/mimc7"
+	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
+	"github.com/vocdoni/vocdoni-z-sandbox/state"
 )
 
 // AggregatorTestResults struct includes relevant data after AggregatorCircuit
 // inputs generation
 type AggregatorTestResults struct {
-	InputsHash       *big.Int
-	ProcessId        *big.Int
-	CensusRoot       *big.Int
-	EncryptionPubKey circuits.EncryptionKey[*big.Int]
-	Nullifiers       []*big.Int
-	Commitments      []*big.Int
-	Addresses        []*big.Int
-	Ballots          []elgamal.Ballot
+	InputsHash *big.Int
+
+	Process circuits.Process[*big.Int]
+	Votes   []state.Vote
 }
 
 /*
@@ -309,15 +306,24 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
+
+	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
+	votes := [circuits.VotesPerBatch]state.Vote{}
+	for i := range votes {
+		votes[i].Address = arbo.BigIntToBytes(32, addresses[i])
+		votes[i].Commitment = commitments[i]
+		votes[i].Nullifier = arbo.BigIntToBytes(32, nullifiers[i])
+		votes[i].Ballot = &vvInputs.Ballots[i]
+	}
 	res := AggregatorTestResults{
-		InputsHash:       inputsHash,
-		ProcessId:        vvInputs.ProcessID,
-		CensusRoot:       vvInputs.CensusRoot,
-		EncryptionPubKey: vvInputs.EncryptionPubKey,
-		Nullifiers:       nullifiers,
-		Commitments:      commitments,
-		Addresses:        addresses,
-		Ballots:          vvInputs.Ballots,
+		InputsHash: inputsHash,
+		Process: circuits.Process[*big.Int]{
+			ID:         vvInputs.ProcessID,
+			CensusRoot: vvInputs.CensusRoot,
+			// BallotMode:    circuits.BallotMode{},
+			EncryptionKey: vvInputs.EncryptionPubKey,
+		},
+		Votes: votes[:],
 	}
 
 	/*
