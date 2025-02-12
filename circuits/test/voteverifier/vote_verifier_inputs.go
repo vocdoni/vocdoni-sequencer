@@ -84,7 +84,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	for i, voter := range votersData {
 		voterProof, err := ballottest.BallotProofForTest(voter.Address.Bytes(), processId, ek)
 		if err != nil {
-			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, fmt.Errorf("ballotproof inputs: %w", err)
 		}
 		if finalProcessID == nil {
 			finalProcessID = voterProof.ProcessID

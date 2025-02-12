@@ -33,44 +33,44 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	// generate aggregator circuit and inputs
 	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters, false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
 	// compile aggregator circuit
 	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator compile: %w", err)
 	}
 	agPk, agVk, err := groth16.Setup(agCCS)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator setup: %w", err)
 	}
 	// parse the witness to the circuit
 	fullWitness, err := frontend.NewWitness(agWitness, circuits.AggregatorCurve.ScalarField())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator witness: %w", err)
 	}
 	// generate the proof
 	proof, err := groth16.Prove(agCCS, agPk, fullWitness, stdgroth16.GetNativeProverOptions(
 		circuits.StateTransitionCurve.ScalarField(),
 		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("err proving proof: %w", err)
+		return nil, nil, nil, fmt.Errorf("err proving aggregator circuit: %w", err)
 	}
 	// convert the proof to the circuit proof type
 	proofInBW6761, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("convert aggregator proof: %w", err)
 	}
 	// convert the public inputs to the circuit public inputs type
 	publicWitness, err := fullWitness.Public()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("convert aggregator public inputs: %w", err)
 	}
 	err = groth16.Verify(proof, agVk, publicWitness, stdgroth16.GetNativeVerifierOptions(
 		circuits.StateTransitionCurve.ScalarField(),
 		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator verify: %w", err)
 	}
 
 	// init final assignments stuff

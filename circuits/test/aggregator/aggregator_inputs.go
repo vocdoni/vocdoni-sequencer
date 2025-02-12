@@ -177,7 +177,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// generate vote verifier circuit and inputs
 	vvInputs, vvPlaceholder, vvAssigments, err := voteverifiertest.VoteVerifierInputsForTest(vvData, processId)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier inputs: %w", err)
 	}
 	// compile vote verifier circuit
 	vvCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
@@ -212,7 +212,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			circuits.AggregatorCurve.ScalarField(),
 			circuits.VoteVerifierCurve.ScalarField()))
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving proof %d: %w", i, err)
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("err proving voteverifier circuit %d: %w", i, err)
 		}
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)

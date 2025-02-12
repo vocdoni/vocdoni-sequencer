@@ -140,17 +140,17 @@ func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.I
 func CompileAndGenerateProofForTest(inputs []byte) (string, string, error) {
 	finalInputs, err := witness.ParseInputs(inputs)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("circom inputs: %w", err)
 	}
 	// instance witness calculator
 	calc, err := witness.NewCircom2WitnessCalculator(TestCircomCircuit, true)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("instance witness calculator: %w", err)
 	}
 	// calculate witness
 	w, err := calc.CalculateWTNSBin(finalInputs, true)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("calculate witness: %w", err)
 	}
 	// generate proof
 	return prover.Groth16ProverRaw(TestCircomProvingKey, w)
@@ -243,7 +243,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	// create circom proof and public signals
 	circomProof, circomPubInputs, err := CompileAndGenerateProofForTest(bCircomInputs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create circom proof: %w", err)
 	}
 	return &VoterProofResult{
 		ProcessID:  ffProcessID,
