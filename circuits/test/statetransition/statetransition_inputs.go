@@ -34,7 +34,7 @@ type StateTransitionTestResults struct {
 }
 
 // StateTransitionInputsForTest returns the StateTransitionTestResults, the placeholder
-// and the assigments of a StateTransitionCircuit for the processId provided
+// and the assignments of a StateTransitionCircuit for the processId provided
 // generating nValidVoters. If something fails it returns an error.
 func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
@@ -77,10 +77,6 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	agPublicInputs, err := stdgroth16.ValueOfWitness[sw_bw6761.ScalarField](publicWitness)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 
 	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
 	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
@@ -88,7 +84,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
 	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
-	// init final assigments stuff
+	// init final assignments stuff
 	s := newState(
 		processId,
 		agInputs.CensusRoot.Bytes(),
@@ -116,8 +112,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, err
 	}
 
-	witness.AggregatedProof.Proof = proofInBLS12377
-	witness.AggregatedProof.Witness = agPublicInputs
+	witness.AggregatorProof.Proof = proofInBLS12377
 
 	// create final placeholder
 	circuitPlaceholder := statetransition.CircuitPlaceholder()
@@ -126,7 +121,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	circuitPlaceholder.AggregatedProof.VK = fixedVk
+	circuitPlaceholder.AggregatorProof.VK = fixedVk
 	// // fill placeholder and witness with dummy circuits
 	// if err := aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, agCCS, nValidVoters); err != nil {
 	// 	return nil, nil, nil, err

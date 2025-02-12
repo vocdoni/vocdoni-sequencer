@@ -27,6 +27,6 @@ func (sig *BallotSignature) Bin() []byte {
 // the final value is in the expected scalar field (BLS12_377) and has the
 // expected size.
 func (sig *BallotSignature) Verify(input *big.Int, pubKey []byte) bool {
-	ffInput := crypto.BigIntToMIMCHash(input, gecc.BLS12_377.ScalarField())
+	ffInput := crypto.SignatureHash(input, gecc.BLS12_377.ScalarField())
 	return ethcrypto.VerifySignature(pubKey, ffInput, sig.Bin())
 }

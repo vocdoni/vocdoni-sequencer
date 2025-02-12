@@ -18,7 +18,7 @@ func TestVerifySingleVoteCircuit(t *testing.T) {
 	// generate voter account
 	privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 	c.Assert(err, qt.IsNil)
-	_, placeholder, assigments, err := VoteVerifierInputsForTest([]VoterTestData{
+	_, placeholder, assignments, err := VoteVerifierInputsForTest([]VoterTestData{
 		{
 			PrivKey: privKey,
 			PubKey:  pubKey,
@@ -29,7 +29,7 @@ func TestVerifySingleVoteCircuit(t *testing.T) {
 	// generate proof
 	assert := test.NewAssert(t)
 	now := time.Now()
-	assert.SolvingSucceeded(&placeholder, &assigments[0],
+	assert.SolvingSucceeded(&placeholder, &assignments[0],
 		test.WithCurves(ecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
 	fmt.Println("proving tooks", time.Since(now))
@@ -47,13 +47,13 @@ func TestVerifyMultipleVotesCircuit(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		data = append(data, VoterTestData{privKey, pubKey, address})
 	}
-	_, placeholder, assigments, err := VoteVerifierInputsForTest(data, nil)
+	_, placeholder, assignments, err := VoteVerifierInputsForTest(data, nil)
 	c.Assert(err, qt.IsNil)
 	assert := test.NewAssert(t)
 	now := time.Now()
-	for i, assigment := range assigments {
-		c.Logf("proof %d of %d", i+1, len(assigments))
-		err := test.IsSolved(&placeholder, &assigment, ecc.BLS12_377.ScalarField())
+	for i, assignment := range assignments {
+		c.Logf("proof %d of %d", i+1, len(assignments))
+		err := test.IsSolved(&placeholder, &assignment, ecc.BLS12_377.ScalarField())
 		assert.NoError(err)
 	}
 	fmt.Println("proving tooks", time.Since(now))

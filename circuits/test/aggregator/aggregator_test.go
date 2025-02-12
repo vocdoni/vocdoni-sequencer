@@ -21,13 +21,13 @@ func TestAggregatorCircuit(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
-	_, placeholder, assigments, err := AggregarorInputsForTest(processId, 3, false)
+	_, placeholder, assignments, err := AggregarorInputsForTest(processId, 3, false)
 	c.Assert(err, qt.IsNil)
 	c.Logf("inputs generation tooks %s", time.Since(now).String())
 	// proving
 	now = time.Now()
 	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(&placeholder, &assigments,
+	assert.SolvingSucceeded(&placeholder, &assignments,
 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	c.Logf("proving tooks %s", time.Since(now).String())
@@ -114,7 +114,7 @@ func TestDummyAggregation(t *testing.T) {
 		DummyVerificationKey: dummyVk,
 		Proofs:               dymmyProofSlots,
 	}
-	assigments := aggregator.AggregatorCircuit{
+	assignments := aggregator.AggregatorCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](dummyInputsHash),
 		ValidVotes: aggregator.EncodeProofsSelector(0),
 		BallotMode: circuits.BallotMode[emulated.Element[sw_bn254.ScalarField]]{
@@ -143,7 +143,7 @@ func TestDummyAggregation(t *testing.T) {
 	// proving
 	now = time.Now()
 	assert := test.NewAssert(t)
-	assert.SolvingSucceeded(&placeholder, &assigments,
+	assert.SolvingSucceeded(&placeholder, &assignments,
 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 	c.Logf("proving tooks %s", time.Since(now).String())
@@ -155,13 +155,13 @@ func TestDummyAggregation(t *testing.T) {
 // 	c := qt.New(t)
 // 	// inputs generation
 // 	now := time.Now()
-// 	_, placeholder, assigments, err := LocalInputsForTest(3)
+// 	_, placeholder, assignments, err := LocalInputsForTest(3)
 // 	c.Assert(err, qt.IsNil)
 // 	c.Logf("inputs generation tooks %s", time.Since(now).String())
 // 	// proving
 // 	now = time.Now()
 // 	assert := test.NewAssert(t)
-// 	assert.SolvingSucceeded(&placeholder, &assigments,
+// 	assert.SolvingSucceeded(&placeholder, &assignments,
 // 		test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16),
 // 		test.WithProverOpts(stdgroth16.GetNativeProverOptions(ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField())))
 // 	c.Logf("proving tooks %s", time.Since(now).String())

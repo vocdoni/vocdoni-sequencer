@@ -164,7 +164,7 @@ func (s *Storage) CountVerifiedBallots(processID []byte) int {
 }
 
 // PushBallotBatch pushes an aggregated ballot batch to the aggregator queue.
-func (s *Storage) PushBallotBatch(abb *AggregatedBallotBatch) error {
+func (s *Storage) PushBallotBatch(abb *AggregatorBallotBatch) error {
 	val, err := encodeArtifact(abb)
 	if err != nil {
 		return fmt.Errorf("encode batch: %w", err)
@@ -201,7 +201,7 @@ func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []b
 		return nil, nil, ErrNoMoreElements
 	}
 
-	var abb AggregatedBallotBatch
+	var abb AggregatorBallotBatch
 	if err := decodeArtifact(chosenVal, &abb); err != nil {
 		return nil, nil, fmt.Errorf("decode agg batch: %w", err)
 	}

@@ -66,12 +66,12 @@ func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
 	return dummyCCS, dummyVk, dummyProof, dummyWitness, nil
 }
 
-// FillWithDummyFixed function fills the placeholder and the assigments
+// FillWithDummyFixed function fills the placeholder and the assignments
 // provided with a dummy circuit stuff and proofs compiled for the main
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool) (
+func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool) (
 	AggregatorCircuit, AggregatorCircuit, error,
 ) {
 	dummyCCS, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist)
@@ -80,18 +80,18 @@ func FillWithDummyFixed(placeholder, assigments AggregatorCircuit, main constrai
 	}
 	// set fixed dummy vk in the placeholders
 	placeholder.DummyVerificationKey = dummyVk
-	// set some dummy values in others assigments variables
+	// set some dummy values in others assignments variables
 	dummyValue := emulated.ValueOf[sw_bn254.ScalarField](0)
-	// fill placeholders and assigments dummy values
-	for i := range assigments.Proofs {
+	// fill placeholders and assignments dummy values
+	for i := range assignments.Proofs {
 		placeholder.Proofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
 		if i >= fromIdx {
-			assigments.Votes[i].Nullifier = dummyValue
-			assigments.Votes[i].Commitment = dummyValue
-			assigments.Votes[i].Address = dummyValue
-			assigments.Votes[i].Ballot = *circuits.NewEmulatedBallot[sw_bn254.ScalarField]()
-			assigments.Proofs[i] = dummyProof
+			assignments.Votes[i].Nullifier = dummyValue
+			assignments.Votes[i].Commitment = dummyValue
+			assignments.Votes[i].Address = dummyValue
+			assignments.Votes[i].Ballot = *circuits.NewEmulatedBallot[sw_bn254.ScalarField]()
+			assignments.Proofs[i] = dummyProof
 		}
 	}
-	return placeholder, assigments, nil
+	return placeholder, assignments, nil
 }

@@ -5,15 +5,34 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
-var HashFn = utils.MiMCHasher
+var (
+	HashFn           = utils.MiMCHasher
+	AggregatorHashFn = MiMC7Hasher
+)
+
+// MiMC7Hasher function calculates the mimc7 hash of the provided inputs. It
+// returns the hash of the inputs.
+func MiMC7Hasher(api frontend.API, inputs ...emulated.Element[sw_bn254.ScalarField]) emulated.Element[sw_bn254.ScalarField] {
+	hFn, err := mimc7.NewMiMC(api)
+	if err != nil {
+		circuits.FrontendError(api, "failed to create emulated MiMC hash function", err)
+	}
+	if err := hFn.Write(inputs...); err != nil {
+		circuits.FrontendError(api, "failed to write inputs to emulated MiMC hash function", err)
+	}
+	return hFn.Sum()
+}
 
 type Circuit struct {
 	// ---------------------------------------------------------------------------------------------
@@ -34,7 +53,7 @@ type Circuit struct {
 	VotesProofs   VotesProofs
 	ResultsProofs ResultsProofs
 
-	AggregatedProof circuits.InnerProofBW6761
+	AggregatorProof circuits.InnerProofBW6761
 }
 
 type Results struct {
@@ -68,8 +87,7 @@ type Vote struct {
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	circuit.VerifyAggregatedWitnessHash(api)
-	circuit.VerifyAggregatedProof(api)
+	circuit.VerifyAggregatorProof(api)
 	circuit.VerifyMerkleProofs(api, HashFn)
 	circuit.VerifyMerkleTransitions(api, HashFn)
 	circuit.VerifyLeafHashes(api, HashFn)
@@ -77,27 +95,25 @@ func (circuit Circuit) Define(api frontend.API) error {
 	return nil
 }
 
-func (circuit Circuit) VerifyAggregatedWitnessHash(api frontend.API) {
-	api.AssertIsEqual(len(circuit.AggregatedProof.Witness.Public), 1)
-	publicInput, err := utils.PackScalarToVar(api, circuit.AggregatedProof.Witness.Public[0])
-	if err != nil {
-		circuits.FrontendError(api, "failed to pack scalar to var: ", err)
-	}
-	hash, err := HashFn(api, circuits.AggregatedWitnessInputsAsVars(api, circuit.Process, circuit.ListVotes())...)
-	if err != nil {
-		circuits.FrontendError(api, "failed to hash: ", err)
-	}
-	api.AssertIsEqual(hash, publicInput)
+func (circuit Circuit) CalculateAggregatorWitness(api frontend.API) (groth16.Witness[sw_bw6761.ScalarField], error) {
+	hashes := circuits.CalculateVotersHashes(api,
+		circuit.Process.VarsToEmulatedElementBN254(api),
+		circuit.ListVotesAsEmulated(api))
+	return hashes.ToWitnessBW6761(api)
 }
 
-func (circuit Circuit) VerifyAggregatedProof(api frontend.API) {
+func (circuit Circuit) VerifyAggregatorProof(api frontend.API) {
+	witness, err := circuit.CalculateAggregatorWitness(api)
+	if err != nil {
+		circuits.FrontendError(api, "failed to create bw6761 witness: ", err)
+	}
 	// initialize the verifier
 	verifier, err := groth16.NewVerifier[sw_bw6761.ScalarField, sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create bw6761 verifier: ", err)
 	}
 	// verify the proof with the hash as input and the fixed verification key
-	if err := verifier.AssertProof(circuit.AggregatedProof.VK, circuit.AggregatedProof.Proof, circuit.AggregatedProof.Witness); err != nil {
+	if err := verifier.AssertProof(circuit.AggregatorProof.VK, circuit.AggregatorProof.Proof, witness); err != nil {
 		circuits.FrontendError(api, "failed to verify aggregated proof: ", err)
 	}
 }
@@ -195,6 +211,14 @@ func (circuit Circuit) ListVotes() []circuits.Vote[frontend.Variable] {
 	return list
 }
 
+func (circuit Circuit) ListVotesAsEmulated(api frontend.API) []circuits.EmulatedVote[sw_bn254.ScalarField] {
+	list := []circuits.EmulatedVote[sw_bn254.ScalarField]{}
+	for _, v := range circuit.Votes {
+		list = append(list, v.Vote.ToEmulatedVote(api))
+	}
+	return list
+}
+
 func CircuitPlaceholder() *Circuit {
 	proof, err := DummyInnerProof(0)
 	if err != nil {
@@ -205,13 +229,13 @@ func CircuitPlaceholder() *Circuit {
 
 func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
 	return &Circuit{
-		AggregatedProof: *proof,
+		AggregatorProof: *proof,
 	}
 }
 
 func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
 	_, witness, proof, vk, err := dummy.Prove(
-		dummy.PlaceholderWithConstraints(0), dummy.Assignment(inputsHash),
+		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
 		ecc.BN254.ScalarField(), ecc.BW6_761.ScalarField(), false)
 	if err != nil {
 		return nil, err

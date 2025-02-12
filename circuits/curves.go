@@ -25,9 +25,8 @@ import (
 // inner bw6761
 
 type InnerProofBN254 struct {
-	Proof   groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
-	Witness groth16.Witness[sw_bn254.ScalarField]
-	VK      groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
+	Proof groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	VK    groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
 }
 type InnerProofBLS12377 struct {
 	Proof   groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
@@ -37,6 +36,6 @@ type InnerProofBLS12377 struct {
 
 type InnerProofBW6761 struct {
 	Proof   groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine]
-	Witness groth16.Witness[sw_bw6761.ScalarField]
+	Witness groth16.Witness[sw_bw6761.ScalarField]                                       // TODO: remove this, unneeded, since it's calculated in-circuit
 	VK      groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl] `gnark:"-"`
 }

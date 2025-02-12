@@ -52,34 +52,13 @@ type AggregatorCircuit struct {
 	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-// calculateVotersHashes circuit method calculates the hash of each voter using
-// the common inputs and the unique inputs of each voter. It returns a
-// VotersHashes struct that contains the hashes of the voters and allows to
-// generate the witness for the i-th voter or to assert that the sum of the
-// hashes is equal to the expected value.
-func (c AggregatorCircuit) calculateVotersHashes(api frontend.API) VotersHashes {
-	// initialize the hashes of the voters
-	votersHashes := [circuits.VotesPerBatch]emulated.Element[sw_bn254.ScalarField]{}
-	// group common inputs
-	commonInputs := c.Process.Serialize()
-	// iterate over the voters
-	for i := 0; i < circuits.VotesPerBatch; i++ {
-		// group remaining inputs, those that are unique for each voter
-		voterInputs := append(commonInputs, c.Votes[i].Address, c.Votes[i].Nullifier, c.Votes[i].Commitment)
-		voterInputs = append(voterInputs, c.Votes[i].Ballot.Serialize()...)
-		// calculate the voter hash and store it
-		votersHashes[i] = VoterHashFn(api, voterInputs...)
-	}
-	return VotersHashes{votersHashes}
-}
-
 // checkProofs circuit method verifies each voter proof with the provided
 // verification keys and public inputs. The verification keys should contain
 // the dummy circuit and the main circuit verification keys in that particular
 // order. The dummy circuit verification key is used to verify the proofs that
 // are not from valid voters. As circuit method, it does not return any value,
 // but it assert that all the proofs are valid.
-func (c AggregatorCircuit) checkProofs(api frontend.API, hashes VotersHashes) {
+func (c AggregatorCircuit) checkProofs(api frontend.API, hashes circuits.VotersHashes) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
@@ -101,7 +80,7 @@ func (c AggregatorCircuit) checkProofs(api frontend.API, hashes VotersHashes) {
 			circuits.FrontendError(api, "failed to switch verification key", err)
 		}
 		// calculate the witness for the i-th voter
-		calculatedWitness, err := hashes.ToWitness(api, i, validProofs[i])
+		calculatedWitness, err := hashes.ToWitnessBLS12377(api, i, validProofs[i])
 		if err != nil {
 			circuits.FrontendError(api, "failed to calculate witness", err)
 		}
@@ -114,7 +93,7 @@ func (c AggregatorCircuit) checkProofs(api frontend.API, hashes VotersHashes) {
 
 func (c AggregatorCircuit) Define(api frontend.API) error {
 	// calculate the voters hashes
-	hashes := c.calculateVotersHashes(api)
+	hashes := circuits.CalculateVotersHashes(api, c.Process, c.Votes[:])
 	// check the inputs hash matches the calculated one from the voters hashes
 	hashes.AssertSumIsEqual(api, c.InputsHash)
 	// check all the proofs are valid and match the voters hashes as inputs

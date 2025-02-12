@@ -224,7 +224,7 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
-	blsCircomInputsHash := crypto.BigIntToMIMCHash(votedata.InputsHash, gecc.BLS12_377.ScalarField())
+	blsCircomInputsHash := crypto.SignatureHash(votedata.InputsHash, gecc.BLS12_377.ScalarField())
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
 	c.Assert(err, qt.IsNil)
