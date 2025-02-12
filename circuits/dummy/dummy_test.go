@@ -22,9 +22,8 @@ func TestSameCircuitsInfo(t *testing.T) {
 	// compile the main circuit
 	mainCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
 		CircomProof: circuits.InnerProofBN254{
-			VK:      circomPlaceholder.Vk,
-			Proof:   circomPlaceholder.Proof,
-			Witness: circomPlaceholder.Witness,
+			VK:    circomPlaceholder.Vk,
+			Proof: circomPlaceholder.Proof,
 		},
 	})
 	c.Assert(err, qt.IsNil)

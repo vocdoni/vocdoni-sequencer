@@ -282,15 +282,21 @@ func (o *State) PaddedVotes() []*Vote {
 	v := slices.Clone(o.votes)
 	for len(v) < circuits.VotesPerBatch {
 		v = append(v, &Vote{
-			Nullifier:  []byte{0x00},
-			Ballot:     elgamal.NewBallot(Curve),
 			Address:    []byte{0x00},
 			Commitment: big.NewInt(0),
+			Nullifier:  []byte{0x00},
+			Ballot:     elgamal.NewBallot(Curve),
 		})
 	}
 	return v
 }
 
+// ProcessSerializeBigInts returns
+//
+//	process.ID
+//	process.CensusRoot
+//	process.BallotMode
+//	process.EncryptionKey
 func (o *State) ProcessSerializeBigInts() []*big.Int {
 	list := []*big.Int{}
 	list = append(list, arbo.BytesToBigInt(o.ProcessID()))
@@ -340,41 +346,21 @@ func (o *State) EncryptionKey() circuits.EncryptionKey[*big.Int] {
 	return ek
 }
 
-func (o *State) VoterHashesInputs() []*big.Int {
-	// all of the following values compose the preimage that is hashed
-	// to produce the public input needed to verify AggregatorProof.
-	// ProcessID
-	// CensusRoot
-	// BallotMode
-	// EncryptionKey
-	// Nullifiers
-	// Ballots
-	// Addressess
-	// Commitments
-
-	inputs := []*big.Int{}
-	inputs = append(inputs, arbo.BytesToBigInt(o.ProcessID()))
-	inputs = append(inputs, arbo.BytesToBigInt(o.CensusRoot()))
-	inputs = append(inputs, o.BallotMode().Serialize()...)
-	inputs = append(inputs, o.EncryptionKey().Serialize()...)
-
-	votes := o.PaddedVotes()
-	for _, v := range votes {
-		inputs = append(inputs, arbo.BytesToBigInt(v.Nullifier))
-	}
-	for _, v := range votes {
-		inputs = append(inputs, v.Ballot.BigInts()...)
-	}
-	for _, v := range votes {
-		inputs = append(inputs, arbo.BytesToBigInt(v.Address))
-	}
-	for _, v := range votes {
-		inputs = append(inputs, v.Commitment)
-	}
-	return inputs
-}
-
+// AggregatorWitnessHash uses the following values for each vote
+//
+//	process.ID
+//	process.CensusRoot
+//	process.BallotMode
+//	process.EncryptionKey
+//	vote.Address
+//	vote.Commitment
+//	vote.Nullifier
+//	vote.Ballot
+//
+// to calculate a subhash of each process+vote, then hashes all subhashes
+// and returns the final hash
 func (o *State) AggregatorWitnessHash() (*big.Int, error) {
+	// TODO: move this func somewhere else, along with other similar funcs used by other circuits
 	subhashes := []*big.Int{}
 	for _, v := range o.PaddedVotes() {
 		inputs := []*big.Int{}

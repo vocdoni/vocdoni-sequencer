@@ -4,12 +4,12 @@ import "math/big"
 
 const SerializedFieldSize = 32 // bytes
 
-// BigIntToMIMCHash transform the inputs hash to the field provided, if it is
+// SignatureHash transform the inputs hash to the field provided, if it is
 // not done, the circuit will transform it during the witness calculation and
 // the resulting hash will be different. Moreover, the input hash should be
 // 32 bytes so if it is not, fill with zeros at the beginning of the bytes
 // representation.
-func BigIntToMIMCHash(input, base *big.Int) []byte {
+func SignatureHash(input, base *big.Int) []byte {
 	hash := BigToFF(base, input).Bytes()
 	for len(hash) < SerializedFieldSize {
 		hash = append([]byte{0}, hash...)
