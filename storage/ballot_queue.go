@@ -180,7 +180,7 @@ func (s *Storage) PushBallotBatch(abb *AggregatorBallotBatch) error {
 
 // NextBallotBatch returns the next aggregated ballot batch for a given
 // processID, sets a reservation.
-func (s *Storage) NextBallotBatch(processID []byte) (*AggregatedBallotBatch, []byte, error) {
+func (s *Storage) NextBallotBatch(processID []byte) (*AggregatorBallotBatch, []byte, error) {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
 

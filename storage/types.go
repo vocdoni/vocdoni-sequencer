@@ -43,6 +43,7 @@ type Ballot struct {
 	BallotProof      parser.GnarkRecursionProof `json:"ballotProof"`
 	Signature        types.BallotSignature      `json:"signature"`
 	CensusProof      types.CensusProof          `json:"censusProof"`
+	PubKey           types.HexBytes             `json:"publicKey"`
 }
 
 type AggregatorBallotBatch struct {
