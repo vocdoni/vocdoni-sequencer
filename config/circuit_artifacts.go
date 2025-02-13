@@ -12,9 +12,9 @@ const (
 	VoteVerifierCircuitURL          = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.ccs"
 	VoteVerifierCircuitHash         = "e6e5e27a311c04ffe7894494e614f1cf28067df357b1d55b38855b8351e01f79"
 	VoteVerifierProvingKeyURL       = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.pk"
-	VoteVerifierProvingKeyHash      = "53868690656c012b93c50dd33c92a8642d3b6947b63378278cabd3767fa05dcb"
+	VoteVerifierProvingKeyHash      = "2575d26935cae94213c8921f9613f5deded5f815a857fb8813571da076d0d114"
 	VoteVerifierVerificationKeyURL  = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.vk"
-	VoteVerifierVerificationKeyHash = "25d9b8a646190527fcbf2afc601c59da5fd2023e7dee64134a9af2089b061ff9"
+	VoteVerifierVerificationKeyHash = "8d60c75eec1ef373d01b8d26b392796a5764be097148ff949ab2801ba0d56e8a"
 	// CircuitArtifacts constants for circuits/aggregator package
 	AgregatorCircuitURL           = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/aggregator.ccs"
 	AggregatorCircuitHash         = "e48d63c1c13cdc100b7c66b75fbc2a9d4b284a2998a1357b413dc1e3c618864d"

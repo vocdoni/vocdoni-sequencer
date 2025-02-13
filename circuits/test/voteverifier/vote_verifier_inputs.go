@@ -133,9 +133,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			// circom inputs
 			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
 				Address:    emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
-				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 				Commitment: emulated.ValueOf[sw_bn254.ScalarField](voterProof.Commitment),
 				Ballot:     *voterProof.Ballot.ToGnarkEmulatedBN254(),
+				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 			},
 			UserWeight: emulated.ValueOf[sw_bn254.ScalarField](circuits.MockWeight),
 			Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
@@ -144,7 +144,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				EncryptionKey: encryptionKey.BigIntsToEmulatedElementBN254(),
 				BallotMode:    circuits.MockBallotModeEmulated(),
 			},
-			// census proof
 			CensusSiblings: emulatedSiblings,
 			// signature
 			Msg: emulated.ValueOf[emulated.Secp256k1Fr](blsCircomInputsHash),
@@ -157,10 +156,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				S: emulated.ValueOf[emulated.Secp256k1Fr](sSign),
 			},
 			// circom proof
-			CircomProof: circuits.InnerProofBN254{
-				VK:    recursiveProof.Vk,
-				Proof: recursiveProof.Proof,
-			},
+			CircomProof: recursiveProof.Proof,
 		})
 	}
 
@@ -174,9 +170,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			Commitments:      commitments,
 			Ballots:          ballots,
 		}, voteverifier.VerifyVoteCircuit{
-			CircomProof: circuits.InnerProofBN254{
-				VK:    circomPlaceholder.Vk,
-				Proof: circomPlaceholder.Proof,
-			},
+			CircomProof:           circomPlaceholder.Proof,
+			CircomVerificationKey: circomPlaceholder.Vk,
 		}, assignments, nil
 }

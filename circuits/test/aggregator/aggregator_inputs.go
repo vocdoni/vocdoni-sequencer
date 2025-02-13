@@ -311,12 +311,14 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	}
 
 	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
-	votes := [circuits.VotesPerBatch]state.Vote{}
-	for i := range votes {
-		votes[i].Address = arbo.BigIntToBytes(32, addresses[i])
-		votes[i].Commitment = commitments[i]
-		votes[i].Nullifier = arbo.BigIntToBytes(32, nullifiers[i])
-		votes[i].Ballot = &vvInputs.Ballots[i]
+	votes := []state.Vote{}
+	for i := 0; i < nValidVoters; i++ {
+		votes = append(votes, state.Vote{
+			Address:    arbo.BigIntToBytes(32, vvInputs.Addresses[i]),
+			Commitment: vvInputs.Commitments[i],
+			Nullifier:  arbo.BigIntToBytes(32, vvInputs.Nullifiers[i]),
+			Ballot:     &vvInputs.Ballots[i],
+		})
 	}
 	res := AggregatorTestResults{
 		InputsHash: inputsHash,

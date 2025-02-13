@@ -20,10 +20,8 @@ func TestSameCircuitsInfo(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	// compile the main circuit
 	mainCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, &voteverifier.VerifyVoteCircuit{
-		CircomProof: circuits.InnerProofBN254{
-			VK:    circomPlaceholder.Vk,
-			Proof: circomPlaceholder.Proof,
-		},
+		CircomProof:           circomPlaceholder.Proof,
+		CircomVerificationKey: circomPlaceholder.Vk,
 	})
 	c.Assert(err, qt.IsNil)
 	mainVk := stdgroth16.PlaceholderVerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](mainCCS)
