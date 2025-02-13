@@ -73,9 +73,10 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 		Commitment:       vote.Commitment,
 		Address:          vote.CensusProof.Key,
 		BallotInputsHash: vote.BallotInputsHash,
-		BallotProof:      *proof,
+		BallotProof:      proof.Proof,
 		Signature:        vote.Signature,
 		CensusProof:      vote.CensusProof,
+		PubKey:           vote.PublicKey,
 	}); err != nil {
 		ErrGenericInternalServerError.Withf("could not push ballot: %v", err).Write(w)
 		return

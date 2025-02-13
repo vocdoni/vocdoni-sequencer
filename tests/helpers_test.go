@@ -23,6 +23,7 @@ import (
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/processor"
 	"github.com/vocdoni/vocdoni-z-sandbox/service"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
@@ -52,7 +53,7 @@ func NewTestClient(port int) (*client.HTTPclient, error) {
 	return client.New(fmt.Sprintf("http://127.0.0.1:%d", port))
 }
 
-func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *web3.Contracts) {
+func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *storage.Storage, *web3.Contracts) {
 	log.Infow("starting Geth docker compose")
 	compose, err := tc.NewDockerCompose("docker/docker-compose.yml")
 	qt.Assert(t, err, qt.IsNil)
@@ -75,6 +76,13 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 	kv := memdb.New()
 	stg := storage.New(kv)
 
+	voteProcessor := processor.NewVoteProcessor(stg)
+	voteProcessor.Start(ctx)
+	t.Cleanup(func() {
+		err := voteProcessor.Stop()
+		qt.Assert(t, err, qt.IsNil)
+	})
+
 	pm := service.NewProcessMonitor(contracts, stg, time.Second*2)
 	if err := pm.Start(ctx); err != nil {
 		log.Fatal(err)
@@ -85,7 +93,7 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 	qt.Assert(t, err, qt.IsNil)
 	t.Cleanup(api.Stop)
 
-	return api, contracts
+	return api, stg, contracts
 }
 
 func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant, []*ethereum.SignKeys) {

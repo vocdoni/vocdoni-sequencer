@@ -9,6 +9,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -22,7 +23,7 @@ func TestIntegration(t *testing.T) {
 
 	// Setup
 	ctx := context.Background()
-	apiSrv, contracts := NewTestService(t, ctx)
+	apiSrv, storage, contracts := NewTestService(t, ctx)
 	_, port := apiSrv.HostPort()
 	cli, err := NewTestClient(port)
 	c.Assert(err, qt.IsNil)
@@ -61,6 +62,12 @@ func TestIntegration(t *testing.T) {
 	})
 
 	c.Run("create vote", func(c *qt.C) {
+		// load ballot proof artifacts
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
+		c.Assert(voteverifier.Artifacts.DownloadAll(ctx), qt.IsNil)
+
 		// create census with 10 participants
 		root, participants, signers := createCensus(c, cli, 10)
 		// create process
@@ -84,14 +91,24 @@ func TestIntegration(t *testing.T) {
 		c.Assert(censusProof.Siblings, qt.IsNotNil)
 		vote.CensusProof = *censusProof
 
-		// load ballot proof artifacts
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
-
 		body, status, err := cli.Request("POST", vote, nil, api.VotesEndpoint)
 		c.Assert(err, qt.IsNil)
 		c.Assert(status, qt.Equals, 200)
 		c.Log("Vote created", string(body))
+
+		// wait to process the vote
+		voteWaiter, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		for {
+			select {
+			case <-voteWaiter.Done():
+				c.Fatal("timeout waiting for vote to be processed")
+			default:
+				if storage.CountVerifiedBallots(pid.Marshal()) == 0 {
+					time.Sleep(time.Second)
+					continue
+				}
+			}
+		}
 	})
 }
