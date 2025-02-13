@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
@@ -132,13 +133,13 @@ func TestCiphertext_MarshalUnmarshal(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Test marshaling
-	marshaled, err := encrypted.Marshal()
+	marshaled, err := json.Marshal(encrypted)
 	c.Assert(err, qt.IsNil)
 	c.Assert(marshaled, qt.Not(qt.IsNil))
 
 	// Test unmarshaling
 	unmarshaled := NewCiphertext(publicKey)
-	err = unmarshaled.Unmarshal(marshaled)
+	err = json.Unmarshal(marshaled, unmarshaled)
 	c.Assert(err, qt.IsNil)
 
 	// Compare points
@@ -201,13 +202,13 @@ func TestBallotMarshalCBOR(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 
 		// Test marshaling
-		marshaled, err := ballot.Marshal()
+		marshaled, err := cbor.Marshal(ballot)
 		c.Assert(err, qt.IsNil)
 		c.Assert(marshaled, qt.Not(qt.IsNil))
 
 		// Test unmarshaling
-		unmarshaled := NewBallot(curve)
-		err = unmarshaled.Unmarshal(marshaled)
+		unmarshaled := Ballot{}
+		err = cbor.Unmarshal(marshaled, &unmarshaled)
 		c.Assert(err, qt.IsNil)
 
 		// Compare points
@@ -251,8 +252,8 @@ func TestBallotMarshalJSON(t *testing.T) {
 		c.Assert(marshaled, qt.Not(qt.IsNil))
 
 		// Test JSON unmarshaling.
-		unmarshaled := NewBallot(curve)
-		err = json.Unmarshal(marshaled, unmarshaled)
+		unmarshaled := Ballot{}
+		err = json.Unmarshal(marshaled, &unmarshaled)
 		c.Assert(err, qt.IsNil)
 
 		// Compare points for each ciphertext.
