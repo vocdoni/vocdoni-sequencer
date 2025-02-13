@@ -35,6 +35,28 @@ func TestAggregatorCircuit(t *testing.T) {
 	c.Logf("proving tooks %s", time.Since(now).String())
 }
 
+func TestAggregatorCircuitWithDummy(t *testing.T) {
+	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+	c := qt.New(t)
+	// inputs generation
+	now := time.Now()
+	processId := util.RandomBytes(20)
+	_, placeholder, assignments, err := AggregatorInputsWithDummyProof(processId, 3, false)
+	c.Assert(err, qt.IsNil)
+	c.Logf("inputs generation tooks %s", time.Since(now).String())
+	// proving
+	now = time.Now()
+	assert := test.NewAssert(t)
+	assert.SolvingSucceeded(&placeholder, &assignments,
+		test.WithCurves(circuits.AggregatorCurve), test.WithBackends(backend.GROTH16),
+		test.WithProverOpts(stdgroth16.GetNativeProverOptions(
+			circuits.StateTransitionCurve.ScalarField(),
+			circuits.AggregatorCurve.ScalarField())))
+	c.Logf("proving tooks %s", time.Since(now).String())
+}
+
 /*
 TODO: Fix and refactor this test
 
