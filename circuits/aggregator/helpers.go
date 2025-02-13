@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
@@ -45,7 +44,7 @@ func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
 
 	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
 		dummy.Placeholder(main), dummy.Assignment(1),
-		ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField(), persist)
+		circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField(), persist)
 	if err != nil {
 		return nil, nilVk, nilProof, nilWitness, err
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gnarkecdsa "github.com/consensys/gnark/std/signature/ecdsa"
@@ -31,7 +30,7 @@ type VoteVerifierTestResults struct {
 	CensusRoot       *big.Int
 	Nullifiers       []*big.Int
 	Commitments      []*big.Int
-	EncryptedBallots []elgamal.Ballot
+	Ballots          []elgamal.Ballot
 }
 
 // VoterTestData struct includes the information required to generate the test
@@ -80,12 +79,12 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 	// circuits assignments, voters data and proofs
 	var assignments []voteverifier.VerifyVoteCircuit
 	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}
-	encryptedBallots := []elgamal.Ballot{}
+	ballots := []elgamal.Ballot{}
 	var finalProcessID *big.Int
 	for i, voter := range votersData {
 		voterProof, err := ballottest.BallotProofForTest(voter.Address.Bytes(), processId, ek)
 		if err != nil {
-			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, fmt.Errorf("ballotproof inputs: %w", err)
 		}
 		if finalProcessID == nil {
 			finalProcessID = voterProof.ProcessID
@@ -93,10 +92,10 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		addresses = append(addresses, voterProof.Address)
 		commitments = append(commitments, voterProof.Commitment)
 		nullifiers = append(nullifiers, voterProof.Nullifier)
-		encryptedBallots = append(encryptedBallots, *voterProof.EncryptedFields)
+		ballots = append(ballots, *voterProof.Ballot)
 		// convert the circom inputs hash to the field of the curve used by the
 		// circuit as input for MIMC hash
-		blsCircomInputsHash := crypto.SignatureHash(voterProof.InputsHash, gecc.BLS12_377.ScalarField())
+		blsCircomInputsHash := crypto.SignatureHash(voterProof.InputsHash, circuits.VoteVerifierCurve.ScalarField())
 		// sign the inputs hash with the private key
 		rSign, sSign, err := ballottest.SignECDSAForTest(voter.PrivKey, blsCircomInputsHash)
 		if err != nil {
@@ -117,7 +116,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 		hashInputs = append(hashInputs, voterProof.Address)
 		hashInputs = append(hashInputs, voterProof.Commitment)
 		hashInputs = append(hashInputs, voterProof.Nullifier)
-		hashInputs = append(hashInputs, voterProof.EncryptedFields.BigInts()...)
+		hashInputs = append(hashInputs, voterProof.Ballot.BigInts()...)
 		// hash the inputs to generate the inputs hash
 		inputsHash, err := mimc7.Hash(hashInputs, nil)
 		if err != nil {
@@ -134,9 +133,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			// circom inputs
 			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
 				Address:    emulated.ValueOf[sw_bn254.ScalarField](voterProof.Address),
-				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 				Commitment: emulated.ValueOf[sw_bn254.ScalarField](voterProof.Commitment),
-				Ballot:     *voterProof.EncryptedFields.ToGnarkEmulatedBN254(),
+				Ballot:     *voterProof.Ballot.ToGnarkEmulatedBN254(),
+				Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](voterProof.Nullifier),
 			},
 			UserWeight: emulated.ValueOf[sw_bn254.ScalarField](circuits.MockWeight),
 			Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
@@ -145,7 +144,6 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				EncryptionKey: encryptionKey.BigIntsToEmulatedElementBN254(),
 				BallotMode:    circuits.MockBallotModeEmulated(),
 			},
-			// census proof
 			CensusSiblings: emulatedSiblings,
 			// signature
 			Msg: emulated.ValueOf[emulated.Secp256k1Fr](blsCircomInputsHash),
@@ -158,10 +156,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 				S: emulated.ValueOf[emulated.Secp256k1Fr](sSign),
 			},
 			// circom proof
-			CircomProof: circuits.InnerProofBN254{
-				VK:    recursiveProof.Vk,
-				Proof: recursiveProof.Proof,
-			},
+			CircomProof: recursiveProof.Proof,
 		})
 	}
 
@@ -173,11 +168,9 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			CensusRoot:       testCensus.Root,
 			Nullifiers:       nullifiers,
 			Commitments:      commitments,
-			EncryptedBallots: encryptedBallots,
+			Ballots:          ballots,
 		}, voteverifier.VerifyVoteCircuit{
-			CircomProof: circuits.InnerProofBN254{
-				VK:    circomPlaceholder.Vk,
-				Proof: circomPlaceholder.Proof,
-			},
+			CircomProof:           circomPlaceholder.Proof,
+			CircomVerificationKey: circomPlaceholder.Vk,
 		}, assignments, nil
 }

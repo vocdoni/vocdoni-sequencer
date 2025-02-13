@@ -36,7 +36,7 @@
 //   - Nullifier: The nullifier of the votes in the package.
 //   - Commitment: The commitment of the votes in the package.
 //   - ProcessId: The process id of the votes in the package.
-//   - EncryptedBallot: The encrypted votes in the package.
+//   - Ballot: The encrypted votes in the package.
 //   - CensusRoot: The root of the census tree.
 //   - CensusSiblings: The siblings of the address in the census tree.
 //   - Msg: The hash of the public inputs of the ballot proof but as scalar
@@ -86,7 +86,8 @@ type VerifyVoteCircuit struct {
 	PublicKey ecdsa.PublicKey[emulated.Secp256k1Fp, emulated.Secp256k1Fr]
 	Signature ecdsa.Signature[emulated.Secp256k1Fr]
 	// The ballot proof is passed as private inputs
-	CircomProof circuits.InnerProofBN254
+	CircomProof           groth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	CircomVerificationKey groth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl] `gnark:"-"`
 }
 
 // censusKeyValue function converts the user address and weight to the current
@@ -189,7 +190,7 @@ func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create BN254 verifier", err)
 	}
-	if err := verifier.AssertProof(c.CircomProof.VK, c.CircomProof.Proof,
+	if err := verifier.AssertProof(c.CircomVerificationKey, c.CircomProof,
 		c.circomWitness(api), groth16.WithCompleteArithmetic(),
 	); err != nil {
 		circuits.FrontendError(api, "failed to verify circom proof", err)

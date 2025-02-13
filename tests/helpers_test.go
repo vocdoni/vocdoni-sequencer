@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	"github.com/ethereum/go-ethereum/common"
 	qt "github.com/frankban/quicktest"
 	tc "github.com/testcontainers/testcontainers-go/modules/compose"
@@ -232,7 +231,7 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
-	blsCircomInputsHash := crypto.SignatureHash(votedata.InputsHash, gecc.BLS12_377.ScalarField())
+	blsCircomInputsHash := crypto.SignatureHash(votedata.InputsHash, circuits.VoteVerifierCurve.ScalarField())
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
 	c.Assert(err, qt.IsNil)
@@ -244,7 +243,7 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 		ProcessID:        pid.Marshal(),
 		Commitment:       votedata.Commitment.Bytes(),
 		Nullifier:        votedata.Nullifier.Bytes(),
-		Ballot:           votedata.EncryptedFields,
+		Ballot:           votedata.Ballot,
 		BallotProof:      circomProof,
 		BallotInputsHash: votedata.InputsHash.Bytes(),
 		PublicKey:        signer.PublicKey(),

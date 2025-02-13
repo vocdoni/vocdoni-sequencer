@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 
-	gecc "github.com/consensys/gnark-crypto/ecc"
 	gecdsa "github.com/consensys/gnark-crypto/ecc/secp256k1/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -22,6 +21,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/format"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
@@ -116,16 +116,16 @@ func GenBallotFieldsForTest(n, max, min int, unique bool) [circuits.FieldsPerBal
 // while the nullifier is generated using the commitment and secret value.
 func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.Int, *big.Int, error) {
 	commitment, err := poseidon.Hash([]*big.Int{
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address)),
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processID)),
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(address)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(processID)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	nullifier, err := poseidon.Hash([]*big.Int{
 		commitment,
-		crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)),
+		crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -140,17 +140,17 @@ func GenCommitmentAndNullifierForTest(address, processID, secret []byte) (*big.I
 func CompileAndGenerateProofForTest(inputs []byte) (string, string, error) {
 	finalInputs, err := witness.ParseInputs(inputs)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("circom inputs: %w", err)
 	}
 	// instance witness calculator
 	calc, err := witness.NewCircom2WitnessCalculator(TestCircomCircuit, true)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("instance witness calculator: %w", err)
 	}
 	// calculate witness
 	w, err := calc.CalculateWTNSBin(finalInputs, true)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("calculate witness: %w", err)
 	}
 	// generate proof
 	return prover.Groth16ProverRaw(TestCircomProvingKey, w)
@@ -160,14 +160,14 @@ func CompileAndGenerateProofForTest(inputs []byte) (string, string, error) {
 // user after ballot proof generation. It includes the value of the given
 // process id and address in the format used inside the circuit.
 type VoterProofResult struct {
-	ProcessID       *big.Int
-	Address         *big.Int
-	Nullifier       *big.Int
-	Commitment      *big.Int
-	EncryptedFields *elgamal.Ballot
-	Proof           string
-	PubInputs       string
-	InputsHash      *big.Int
+	ProcessID  *big.Int
+	Address    *big.Int
+	Nullifier  *big.Int
+	Commitment *big.Int
+	Ballot     *elgamal.Ballot
+	Proof      string
+	PubInputs  string
+	InputsHash *big.Int
 }
 
 // BallotProofForTest function return the information after proving a valid ballot
@@ -189,13 +189,6 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	}
 	// get encryption key point
 	circomEncryptionKeyX, circomEncryptionKeyY := format.FromRTEtoTE(encryptionKey.Point())
-	teBallot := []*big.Int{}
-	for _, c := range ballot.Ciphertexts {
-		tec1x, tec1y := format.FromRTEtoTE(c.C1.Point())
-		tec2x, tec2y := format.FromRTEtoTE(c.C2.Point())
-		teBallot = append(teBallot, tec1x, tec1y, tec2x, tec2y)
-	}
-	teBallot = circuits.BigIntArrayToN(teBallot, circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext)
 
 	// generate and store voter nullifier and commitments
 	secret := util.RandomBytes(16)
@@ -203,8 +196,8 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	if err != nil {
 		return nil, err
 	}
-	ffAddress := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(address))
-	ffProcessID := crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(processId))
+	ffAddress := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(processId))
 	// group the circom inputs to hash
 	bigCircomInputs := []*big.Int{ffProcessID}
 	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
@@ -215,7 +208,7 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		commitment,
 		nullifier,
 	)
-	bigCircomInputs = append(bigCircomInputs, teBallot...)
+	bigCircomInputs = append(bigCircomInputs, BallotFromRTEtoTE(ballot).BigInts()...)
 	bigCircomInputs = append(bigCircomInputs, big.NewInt(int64(circuits.MockWeight)))
 	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
 	if err != nil {
@@ -237,10 +230,10 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 		"process_id":       ffProcessID.String(),
 		"pk":               []string{circomEncryptionKeyX.String(), circomEncryptionKeyY.String()},
 		"k":                k.String(),
-		"cipherfields":     circuits.BigIntArrayToStringArray(teBallot, circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
+		"cipherfields":     circuits.BigIntArrayToStringArray(BallotFromRTEtoTE(ballot).BigInts(), circuits.FieldsPerBallot*elgamal.BigIntsPerCiphertext),
 		"nullifier":        nullifier.String(),
 		"commitment":       commitment.String(),
-		"secret":           crypto.BigToFF(gecc.BN254.ScalarField(), new(big.Int).SetBytes(secret)).String(),
+		"secret":           crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(secret)).String(),
 		"inputs_hash":      circomInputsHash.String(),
 	}
 	bCircomInputs, err := json.Marshal(circomInputs)
@@ -250,16 +243,27 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	// create circom proof and public signals
 	circomProof, circomPubInputs, err := CompileAndGenerateProofForTest(bCircomInputs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create circom proof: %w", err)
 	}
 	return &VoterProofResult{
-		ProcessID:       ffProcessID,
-		Address:         ffAddress,
-		Nullifier:       nullifier,
-		Commitment:      commitment,
-		EncryptedFields: ballot,
-		Proof:           circomProof,
-		PubInputs:       circomPubInputs,
-		InputsHash:      circomInputsHash,
+		ProcessID:  ffProcessID,
+		Address:    ffAddress,
+		Nullifier:  nullifier,
+		Commitment: commitment,
+		Ballot:     ballot,
+		Proof:      circomProof,
+		PubInputs:  circomPubInputs,
+		InputsHash: circomInputsHash,
 	}, nil
+}
+
+func BallotFromRTEtoTE(rteBallot *elgamal.Ballot) *elgamal.Ballot {
+	teBallot := elgamal.NewBallot(curves.New(rteBallot.CurveType))
+	for i := range rteBallot.Ciphertexts {
+		teBallot.Ciphertexts[i].C1 = teBallot.Ciphertexts[i].C1.SetPoint(
+			format.FromRTEtoTE(rteBallot.Ciphertexts[i].C1.Point()))
+		teBallot.Ciphertexts[i].C2 = teBallot.Ciphertexts[i].C2.SetPoint(
+			format.FromRTEtoTE(rteBallot.Ciphertexts[i].C2.Point()))
+	}
+	return teBallot
 }

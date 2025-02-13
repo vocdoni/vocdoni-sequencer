@@ -5,17 +5,14 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	aggregatortest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/aggregator"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 	"go.vocdoni.io/dvote/db/metadb"
 )
@@ -23,14 +20,8 @@ import (
 // StateTransitionTestResults struct includes relevant data after StateTransitionCircuit
 // inputs generation
 type StateTransitionTestResults struct {
-	ProcessId             *big.Int
-	CensusRoot            *big.Int
-	EncryptionPubKey      circuits.EncryptionKey[*big.Int]
-	Nullifiers            []*big.Int
-	Commitments           []*big.Int
-	Addresses             []*big.Int
-	EncryptedBallots      []elgamal.Ballot
-	PlainEncryptedBallots []*big.Int
+	Process circuits.Process[*big.Int]
+	Votes   []state.Vote
 }
 
 // StateTransitionInputsForTest returns the StateTransitionTestResults, the placeholder
@@ -40,79 +31,71 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregarorInputsForTest(processId, nValidVoters, false)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters, false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
-	// compile aggregoar circuit
-	agCCS, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, agPlaceholder)
+	// compile aggregator circuit
+	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator compile: %w", err)
 	}
 	agPk, agVk, err := groth16.Setup(agCCS)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator setup: %w", err)
 	}
 	// parse the witness to the circuit
-	fullWitness, err := frontend.NewWitness(agWitness, ecc.BLS12_377.ScalarField())
+	fullWitness, err := frontend.NewWitness(agWitness, circuits.AggregatorCurve.ScalarField())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator witness: %w", err)
 	}
 	// generate the proof
-	proof, err := groth16.Prove(agCCS, agPk, fullWitness, stdgroth16.GetNativeProverOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	proof, err := groth16.Prove(agCCS, agPk, fullWitness, stdgroth16.GetNativeProverOptions(
+		circuits.StateTransitionCurve.ScalarField(),
+		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("err proving proof: %w", err)
+		return nil, nil, nil, fmt.Errorf("err proving aggregator circuit: %w", err)
 	}
 	// convert the proof to the circuit proof type
-	proofInBLS12377, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
+	proofInBW6761, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("convert aggregator proof: %w", err)
 	}
 	// convert the public inputs to the circuit public inputs type
 	publicWitness, err := fullWitness.Public()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("convert aggregator public inputs: %w", err)
 	}
-	err = groth16.Verify(proof, agVk, publicWitness, stdgroth16.GetNativeVerifierOptions(ecc.BW6_761.ScalarField(), ecc.BLS12_377.ScalarField()))
+	err = groth16.Verify(proof, agVk, publicWitness, stdgroth16.GetNativeVerifierOptions(
+		circuits.StateTransitionCurve.ScalarField(),
+		circuits.AggregatorCurve.ScalarField()))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator verify: %w", err)
 	}
-
-	// pad voters inputs (nullifiers, commitments, addresses, plain EncryptedBallots)
-	nullifiers := circuits.BigIntArrayToN(agInputs.Nullifiers, circuits.VotesPerBatch)
-	commitments := circuits.BigIntArrayToN(agInputs.Commitments, circuits.VotesPerBatch)
-	addresses := circuits.BigIntArrayToN(agInputs.Addresses, circuits.VotesPerBatch)
-	plainEncryptedBallots := circuits.BigIntArrayToN(agInputs.PlainEncryptedBallots, circuits.VotesPerBatch*circuits.FieldsPerBallot*4)
 
 	// init final assignments stuff
 	s := newState(
-		processId,
-		agInputs.CensusRoot.Bytes(),
+		agInputs.Process.ID.Bytes(),
+		agInputs.Process.CensusRoot.Bytes(),
 		circuits.MockBallotMode().Bytes(),
-		agInputs.EncryptionPubKey.Bytes())
+		agInputs.Process.EncryptionKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {
 		return nil, nil, nil, err
 	}
-	for i := range agInputs.EncryptedBallots {
-		if err := s.AddVote(&state.Vote{
-			Nullifier:  arbo.BigIntToBytes(32, agInputs.Nullifiers[i]),
-			Ballot:     &agInputs.EncryptedBallots[i],
-			Address:    arbo.BigIntToBytes(32, agInputs.Addresses[i]),
-			Commitment: agInputs.Commitments[i],
-		}); err != nil {
+	for _, v := range agInputs.Votes {
+		if err := s.AddVote(&v); err != nil {
 			return nil, nil, nil, err
 		}
+	}
+	if err := s.EndBatch(); err != nil {
+		return nil, nil, nil, err
 	}
 	witness, err := GenerateWitnesses(s)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err := s.EndBatch(); err != nil {
-		return nil, nil, nil, err
-	}
-
-	witness.AggregatorProof.Proof = proofInBLS12377
+	witness.AggregatorProof.Proof = proofInBW6761
 
 	// create final placeholder
 	circuitPlaceholder := statetransition.CircuitPlaceholder()
@@ -127,14 +110,8 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	// 	return nil, nil, nil, err
 	// }
 	return &StateTransitionTestResults{
-		ProcessId:             agInputs.ProcessId,
-		CensusRoot:            agInputs.CensusRoot,
-		EncryptionPubKey:      agInputs.EncryptionPubKey,
-		Nullifiers:            nullifiers,
-		Commitments:           commitments,
-		Addresses:             addresses,
-		EncryptedBallots:      agInputs.EncryptedBallots,
-		PlainEncryptedBallots: plainEncryptedBallots,
+		Process: agInputs.Process,
+		Votes:   agInputs.Votes,
 	}, circuitPlaceholder, witness, nil
 }
 
