@@ -15,6 +15,7 @@ import (
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
@@ -345,5 +346,123 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			}
 		}
 	*/
+	return res, finalPlaceholder, finalAssigments, nil
+}
+
+// AggregatorInputsWithDummyProof returns the AggregatorTestResults, the placeholder
+// and the assignments of a AggregatorCircuit for the processId provided
+// generating nValidVoters. If something fails it returns an error.
+func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist bool) (
+	AggregatorTestResults, aggregator.AggregatorCircuit, aggregator.AggregatorCircuit, error,
+) {
+	// generate users accounts and census
+	vvData := []voteverifiertest.VoterTestData{}
+	for i := 0; i < nValidVoters; i++ {
+		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
+		if err != nil {
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("generate accounts: %w", err)
+		}
+		vvData = append(vvData, voteverifiertest.VoterTestData{
+			PrivKey: privKey,
+			PubKey:  pubKey,
+			Address: address,
+		})
+	}
+
+	// generate vote verifier inputs
+	vvInputs, _, _, err := voteverifiertest.VoteVerifierInputsWithoutProof(vvData, processId)
+	if err != nil {
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier inputs: %w", err)
+	}
+
+	// compile vote verifier circuit
+	dummyCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, dummy.PlaceholderWithConstraints(0))
+	if err != nil {
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier compile: %w", err)
+	}
+
+	// compute public inputs hash
+	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
+	commonInputs = append(commonInputs, circuits.MockBallotMode().Serialize()...)
+	commonInputs = append(commonInputs, vvInputs.EncryptionPubKey.Serialize()...)
+	// pad voters inputs (nullifiers, commitments, addresses)
+	addresses := circuits.BigIntArrayToN(vvInputs.Addresses, circuits.VotesPerBatch)
+	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
+	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
+	hashInputs := []*big.Int{}
+	for i := 0; i < circuits.VotesPerBatch; i++ {
+		if i < nValidVoters {
+			hashInputs = append(hashInputs, vvInputs.InputsHashes[i])
+		} else {
+			voterInputs := append(commonInputs, addresses[i], commitments[i], nullifiers[i])
+			// TODO: move this to a helper function
+			// Dummy encrypted ballots [FieldsPerBallot]{0,1,0,1} for invalid voters
+			for j := 0; j < circuits.FieldsPerBallot; j++ {
+				voterInputs = append(voterInputs, big.NewInt(0), big.NewInt(1), big.NewInt(0), big.NewInt(1))
+			}
+			hashInput, err := mimc7.Hash(voterInputs, nil)
+			if err != nil {
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash subhash: %w", err)
+			}
+			hashInputs = append(hashInputs, hashInput)
+		}
+	}
+	// hash the inputs to generate the inputs hash
+	inputsHash, err := mimc7.Hash(hashInputs, nil)
+	if err != nil {
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash final hash: %w", err)
+	}
+
+	// init final assignments stuff
+	finalAssigments := aggregator.AggregatorCircuit{
+		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
+		ValidVotes: aggregator.EncodeProofsSelector(nValidVoters),
+		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
+			ID:            emulated.ValueOf[sw_bn254.ScalarField](vvInputs.ProcessID),
+			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.CensusRoot),
+			BallotMode:    circuits.MockBallotModeEmulated(),
+			EncryptionKey: vvInputs.EncryptionPubKey.BigIntsToEmulatedElementBN254(),
+		},
+	}
+	// set voters final witness stuff
+	for i := 0; i < nValidVoters; i++ {
+		finalAssigments.Votes[i] = circuits.EmulatedVote[sw_bn254.ScalarField]{
+			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Nullifiers[i]),
+			Commitment: emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Commitments[i]),
+			Address:    emulated.ValueOf[sw_bn254.ScalarField](vvInputs.Addresses[i]),
+			Ballot:     *vvInputs.Ballots[i].ToGnarkEmulatedBN254(),
+		}
+	}
+	// create final placeholder
+	finalPlaceholder := aggregator.AggregatorCircuit{
+		Proofs: [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
+	}
+	// fill placeholder and witness with dummy circuits
+	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, dummyCCS, 0, persist)
+	if err != nil {
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier dummy fill: %w", err)
+	}
+
+	finalPlaceholder.BaseVerificationKey = finalPlaceholder.DummyVerificationKey
+
+	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
+	votes := [circuits.VotesPerBatch]state.Vote{}
+	for i := range votes {
+		votes[i].Address = arbo.BigIntToBytes(32, addresses[i])
+		votes[i].Commitment = commitments[i]
+		votes[i].Nullifier = arbo.BigIntToBytes(32, nullifiers[i])
+		votes[i].Ballot = &vvInputs.Ballots[i]
+	}
+	res := AggregatorTestResults{
+		InputsHash: inputsHash,
+		Process: circuits.Process[*big.Int]{
+			ID:         vvInputs.ProcessID,
+			CensusRoot: vvInputs.CensusRoot,
+			// BallotMode:    circuits.BallotMode{},
+			EncryptionKey: vvInputs.EncryptionPubKey,
+		},
+		Votes: votes[:],
+	}
+
 	return res, finalPlaceholder, finalAssigments, nil
 }
