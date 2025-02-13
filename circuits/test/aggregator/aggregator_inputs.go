@@ -15,6 +15,7 @@ import (
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
 	voteverifiertest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
@@ -365,20 +366,22 @@ func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist 
 			Address: address,
 		})
 	}
+	fmt.Println("start VoteVerifierInputsWithoutProof")
+
 	// generate vote verifier inputs
-	vvInputs, vvPlaceholder, _, err := voteverifiertest.VoteVerifierInputsWithoutProof(vvData, processId)
+	vvInputs, _, _, err := voteverifiertest.VoteVerifierInputsWithoutProof(vvData, processId)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier inputs: %w", err)
 	}
+	fmt.Println("end VoteVerifierInputsWithoutProof")
+
 	// compile vote verifier circuit
-	vvCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
+	dummyCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, dummy.PlaceholderWithConstraints(0))
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier compile: %w", err)
 	}
-	_, vvVk, err := groth16.Setup(vvCCS)
-	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier setup: %w", err)
-	}
+	fmt.Println("end Compile")
+
 	// compute public inputs hash
 	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
 	commonInputs = append(commonInputs, circuits.MockBallotMode().Serialize()...)
@@ -410,6 +413,8 @@ func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist 
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash final hash: %w", err)
 	}
+	fmt.Println("end Hashes")
+
 	// init final assignments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
@@ -430,21 +435,17 @@ func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist 
 			Ballot:     *vvInputs.Ballots[i].ToGnarkEmulatedBN254(),
 		}
 	}
-	// fix the vote verifier verification key
-	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
-	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier vk: %w", err)
-	}
 	// create final placeholder
 	finalPlaceholder := aggregator.AggregatorCircuit{
-		Proofs:              [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
-		BaseVerificationKey: fixedVk,
+		Proofs: [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
 	}
 	// fill placeholder and witness with dummy circuits
-	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, 0, persist)
+	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, dummyCCS, 0, persist)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier dummy fill: %w", err)
 	}
+
+	finalPlaceholder.BaseVerificationKey = finalPlaceholder.DummyVerificationKey
 
 	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
 	votes := [circuits.VotesPerBatch]state.Vote{}

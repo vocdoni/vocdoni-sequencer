@@ -1,14 +1,17 @@
 package aggregatortest
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/logger"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
+	"github.com/rs/zerolog"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
@@ -43,6 +46,9 @@ func TestAggregatorCircuitWithDummy(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
+	fmt.Println("start")
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
+
 	_, placeholder, assignments, err := AggregatorInputsWithDummyProof(processId, 3, false)
 	c.Assert(err, qt.IsNil)
 	c.Logf("inputs generation tooks %s", time.Since(now).String())
