@@ -9,6 +9,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/math/emulated"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -26,12 +27,20 @@ const (
 	SerializedBallotSize = circuits.FieldsPerBallot * sizeCiphertext
 )
 
-// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and C2.Y coords
+// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and
+// C2.Y coords
 const BigIntsPerCiphertext = 4
 
 type Ballot struct {
 	CurveType   string                                `json:"curveType"`
 	Ciphertexts [circuits.FieldsPerBallot]*Ciphertext `json:"ciphertexts"`
+}
+
+// AuxBallot is an auxiliary struct used for JSON and CBOR
+// marshalling/unmarshalling
+type AuxBallot struct {
+	Ciphertexts [circuits.FieldsPerBallot]AuxCiphertext `json:"ciphertexts"`
+	CurveType   string                                  `json:"curveType"`
 }
 
 func NewBallot(curve ecc.Point) *Ballot {
@@ -45,8 +54,8 @@ func NewBallot(curve ecc.Point) *Ballot {
 	return z
 }
 
-// Encrypt encrypts a message using the public key provided as elliptic curve point.
-// The randomness k can be provided or nil to generate a new one.
+// Encrypt encrypts a message using the public key provided as elliptic curve
+// point. The randomness k can be provided or nil to generate a new one.
 func (z *Ballot) Encrypt(message [circuits.FieldsPerBallot]*big.Int, publicKey ecc.Point, k *big.Int) (*Ballot, error) {
 	for i := range z.Ciphertexts {
 		if _, err := z.Ciphertexts[i].Encrypt(message[i], publicKey, k); err != nil {
@@ -56,7 +65,8 @@ func (z *Ballot) Encrypt(message [circuits.FieldsPerBallot]*big.Int, publicKey e
 	return z, nil
 }
 
-// Add adds two Ballots and stores the result in the receiver, which is also returned.
+// Add adds two Ballots and stores the result in the receiver, which is also
+// returned.
 func (z *Ballot) Add(x, y *Ballot) *Ballot {
 	for i := range z.Ciphertexts {
 		z.Ciphertexts[i].Add(x.Ciphertexts[i], y.Ciphertexts[i])
@@ -64,8 +74,9 @@ func (z *Ballot) Add(x, y *Ballot) *Ballot {
 	return z
 }
 
-// BigInts returns a slice with 8*4 BigInts, namely the coords of each Ciphertext
-// C1.X, C1.Y, C2.X, C2.Y as little-endian, in reduced twisted edwards form.
+// BigInts returns a slice with 8*4 BigInts, namely the coords of each
+// Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian, in reduced twisted
+// edwards form.
 func (z *Ballot) BigInts() []*big.Int {
 	list := []*big.Int{}
 	for _, z := range z.Ciphertexts {
@@ -105,47 +116,27 @@ func (z *Ballot) Deserialize(data []byte) error {
 	return nil
 }
 
-// Marshal converts Ballot to a byte slice.
-func (z *Ballot) MarshalJSON() ([]byte, error) {
-	aux := struct {
-		Ciphertexts []struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		} `json:"ciphertexts"`
-		CurveType string `json:"curveType"`
-	}{
-		CurveType: z.CurveType,
+// Aux returns an auxiliary struct with the Ballot data to be encoded
+func (z *Ballot) Aux() *AuxBallot {
+	aux := &AuxBallot{
+		CurveType:   z.CurveType,
+		Ciphertexts: [circuits.FieldsPerBallot]AuxCiphertext{},
 	}
-
 	for i := range z.Ciphertexts {
 		c1x, c1y := z.Ciphertexts[i].C1.Point()
 		c2x, c2y := z.Ciphertexts[i].C2.Point()
 		bc1x, bc1y := (types.BigInt)(*c1x), (types.BigInt)(*c1y)
 		bc2x, bc2y := (types.BigInt)(*c2x), (types.BigInt)(*c2y)
-
-		aux.Ciphertexts = append(aux.Ciphertexts, struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		}{
+		aux.Ciphertexts[i] = AuxCiphertext{
 			C1: ecc.PointEC{X: bc1x, Y: bc1y},
 			C2: ecc.PointEC{X: bc2x, Y: bc2y},
-		})
+		}
 	}
-	return json.Marshal(aux)
+	return aux
 }
 
-// // Unmarshal populates Ballot from a byte slice.
-func (z *Ballot) UnmarshalJSON(data []byte) error {
-	aux := struct {
-		Ciphertexts []struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		} `json:"ciphertexts"`
-		CurveType string `json:"curveType"`
-	}{}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
+// FromAux populates Ballot from an auxiliary struct with the Ballot data
+func (z *Ballot) FromAux(aux *AuxBallot) error {
 	if len(aux.Ciphertexts) != circuits.FieldsPerBallot {
 		return fmt.Errorf("invalid Ballot: got %d fields, expected %d fields", len(aux.Ciphertexts), circuits.FieldsPerBallot)
 	}
@@ -157,6 +148,37 @@ func (z *Ballot) UnmarshalJSON(data []byte) error {
 		z.Ciphertexts[i] = ciphertext
 	}
 	return nil
+}
+
+// Marshal converts Ballot to a byte slice.
+func (z *Ballot) MarshalJSON() ([]byte, error) {
+	return json.Marshal(z.Aux())
+}
+
+// // Unmarshal populates Ballot from a byte slice.
+func (z *Ballot) UnmarshalJSON(data []byte) error {
+	aux := &AuxBallot{}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	return z.FromAux(aux)
+}
+
+func (z *Ballot) MarshalCBOR() ([]byte, error) {
+	encOpts := cbor.CoreDetEncOptions()
+	em, err := encOpts.EncMode()
+	if err != nil {
+		return nil, fmt.Errorf("encode artifact: %w", err)
+	}
+	return em.Marshal(z.Aux())
+}
+
+func (z *Ballot) UnmarshalCBOR(data []byte) error {
+	aux := &AuxBallot{}
+	if err := cbor.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	return z.FromAux(aux)
 }
 
 // String returns a string representation of the Ballot.
@@ -200,11 +222,19 @@ func (z *Ballot) ToGnarkEmulatedBN254() *circuits.EmulatedBallot[sw_bn254.Scalar
 	return eb
 }
 
-// Ciphertext represents an ElGamal encrypted message with homomorphic properties.
-// It is a wrapper for convenience of the elGamal ciphersystem that encapsulates the two points of a ciphertext.
+// Ciphertext represents an ElGamal encrypted message with homomorphic
+// properties. It is a wrapper for convenience of the elGamal ciphersystem
+// that encapsulates the two points of a ciphertext.
 type Ciphertext struct {
 	C1 ecc.Point `json:"c1"`
 	C2 ecc.Point `json:"c2"`
+}
+
+// AuxCiphertext is an auxiliary struct used for JSON and CBOR
+// marshalling/unmarshalling
+type AuxCiphertext struct {
+	C1 ecc.PointEC `json:"c1"`
+	C2 ecc.PointEC `json:"c2"`
 }
 
 // NewCiphertext creates a new Ciphertext on the same curve as the given Point.

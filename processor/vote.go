@@ -1,19 +1,18 @@
 package processor
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"math/big"
+	"time"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	gecc "github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gnarkecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/iden3/go-iden3-crypto/mimc7"
+	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
@@ -24,16 +23,16 @@ import (
 )
 
 type VoteProcessor struct {
-	s      *storage.Storage
+	stg    *storage.Storage
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 // NewVoteProcessor creates a new VoteProcessor instance with the given storage
 // instance.
-func NewVoteProcessor(s *storage.Storage) *VoteProcessor {
+func NewVoteProcessor(stg *storage.Storage) *VoteProcessor {
 	return &VoteProcessor{
-		s: s,
+		stg: stg,
 	}
 }
 
@@ -43,9 +42,6 @@ func NewVoteProcessor(s *storage.Storage) *VoteProcessor {
 // storage. It will stop processing ballots when the context is cancelled.
 func (p *VoteProcessor) Start(ctx context.Context) error {
 	p.ctx, p.cancel = context.WithCancel(ctx)
-	if err := voteverifier.Artifacts.LoadAll(); err != nil {
-		return err
-	}
 	// run the verifier in background until its context is cancelled
 	go func() {
 		for {
@@ -54,24 +50,27 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 				return
 			default:
 				// get the next ballot
-				ballot, key, err := p.s.NextBallot()
+				ballot, key, err := p.stg.NextBallot()
 				if err != nil {
 					if err != storage.ErrNoMoreElements {
 						log.Errorf("failed to get next ballot: %v", err)
 					}
-					continue
+					break
 				}
+				log.Debugf("new ballot to process for address %s", ballot.Address.BigInt())
 				// process the ballot
 				verifiedBallot, err := p.ProcessBallot(ballot)
 				if err != nil {
 					log.Errorf("failed to process ballot: %v", err)
-					continue
+					break
 				}
+				log.Debugf("ballot processed for address %s", ballot.Address)
 				// store the verified ballot
-				if err := p.s.MarkBallotDone(key, verifiedBallot); err != nil {
+				if err := p.stg.MarkBallotDone(key, verifiedBallot); err != nil {
 					log.Errorf("failed to mark ballot done: %v", err)
 				}
 			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
 	return nil
@@ -88,55 +87,58 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	// decode the process id
 	pid := new(types.ProcessID)
 	if err := pid.Unmarshal(b.ProcessID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal process id: %w", err)
 	}
 	// get the process metadata
-	process, err := p.s.Process(pid)
+	process, err := p.stg.Process(pid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get process metadata: %w", err)
 	}
+	ffAddress := crypto.BigToFF(b.Address.BigInt().MathBigInt(), gecc.BN254.ScalarField())
+	ffProcessID := crypto.BigToFF(b.ProcessID.BigInt().MathBigInt(), gecc.BN254.ScalarField())
+	root := arbo.BytesToBigInt(b.CensusProof.Root)
 	// calculate inputs hash
 	hashInputs := []*big.Int{}
-	hashInputs = append(hashInputs, b.ProcessID.BigInt().MathBigInt())
-	hashInputs = append(hashInputs, b.CensusProof.Root.BigInt().MathBigInt())
+	hashInputs = append(hashInputs, ffProcessID)
+	hashInputs = append(hashInputs, root)
 	hashInputs = append(hashInputs, circuits.BallotModeToCircuit[*big.Int](*process.BallotMode).Serialize()...)
 	hashInputs = append(hashInputs, circuits.EncryptionKeyToCircuit[*big.Int](*process.EncryptionKey).Serialize()...)
-	hashInputs = append(hashInputs, b.Address.BigInt().MathBigInt())
+	hashInputs = append(hashInputs, ffAddress)
 	hashInputs = append(hashInputs, b.Commitment.BigInt().MathBigInt())
 	hashInputs = append(hashInputs, b.Nullifier.BigInt().MathBigInt())
 	hashInputs = append(hashInputs, b.EncryptedBallot.BigInts()...)
 	inputHash, err := mimc7.Hash(hashInputs, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to hash inputs: %w", err)
 	}
 	// unpack census proof siblings to big integers
 	siblings, err := census.BigIntSiblings(b.CensusProof.Siblings)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unpack census proof siblings: %w", err)
 	}
 	// convert to emulated elements
 	emulatedSiblings := [circuits.CensusProofMaxLevels]emulated.Element[sw_bn254.ScalarField]{}
-	for j, s := range circuits.BigIntArrayToN(siblings, circuits.CensusProofMaxLevels) {
-		emulatedSiblings[j] = emulated.ValueOf[sw_bn254.ScalarField](s)
+	for i, s := range circuits.BigIntArrayToN(siblings, circuits.CensusProofMaxLevels) {
+		emulatedSiblings[i] = emulated.ValueOf[sw_bn254.ScalarField](s)
 	}
 	// decompress the public key
 	pubKey, err := ethcrypto.DecompressPubkey(b.PubKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decompress voter public key: %w", err)
 	}
-	// set the circuit assignments
-	assigment := voteverifier.VerifyVoteCircuit{
+	// set the circuit assignment
+	assignment := voteverifier.VerifyVoteCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),
 		Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
-			Address:    emulated.ValueOf[sw_bn254.ScalarField](b.Address.BigInt().MathBigInt()),
-			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](b.Nullifier.BigInt().MathBigInt()),
+			Address:    emulated.ValueOf[sw_bn254.ScalarField](ffAddress),
 			Commitment: emulated.ValueOf[sw_bn254.ScalarField](b.Commitment.BigInt().MathBigInt()),
+			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](b.Nullifier.BigInt().MathBigInt()),
 			Ballot:     *b.EncryptedBallot.ToGnarkEmulatedBN254(),
 		},
 		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](b.CensusProof.Weight.MathBigInt()),
 		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
-			ID:            emulated.ValueOf[sw_bn254.ScalarField](b.ProcessID.BigInt().MathBigInt()),
-			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](b.CensusProof.Root.BigInt().MathBigInt()),
+			ID:            emulated.ValueOf[sw_bn254.ScalarField](ffProcessID),
+			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](root),
 			EncryptionKey: circuits.EncryptionKeyToCircuit[emulated.Element[sw_bn254.ScalarField]](*process.EncryptionKey),
 			BallotMode:    circuits.BallotModeToCircuit[emulated.Element[sw_bn254.ScalarField]](*process.BallotMode),
 		},
@@ -150,36 +152,12 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 			R: emulated.ValueOf[emulated.Secp256k1Fr](b.Signature.R.BigInt().MathBigInt()),
 			S: emulated.ValueOf[emulated.Secp256k1Fr](b.Signature.S.BigInt().MathBigInt()),
 		},
-		CircomProof: circuits.InnerProofBN254{
-			VK:    b.BallotProof.Vk,
-			Proof: b.BallotProof.Proof,
-		},
-	}
-	// load circuit artifacts content
-	if err := voteverifier.Artifacts.LoadAll(); err != nil {
-		return nil, err
-	}
-	// decode the circuit definition (constrain system)
-	ccs := groth16.NewCS(ecc.BLS12_377)
-	ccsReader := bytes.NewReader(voteverifier.Artifacts.CircuitDefinition())
-	if _, err := ccs.ReadFrom(ccsReader); err != nil {
-		return nil, err
-	}
-	// decode the proving key
-	pk := groth16.NewProvingKey(ecc.BLS12_377)
-	pkReader := bytes.NewReader(voteverifier.Artifacts.ProvingKey())
-	if _, err := pk.ReadFrom(pkReader); err != nil {
-		return nil, err
-	}
-	// calculate the witness with the assignment
-	witness, err := frontend.NewWitness(assigment, ecc.BLS12_377.ScalarField())
-	if err != nil {
-		return nil, err
+		CircomProof: b.BallotProof,
 	}
 	// generate the final proof
-	proof, err := groth16.Prove(ccs, pk, witness)
+	proof, err := assignment.Prove()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
 	return &storage.VerifiedBallot{
 		ProcessID:       b.ProcessID,
