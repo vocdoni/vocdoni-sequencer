@@ -166,7 +166,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	for i := 0; i < nValidVoters; i++ {
 		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("generate accounts: %w", err)
 		}
 		vvData = append(vvData, voteverifiertest.VoterTestData{
 			PrivKey: privKey,
@@ -182,11 +182,11 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// compile vote verifier circuit
 	vvCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, &vvPlaceholder)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier compile: %w", err)
 	}
 	vvPk, vvVk, err := groth16.Setup(vvCCS)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier setup: %w", err)
 	}
 	/*
 		TODO: uncomment this block when the LocalInputsForTest function is fixed
@@ -205,7 +205,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		// parse the witness to the circuit
 		fullWitness, err := frontend.NewWitness(&vvAssigments[i], circuits.VoteVerifierCurve.ScalarField())
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier witness: %w", err)
 		}
 		// generate the proof
 		proof, err := groth16.Prove(vvCCS, vvPk, fullWitness, stdgroth16.GetNativeProverOptions(
@@ -217,18 +217,18 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		// convert the proof to the circuit proof type
 		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("convert voteverifier proof: %w", err)
 		}
 		// convert the public inputs to the circuit public inputs type
 		publicWitness, err := fullWitness.Public()
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("convert voteverifier public inputs: %w", err)
 		}
 		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(
 			circuits.AggregatorCurve.ScalarField(),
 			circuits.VoteVerifierCurve.ScalarField()))
 		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier verify: %w", err)
 		}
 		/*
 			TODO: uncomment this block when the LocalInputsForTest function is fixed
@@ -263,7 +263,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			}
 			hashInput, err := mimc7.Hash(voterInputs, nil)
 			if err != nil {
-				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+				return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash subhash: %w", err)
 			}
 			hashInputs = append(hashInputs, hashInput)
 		}
@@ -271,7 +271,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// hash the inputs to generate the inputs hash
 	inputsHash, err := mimc7.Hash(hashInputs, nil)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash final hash: %w", err)
 	}
 	// init final assignments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
@@ -297,7 +297,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier vk: %w", err)
 	}
 	// create final placeholder
 	finalPlaceholder := aggregator.AggregatorCircuit{
@@ -307,7 +307,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	// fill placeholder and witness with dummy circuits
 	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters, persist)
 	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier dummy fill: %w", err)
 	}
 
 	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
