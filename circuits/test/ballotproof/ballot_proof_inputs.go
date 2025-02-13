@@ -257,6 +257,60 @@ func BallotProofForTest(address, processId []byte, encryptionKey ecc.Point) (*Vo
 	}, nil
 }
 
+// VoterWithoutProof function return the information after proving a valid ballot
+// for the voter address, process id and encryption key provided. It generates
+// and encrypts the fields for the ballot, the nullifier and the commitment for
+// the user and generates a proof of a valid vote. It returns a *VoterProofResult
+// and an error if it fails.
+func VoterWithoutProof(address, processId []byte, encryptionKey ecc.Point) (*VoterProofResult, error) {
+	// generate random fields
+	fields := GenBallotFieldsForTest(circuits.MockMaxCount, circuits.MockMaxValue, circuits.MockMinValue, circuits.MockForceUniqueness > 0)
+	// encrypt the fields
+	k, err := elgamal.RandK()
+	if err != nil {
+		return nil, err
+	}
+	ballot, err := elgamal.NewBallot(encryptionKey).Encrypt(fields, encryptionKey, k)
+	if err != nil {
+		return nil, err
+	}
+	// get encryption key point
+	circomEncryptionKeyX, circomEncryptionKeyY := format.FromRTEtoTE(encryptionKey.Point())
+
+	// generate and store voter nullifier and commitments
+	secret := util.RandomBytes(16)
+	commitment, nullifier, err := GenCommitmentAndNullifierForTest(address, processId, secret)
+	if err != nil {
+		return nil, err
+	}
+	ffAddress := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(address))
+	ffProcessID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), new(big.Int).SetBytes(processId))
+	// group the circom inputs to hash
+	bigCircomInputs := []*big.Int{ffProcessID}
+	bigCircomInputs = append(bigCircomInputs, circuits.MockBallotMode().Serialize()...)
+	bigCircomInputs = append(bigCircomInputs,
+		circomEncryptionKeyX,
+		circomEncryptionKeyY,
+		ffAddress,
+		commitment,
+		nullifier,
+	)
+	bigCircomInputs = append(bigCircomInputs, BallotFromRTEtoTE(ballot).BigInts()...)
+	bigCircomInputs = append(bigCircomInputs, big.NewInt(int64(circuits.MockWeight)))
+	circomInputsHash, err := mimc7.Hash(bigCircomInputs, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &VoterProofResult{
+		ProcessID:  ffProcessID,
+		Address:    ffAddress,
+		Nullifier:  nullifier,
+		Commitment: commitment,
+		Ballot:     ballot,
+		InputsHash: circomInputsHash,
+	}, nil
+}
+
 func BallotFromRTEtoTE(rteBallot *elgamal.Ballot) *elgamal.Ballot {
 	teBallot := elgamal.NewBallot(curves.New(rteBallot.CurveType))
 	for i := range rteBallot.Ciphertexts {

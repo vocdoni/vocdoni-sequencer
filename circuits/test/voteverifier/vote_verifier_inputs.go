@@ -174,3 +174,87 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			CircomVerificationKey: circomPlaceholder.Vk,
 		}, assignments, nil
 }
+
+// VoteVerifierInputsWithoutProof returns the VoteVerifierTestResults, the placeholder
+// and the assignments for a VerifyVoteCircuit including the provided voters. If
+// processId is nil, it will be randomly generated. If something fails it
+// returns an error.
+func VoteVerifierInputsWithoutProof(votersData []VoterTestData, processId []byte) (
+	VoteVerifierTestResults, voteverifier.VerifyVoteCircuit,
+	[]voteverifier.VerifyVoteCircuit, error,
+) {
+	circomPlaceholder, err := circuits.Circom2GnarkPlaceholder(ballottest.TestCircomVerificationKey)
+	if err != nil {
+		return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+	}
+	bAddresses, bWeights := [][]byte{}, [][]byte{}
+	for _, voter := range votersData {
+		bAddresses = append(bAddresses, voter.Address.Bytes())
+		bWeights = append(bWeights, new(big.Int).SetInt64(int64(circuits.MockWeight)).Bytes())
+	}
+	// generate a test census
+	testCensus, err := primitivestest.GenerateCensusProofForTest(primitivestest.CensusTestConfig{
+		Dir:           fmt.Sprintf("../assets/census%d", util.RandomInt(0, 1000)),
+		ValidSiblings: 10,
+		TotalSiblings: circuits.CensusProofMaxLevels,
+		KeyLen:        20,
+		Hash:          arbo.HashFunctionMiMC_BLS12_377,
+		BaseField:     arbo.BLS12377BaseField,
+	}, bAddresses, bWeights)
+	if err != nil {
+		return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+	}
+	// common data
+	if processId != nil {
+		processId = util.RandomBytes(20)
+	}
+	ek := ballottest.GenEncryptionKeyForTest()
+	encryptionKey := circuits.EncryptionKeyFromECCPoint(ek)
+	inputsHashes, addresses, nullifiers, commitments := []*big.Int{}, []*big.Int{}, []*big.Int{}, []*big.Int{}
+	ballots := []elgamal.Ballot{}
+	var finalProcessID *big.Int
+	for _, voter := range votersData {
+		voterProof, err := ballottest.VoterWithoutProof(voter.Address.Bytes(), processId, ek)
+		if err != nil {
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, fmt.Errorf("ballotproof inputs: %w", err)
+		}
+		if finalProcessID == nil {
+			finalProcessID = voterProof.ProcessID
+		}
+		addresses = append(addresses, voterProof.Address)
+		commitments = append(commitments, voterProof.Commitment)
+		nullifiers = append(nullifiers, voterProof.Nullifier)
+		ballots = append(ballots, *voterProof.Ballot)
+		// hash the inputs of gnark circuit (except weight and including census root)
+		// TODO: move this into a helper func, consistent with circuits.VoteVerifierInputs
+		hashInputs := []*big.Int{}
+		hashInputs = append(hashInputs, voterProof.ProcessID)
+		hashInputs = append(hashInputs, testCensus.Root)
+		hashInputs = append(hashInputs, circuits.MockBallotMode().Serialize()...)
+		hashInputs = append(hashInputs, encryptionKey.Serialize()...)
+		hashInputs = append(hashInputs, voterProof.Address)
+		hashInputs = append(hashInputs, voterProof.Commitment)
+		hashInputs = append(hashInputs, voterProof.Nullifier)
+		hashInputs = append(hashInputs, voterProof.Ballot.BigInts()...)
+		// hash the inputs to generate the inputs hash
+		inputsHash, err := mimc7.Hash(hashInputs, nil)
+		if err != nil {
+			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
+		}
+		inputsHashes = append(inputsHashes, inputsHash)
+	}
+
+	return VoteVerifierTestResults{
+			InputsHashes:     inputsHashes,
+			EncryptionPubKey: encryptionKey,
+			Addresses:        addresses,
+			ProcessID:        finalProcessID,
+			CensusRoot:       testCensus.Root,
+			Nullifiers:       nullifiers,
+			Commitments:      commitments,
+			Ballots:          ballots,
+		}, voteverifier.VerifyVoteCircuit{
+			CircomProof:           circomPlaceholder.Proof,
+			CircomVerificationKey: circomPlaceholder.Vk,
+		}, nil, nil
+}
