@@ -102,7 +102,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](agVk)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("fix vk: %w", err)
+		return nil, nil, nil, fmt.Errorf("aggregator vk: %w", err)
 	}
 	circuitPlaceholder.AggregatorProof.VK = fixedVk
 	// // fill placeholder and witness with dummy circuits
