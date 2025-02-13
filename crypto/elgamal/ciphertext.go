@@ -9,13 +9,13 @@ import (
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/math/emulated"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
-	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 // sizes in bytes needed to serialize a Ballot
@@ -34,6 +34,7 @@ type Ballot struct {
 	Ciphertexts [circuits.FieldsPerBallot]*Ciphertext `json:"ciphertexts"`
 }
 
+// NewBallot creates a new Ballot for the given curve.
 func NewBallot(curve ecc.Point) *Ballot {
 	z := &Ballot{
 		CurveType:   curve.Type(),
@@ -105,57 +106,153 @@ func (z *Ballot) Deserialize(data []byte) error {
 	return nil
 }
 
-// Marshal converts Ballot to a byte slice.
+// MarshalJSON encodes a Ballot into JSON without using an extra aux type.
 func (z *Ballot) MarshalJSON() ([]byte, error) {
-	aux := struct {
-		Ciphertexts []struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		} `json:"ciphertexts"`
-		CurveType string `json:"curveType"`
-	}{
-		CurveType: z.CurveType,
+	// Build a map representing the ballot.
+	m := map[string]interface{}{
+		"curveType": z.CurveType,
 	}
 
-	for i := range z.Ciphertexts {
-		c1x, c1y := z.Ciphertexts[i].C1.Point()
-		c2x, c2y := z.Ciphertexts[i].C2.Point()
-		bc1x, bc1y := (types.BigInt)(*c1x), (types.BigInt)(*c1y)
-		bc2x, bc2y := (types.BigInt)(*c2x), (types.BigInt)(*c2y)
-
-		aux.Ciphertexts = append(aux.Ciphertexts, struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		}{
-			C1: ecc.PointEC{X: bc1x, Y: bc1y},
-			C2: ecc.PointEC{X: bc2x, Y: bc2y},
-		})
+	// For the ciphertexts we build a slice. Each ciphertext is expected
+	// to marshal itself properly (its points must implement MarshalJSON).
+	cts := make([]interface{}, len(z.Ciphertexts))
+	for i, ct := range z.Ciphertexts {
+		cts[i] = ct
 	}
-	return json.Marshal(aux)
+	m["ciphertexts"] = cts
+	return json.Marshal(m)
 }
 
-// // Unmarshal populates Ballot from a byte slice.
+// UnmarshalJSON decodes JSON data into a Ballot.
+// It reads a "curveType" and a "ciphertexts" array and then creates
+// concrete ciphertexts using the provided curve type.
 func (z *Ballot) UnmarshalJSON(data []byte) error {
-	aux := struct {
-		Ciphertexts []struct {
-			C1 ecc.PointEC `json:"c1"`
-			C2 ecc.PointEC `json:"c2"`
-		} `json:"ciphertexts"`
-		CurveType string `json:"curveType"`
-	}{}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	// First, decode into a map of raw JSON values.
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
-	if len(aux.Ciphertexts) != circuits.FieldsPerBallot {
-		return fmt.Errorf("invalid Ballot: got %d fields, expected %d fields", len(aux.Ciphertexts), circuits.FieldsPerBallot)
+
+	// Extract the curve type.
+	if raw, ok := m["curveType"]; ok {
+		if err := json.Unmarshal(raw, &z.CurveType); err != nil {
+			return fmt.Errorf("failed to unmarshal curveType: %w", err)
+		}
+	} else {
+		return fmt.Errorf("missing curveType field")
 	}
-	z.CurveType = aux.CurveType
-	for i := range aux.Ciphertexts {
-		ciphertext := NewCiphertext(curves.New(z.CurveType))
-		ciphertext.C1.SetPoint(aux.Ciphertexts[i].C1.X.MathBigInt(), aux.Ciphertexts[i].C1.Y.MathBigInt())
-		ciphertext.C2.SetPoint(aux.Ciphertexts[i].C2.X.MathBigInt(), aux.Ciphertexts[i].C2.Y.MathBigInt())
-		z.Ciphertexts[i] = ciphertext
+
+	// Extract the ciphertexts.
+	var rawCts []json.RawMessage
+	if raw, ok := m["ciphertexts"]; ok {
+		if err := json.Unmarshal(raw, &rawCts); err != nil {
+			return fmt.Errorf("failed to unmarshal ciphertexts: %w", err)
+		}
+	} else {
+		return fmt.Errorf("missing ciphertexts field")
 	}
+
+	if len(rawCts) != circuits.FieldsPerBallot {
+		return fmt.Errorf("expected %d ciphertexts, got %d", circuits.FieldsPerBallot, len(rawCts))
+	}
+
+	// Unmarshal each ciphertext using the Ballot's curve type.
+	var cts [circuits.FieldsPerBallot]*Ciphertext
+	for i, raw := range rawCts {
+		ct := new(Ciphertext)
+		if err := ct.unmarshalJSONWithCurve(z.CurveType, raw); err != nil {
+			return fmt.Errorf("failed to unmarshal ciphertext[%d]: %w", i, err)
+		}
+		cts[i] = ct
+	}
+	z.Ciphertexts = cts
+	return nil
+}
+
+// Helper: unmarshalJSONWithCurve decodes a ciphertext from JSON given a curve type.
+func (ct *Ciphertext) unmarshalJSONWithCurve(curveType string, data json.RawMessage) error {
+	// We expect the ciphertext JSON to have "c1" and "c2".
+	var tmp struct {
+		C1 json.RawMessage `json:"c1"`
+		C2 json.RawMessage `json:"c2"`
+	}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return fmt.Errorf("failed to unmarshal ciphertext fields: %w", err)
+	}
+
+	// Create concrete points using the provided curve type.
+	p1 := curves.New(curveType)
+	if err := json.Unmarshal(tmp.C1, p1); err != nil {
+		return fmt.Errorf("failed to unmarshal c1: %w", err)
+	}
+	p2 := curves.New(curveType)
+	if err := json.Unmarshal(tmp.C2, p2); err != nil {
+		return fmt.Errorf("failed to unmarshal c2: %w", err)
+	}
+	ct.C1 = p1
+	ct.C2 = p2
+	return nil
+}
+
+func (z *Ballot) Marshal() ([]byte, error) {
+	encOpts := cbor.CoreDetEncOptions()
+
+	em, err := encOpts.EncMode()
+	if err != nil {
+		return nil, fmt.Errorf("encode artifact: %w", err)
+	}
+	return em.Marshal(z)
+}
+
+// Unmarshal decodes a Ballot from CBOR data.
+func (z *Ballot) Unmarshal(data []byte) error {
+	// decode into a temporary structure that holds the raw CBOR messages
+	var tmp struct {
+		CurveType   string            `cbor:"curveType"`
+		Ciphertexts []cbor.RawMessage `cbor:"ciphertexts"`
+	}
+	if err := cbor.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	z.CurveType = tmp.CurveType
+
+	if len(tmp.Ciphertexts) != circuits.FieldsPerBallot {
+		return fmt.Errorf("expected %d ciphertexts, got %d", circuits.FieldsPerBallot, len(tmp.Ciphertexts))
+	}
+
+	z.Ciphertexts = [circuits.FieldsPerBallot]*Ciphertext{}
+	for i, raw := range tmp.Ciphertexts {
+		ct := new(Ciphertext)
+		// Unmarshal the ciphertext using a helper that knows the curve type.
+		if err := ct.unmarshalCBORWithCurve(tmp.CurveType, raw); err != nil {
+			return err
+		}
+		z.Ciphertexts[i] = ct
+	}
+	return nil
+}
+
+// unmarshalCBORWithCurve decodes a Ciphertext from raw CBOR using the given curve type.
+func (ct *Ciphertext) unmarshalCBORWithCurve(curveType string, data []byte) error {
+	// decode into a temporary structure that holds the raw messages for c1 and c2
+	var tmp struct {
+		C1 cbor.RawMessage `cbor:"c1"`
+		C2 cbor.RawMessage `cbor:"c2"`
+	}
+	if err := cbor.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	// Create new concrete points using the curve type.
+	p1 := curves.New(curveType)
+	if err := p1.UnmarshalCBOR(tmp.C1); err != nil {
+		return fmt.Errorf("failed to unmarshal c1: %w", err)
+	}
+	p2 := curves.New(curveType)
+	if err := p2.UnmarshalCBOR(tmp.C2); err != nil {
+		return fmt.Errorf("failed to unmarshal c2: %w", err)
+	}
+	ct.C1 = p1
+	ct.C2 = p2
 	return nil
 }
 
