@@ -2,21 +2,15 @@ package elgamal
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math/big"
 
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
-	"github.com/consensys/gnark/std/math/emulated"
-	"github.com/fxamacker/cbor/v2"
 	"github.com/vocdoni/arbo"
 	gelgamal "github.com/vocdoni/gnark-crypto-primitives/elgamal"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
-	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 // sizes in bytes needed to serialize a Ballot
@@ -31,200 +25,8 @@ const (
 // C2.Y coords
 const BigIntsPerCiphertext = 4
 
-type Ballot struct {
-	CurveType   string                                `json:"curveType"`
-	Ciphertexts [circuits.FieldsPerBallot]*Ciphertext `json:"ciphertexts"`
-}
-
-// AuxBallot is an auxiliary struct used for JSON and CBOR
-// marshalling/unmarshalling
-type AuxBallot struct {
-	Ciphertexts [circuits.FieldsPerBallot]AuxCiphertext `json:"ciphertexts"`
-	CurveType   string                                  `json:"curveType"`
-}
-
-func NewBallot(curve ecc.Point) *Ballot {
-	z := &Ballot{
-		CurveType:   curve.Type(),
-		Ciphertexts: [circuits.FieldsPerBallot]*Ciphertext{},
-	}
-	for i := range z.Ciphertexts {
-		z.Ciphertexts[i] = NewCiphertext(curve)
-	}
-	return z
-}
-
-// Encrypt encrypts a message using the public key provided as elliptic curve
-// point. The randomness k can be provided or nil to generate a new one.
-func (z *Ballot) Encrypt(message [circuits.FieldsPerBallot]*big.Int, publicKey ecc.Point, k *big.Int) (*Ballot, error) {
-	for i := range z.Ciphertexts {
-		if _, err := z.Ciphertexts[i].Encrypt(message[i], publicKey, k); err != nil {
-			return nil, err
-		}
-	}
-	return z, nil
-}
-
-// Add adds two Ballots and stores the result in the receiver, which is also
-// returned.
-func (z *Ballot) Add(x, y *Ballot) *Ballot {
-	for i := range z.Ciphertexts {
-		z.Ciphertexts[i].Add(x.Ciphertexts[i], y.Ciphertexts[i])
-	}
-	return z
-}
-
-// BigInts returns a slice with 8*4 BigInts, namely the coords of each
-// Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian, in reduced twisted
-// edwards form.
-func (z *Ballot) BigInts() []*big.Int {
-	list := []*big.Int{}
-	for _, z := range z.Ciphertexts {
-		c1x, c1y := z.C1.Point()
-		c2x, c2y := z.C2.Point()
-		list = append(list, c1x, c1y, c2x, c2y)
-	}
-	return list
-}
-
-// Serialize returns a slice of len N*4*32 bytes,
-// representing each Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian,
-// in reduced twisted edwards form.
-func (z *Ballot) Serialize() []byte {
-	var buf bytes.Buffer
-	for _, z := range z.Ciphertexts {
-		buf.Write(z.Serialize())
-	}
-	return buf.Bytes()
-}
-
-// Deserialize reconstructs a Ballot from a slice of bytes.
-// The input must be of len N*4*32 bytes (otherwise it returns an error),
-// representing each Ciphertext C1.X, C1.Y, C2.X, C2.Y as little-endian,
-// in reduced twisted edwards form.
-func (z *Ballot) Deserialize(data []byte) error {
-	// Validate the input length
-	if len(data) != SerializedBallotSize {
-		return fmt.Errorf("invalid input length for Ballot: got %d bytes, expected %d bytes", len(data), SerializedBallotSize)
-	}
-	for i := range z.Ciphertexts {
-		err := z.Ciphertexts[i].Deserialize(data[i*sizeCiphertext : (i+1)*sizeCiphertext])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Aux returns an auxiliary struct with the Ballot data to be encoded
-func (z *Ballot) Aux() *AuxBallot {
-	aux := &AuxBallot{
-		CurveType:   z.CurveType,
-		Ciphertexts: [circuits.FieldsPerBallot]AuxCiphertext{},
-	}
-	for i := range z.Ciphertexts {
-		c1x, c1y := z.Ciphertexts[i].C1.Point()
-		c2x, c2y := z.Ciphertexts[i].C2.Point()
-		bc1x, bc1y := (types.BigInt)(*c1x), (types.BigInt)(*c1y)
-		bc2x, bc2y := (types.BigInt)(*c2x), (types.BigInt)(*c2y)
-		aux.Ciphertexts[i] = AuxCiphertext{
-			C1: ecc.PointEC{X: bc1x, Y: bc1y},
-			C2: ecc.PointEC{X: bc2x, Y: bc2y},
-		}
-	}
-	return aux
-}
-
-// FromAux populates Ballot from an auxiliary struct with the Ballot data
-func (z *Ballot) FromAux(aux *AuxBallot) error {
-	if len(aux.Ciphertexts) != circuits.FieldsPerBallot {
-		return fmt.Errorf("invalid Ballot: got %d fields, expected %d fields", len(aux.Ciphertexts), circuits.FieldsPerBallot)
-	}
-	z.CurveType = aux.CurveType
-	for i := range aux.Ciphertexts {
-		ciphertext := NewCiphertext(curves.New(z.CurveType))
-		ciphertext.C1.SetPoint(aux.Ciphertexts[i].C1.X.MathBigInt(), aux.Ciphertexts[i].C1.Y.MathBigInt())
-		ciphertext.C2.SetPoint(aux.Ciphertexts[i].C2.X.MathBigInt(), aux.Ciphertexts[i].C2.Y.MathBigInt())
-		z.Ciphertexts[i] = ciphertext
-	}
-	return nil
-}
-
-// Marshal converts Ballot to a byte slice.
-func (z *Ballot) MarshalJSON() ([]byte, error) {
-	return json.Marshal(z.Aux())
-}
-
-// // Unmarshal populates Ballot from a byte slice.
-func (z *Ballot) UnmarshalJSON(data []byte) error {
-	aux := &AuxBallot{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-	return z.FromAux(aux)
-}
-
-func (z *Ballot) MarshalCBOR() ([]byte, error) {
-	encOpts := cbor.CoreDetEncOptions()
-	em, err := encOpts.EncMode()
-	if err != nil {
-		return nil, fmt.Errorf("encode artifact: %w", err)
-	}
-	return em.Marshal(z.Aux())
-}
-
-func (z *Ballot) UnmarshalCBOR(data []byte) error {
-	aux := &AuxBallot{}
-	if err := cbor.Unmarshal(data, aux); err != nil {
-		return err
-	}
-	return z.FromAux(aux)
-}
-
-// String returns a string representation of the Ballot.
-func (z *Ballot) String() string {
-	b, err := json.Marshal(z)
-	if b == nil || err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-// ToGnark returns z as the struct used by gnark,
-// with the points in reduced twisted edwards format
-func (z *Ballot) ToGnark() *circuits.Ballot {
-	gz := &circuits.Ballot{}
-	for i := range z.Ciphertexts {
-		gz[i] = *z.Ciphertexts[i].ToGnark()
-	}
-	return gz
-}
-
-// ToGnarkEmulatedBN254 returns z as the struct used by gnark,
-// with the points in reduced twisted edwards format
-// but as emulated.Element[sw_bn254.ScalarField] instead of frontend.Variable
-func (z *Ballot) ToGnarkEmulatedBN254() *circuits.EmulatedBallot[sw_bn254.ScalarField] {
-	eb := &circuits.EmulatedBallot[sw_bn254.ScalarField]{}
-	for i, z := range z.Ciphertexts {
-		c1x, c1y := z.C1.Point()
-		c2x, c2y := z.C2.Point()
-		eb[i] = circuits.EmulatedCiphertext[sw_bn254.ScalarField]{
-			C1: circuits.EmulatedPoint[sw_bn254.ScalarField]{
-				X: emulated.ValueOf[sw_bn254.ScalarField](c1x),
-				Y: emulated.ValueOf[sw_bn254.ScalarField](c1y),
-			},
-			C2: circuits.EmulatedPoint[sw_bn254.ScalarField]{
-				X: emulated.ValueOf[sw_bn254.ScalarField](c2x),
-				Y: emulated.ValueOf[sw_bn254.ScalarField](c2y),
-			},
-		}
-	}
-	return eb
-}
-
-// Ciphertext represents an ElGamal encrypted message with homomorphic
-// properties. It is a wrapper for convenience of the elGamal ciphersystem
-// that encapsulates the two points of a ciphertext.
+// Ciphertext represents an ElGamal encrypted message with homomorphic properties.
+// It is a wrapper for convenience of the elGamal ciphersystem that encapsulates the two points of a ciphertext.
 type Ciphertext struct {
 	C1 ecc.Point `json:"c1"`
 	C2 ecc.Point `json:"c2"`
@@ -307,16 +109,6 @@ func (z *Ciphertext) Deserialize(data []byte) error {
 		readBigInt(3*sizeCoord),
 	)
 	return nil
-}
-
-// Marshal converts Ciphertext to a byte slice.
-func (z *Ciphertext) Marshal() ([]byte, error) {
-	return json.Marshal(z)
-}
-
-// Unmarshal populates Ciphertext from a byte slice.
-func (z *Ciphertext) Unmarshal(data []byte) error {
-	return json.Unmarshal(data, z)
 }
 
 // String returns a string representation of the Ciphertext.

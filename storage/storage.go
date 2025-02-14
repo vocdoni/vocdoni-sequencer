@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage/census"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/prefixeddb"
@@ -32,32 +34,28 @@ var (
 	maxKeySize = 12
 )
 
-// reservationRecord stores metadata about a reservation (timestamp, etc.)
+// reservationRecord stores metadata about a reservation
 type reservationRecord struct {
 	Timestamp int64
 }
 
 // Storage manages artifacts in various stages with reservations.
 type Storage struct {
-	db       db.Database
-	censusDB *census.CensusDB
-	// globalLock is used to ensure that no two operations can interfere with each other.
+	db         db.Database
+	censusDB   *census.CensusDB
 	globalLock sync.Mutex
 }
 
-// New creates a new Storage instance and attempts to recover from a previous
-// crash.
+// New creates a new Storage instance.
 func New(db db.Database) *Storage {
 	s := &Storage{
 		db:       db,
 		censusDB: census.NewCensusDB(prefixeddb.NewPrefixedDatabase(db, censusDBprefix)),
 	}
-	go func() {
-		if err := s.recover(); err != nil {
-			// If we fail here, we may panic because we must ensure consistency.
-			panic(fmt.Errorf("failed to recover from crash: %w", err))
-		}
-	}()
+	// clear stale reservations
+	if err := s.recover(); err != nil {
+		log.Errorw(err, "failed to clear stale reservations")
+	}
 	return s
 }
 
@@ -68,15 +66,25 @@ func New(db db.Database) *Storage {
 func (s *Storage) recover() error {
 	s.globalLock.Lock()
 	defer s.globalLock.Unlock()
+
+	if s.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
 	// Clear all reservations
-	if err := s.clearAllReservations(ballotReservationPrefix); err != nil {
-		return fmt.Errorf("failed to clear ballot reservations: %w", err)
+	prefixes := [][]byte{
+		ballotReservationPrefix,
+		verifiedBallotReservPrefix,
+		aggregBatchReservPrefix,
 	}
-	if err := s.clearAllReservations(verifiedBallotReservPrefix); err != nil {
-		return fmt.Errorf("failed to clear verified ballot reservations: %w", err)
-	}
-	if err := s.clearAllReservations(aggregBatchReservPrefix); err != nil {
-		return fmt.Errorf("failed to clear aggregated batch reservations: %w", err)
+
+	for _, prefix := range prefixes {
+		if err := s.clearAllReservations(prefix); err != nil {
+			if strings.Contains(err.Error(), "pebble: closed") {
+				return fmt.Errorf("database closed")
+			}
+			return fmt.Errorf("failed to clear reservations for prefix %x: %w", prefix, err)
+		}
 	}
 
 	return nil
@@ -114,6 +122,7 @@ func (s *Storage) clearAllReservations(prefix []byte) error {
 	return nil
 }
 
+// Close closes the storage.
 func (s *Storage) Close() {
 	if err := s.db.Close(); err != nil {
 		fmt.Printf("failed to close storage: %v", err)

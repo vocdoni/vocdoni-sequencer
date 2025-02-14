@@ -24,3 +24,12 @@ func New(curveType string) ecc.Point {
 		panic(fmt.Sprintf("unsupported curve type: %s", curveType))
 	}
 }
+
+// Curves returns a list of supported curve types.
+func Curves() []string {
+	return []string{
+		bjj_gnark.CurveType,
+		bn254.CurveType,
+		bjj_iden3.CurveType,
+	}
+}

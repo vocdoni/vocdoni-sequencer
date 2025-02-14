@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/fxamacker/cbor/v2"
 	babyjubjub "github.com/iden3/go-iden3-crypto/babyjub"
 
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
@@ -63,24 +64,45 @@ func (g *BJJ) Unmarshal(buf []byte) error {
 	return err
 }
 
+// MarshalJSON serializes the elliptic curve element into a JSON byte slice.
 func (g *BJJ) MarshalJSON() ([]byte, error) {
-	points := &curve.PointEC{}
-	points.X = types.BigInt(*g.inner.X)
-	points.Y = types.BigInt(*g.inner.Y)
-	return json.Marshal(points)
+	return json.Marshal([]types.BigInt{types.BigInt(*g.inner.X), types.BigInt(*g.inner.Y)})
 }
 
+// UnmarshalJSON deserializes the elliptic curve element from a JSON byte slice.
 func (g *BJJ) UnmarshalJSON(buf []byte) error {
-	points := &curve.PointEC{}
-	err := json.Unmarshal(buf, points)
-	if err != nil {
-		return err
-	}
 	if g.inner == nil {
 		g.inner = babyjubjub.NewPoint()
 	}
-	g.inner.X = g.inner.X.Set(points.X.MathBigInt())
-	g.inner.Y = g.inner.Y.Set(points.Y.MathBigInt())
+	var coords []types.BigInt
+	if err := json.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	g.inner.X = coords[0].MathBigInt()
+	g.inner.Y = coords[1].MathBigInt()
+	return nil
+}
+
+func (g *BJJ) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal([]*big.Int{g.inner.X, g.inner.Y})
+}
+
+func (g *BJJ) UnmarshalCBOR(buf []byte) error {
+	if g.inner == nil {
+		g.inner = babyjubjub.NewPoint()
+	}
+	var coords []*big.Int
+	if err := cbor.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	g.inner.X = coords[0]
+	g.inner.Y = coords[1]
 	return nil
 }
 
