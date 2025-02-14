@@ -38,6 +38,7 @@ func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		circuit,
