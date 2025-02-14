@@ -1,8 +1,6 @@
 package statetransition
 
 import (
-	"fmt"
-
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
@@ -11,7 +9,6 @@ import (
 	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
@@ -216,42 +213,4 @@ func (circuit Circuit) ListVotesAsEmulated(api frontend.API) []circuits.Emulated
 		list = append(list, v.Vote.ToEmulatedVote(api))
 	}
 	return list
-}
-
-func CircuitPlaceholder() *Circuit {
-	proof, err := DummyInnerProof(0)
-	if err != nil {
-		panic(err)
-	}
-	return CircuitPlaceholderWithProof(proof)
-}
-
-func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
-	return &Circuit{
-		AggregatorProof: *proof,
-	}
-}
-
-func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
-	_, _, proof, vk, err := dummy.Prove(
-		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
-		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
-	if err != nil {
-		return nil, err
-	}
-	// parse dummy proof and witness
-	dummyProof, err := groth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
-	if err != nil {
-		return nil, fmt.Errorf("dummy proof value error: %w", err)
-	}
-	// set fixed dummy vk in the placeholders
-	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
-	if err != nil {
-		return nil, fmt.Errorf("dummy vk value error: %w", err)
-	}
-
-	return &circuits.InnerProofBW6761{
-		Proof: dummyProof,
-		VK:    dummyVK,
-	}, nil
 }
