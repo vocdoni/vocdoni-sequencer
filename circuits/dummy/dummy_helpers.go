@@ -13,13 +13,9 @@ import (
 )
 
 func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
-	ccs, err := frontend.Compile(field, r1cs.NewBuilder, placeholder)
+	ccs, pk, vk, err := CompileAndSetup(placeholder, field)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("compile error: %w", err)
-	}
-	pk, vk, err := groth16.Setup(ccs)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("setup error: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("init error: %w", err)
 	}
 	fullWitness, err := frontend.NewWitness(assignment, field)
 	if err != nil {
@@ -55,4 +51,16 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 		}
 	*/
 	return ccs, publicWitness, proof, vk, nil
+}
+
+func CompileAndSetup(placeholder frontend.Circuit, field *big.Int) (constraint.ConstraintSystem, groth16.ProvingKey, groth16.VerifyingKey, error) {
+	ccs, err := frontend.Compile(field, r1cs.NewBuilder, placeholder)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("compile error: %w", err)
+	}
+	pk, vk, err := groth16.Setup(ccs)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("setup error: %w", err)
+	}
+	return ccs, pk, vk, nil
 }

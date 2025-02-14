@@ -220,11 +220,7 @@ func (circuit Circuit) ListVotesAsEmulated(api frontend.API) []circuits.Emulated
 }
 
 func CircuitPlaceholder() *Circuit {
-	proof, vk, err := DummyInnerProof(0)
-	if err != nil {
-		panic(err)
-	}
-	return CircuitPlaceholderWithProof(proof, vk)
+	return CircuitPlaceholderWithProof(DummyProofPlaceholder())
 }
 
 func CircuitPlaceholderWithProof(
@@ -237,7 +233,25 @@ func CircuitPlaceholderWithProof(
 	}
 }
 
-func DummyInnerProof(inputsHash frontend.Variable) (
+func DummyProofPlaceholder() (
+	*groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
+	*groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl],
+) {
+	ccs, _, vk, err := dummy.CompileAndSetup(dummy.NativePlaceholderWithConstraints(0), circuits.AggregatorCurve.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	// parse dummy proof and witness
+	dummyProof := groth16.PlaceholderProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](ccs)
+	// set fixed dummy vk in the placeholders
+	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
+	if err != nil {
+		panic(err)
+	}
+	return &dummyProof, &dummyVK
+}
+
+func DummyProof(inputsHash frontend.Variable) (
 	*groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
 	*groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl], error,
 ) {
@@ -257,6 +271,5 @@ func DummyInnerProof(inputsHash frontend.Variable) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("dummy vk value error: %w", err)
 	}
-
 	return &dummyProof, &dummyVK, nil
 }

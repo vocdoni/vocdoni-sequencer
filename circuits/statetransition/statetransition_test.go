@@ -222,7 +222,7 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	proof, vk, err := statetransition.DummyInnerProof(inputsHash)
+	proof, vk, err := statetransition.DummyProof(inputsHash)
 	if err != nil {
 		t.Fatal(err)
 	}
