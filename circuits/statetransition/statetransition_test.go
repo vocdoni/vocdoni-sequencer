@@ -78,7 +78,10 @@ type CircuitCalculateAggregatorWitness struct {
 }
 
 func (circuit CircuitCalculateAggregatorWitness) Define(api frontend.API) error {
-	circuit.CalculateAggregatorWitness(api)
+	_, err := circuit.CalculateAggregatorWitness(api)
+	if err != nil {
+		circuits.FrontendError(api, "failed to create bw6761 witness: ", err)
+	}
 	return nil
 }
 
