@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -235,6 +236,9 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
 	c.Assert(err, qt.IsNil)
+
+	c.Assert(os.WriteFile("debug_proof.json", []byte(votedata.Proof), 0644), qt.IsNil)
+	c.Assert(os.WriteFile("debug_pub_inputs.json", []byte(votedata.PubInputs), 0644), qt.IsNil)
 
 	circomProof, _, err := circuits.Circom2GnarkProof(votedata.Proof, votedata.PubInputs)
 	c.Assert(err, qt.IsNil)

@@ -2,8 +2,10 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	gecc "github.com/consensys/gnark-crypto/ecc"
@@ -13,6 +15,7 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/vocdoni/arbo"
+	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
@@ -57,7 +60,7 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 					}
 					break
 				}
-				log.Debugf("new ballot to process for address %s", ballot.Address.BigInt())
+				log.Debugf("new ballot to process for address %s", ballot.Address.String())
 				// process the ballot
 				verifiedBallot, err := p.ProcessBallot(ballot)
 				if err != nil {
@@ -94,8 +97,8 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get process metadata: %w", err)
 	}
-	ffAddress := crypto.BigToFF(b.Address.BigInt().MathBigInt(), gecc.BN254.ScalarField())
-	ffProcessID := crypto.BigToFF(b.ProcessID.BigInt().MathBigInt(), gecc.BN254.ScalarField())
+	ffAddress := crypto.BigToFF(b.Address.BigInt().MathBigInt(), gecc.BLS12_377.ScalarField())
+	ffProcessID := crypto.BigToFF(b.ProcessID.BigInt().MathBigInt(), gecc.BLS12_377.ScalarField())
 	root := arbo.BytesToBigInt(b.CensusProof.Root)
 	// calculate inputs hash
 	hashInputs := []*big.Int{}
@@ -126,6 +129,42 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress voter public key: %w", err)
 	}
+
+	debugSiblings := []types.HexBytes{}
+	for _, s := range circuits.BigIntArrayToN(siblings, circuits.CensusProofMaxLevels) {
+		if s.Int64() == 0 {
+			debugSiblings = append(debugSiblings, []byte{0})
+		} else {
+			debugSiblings = append(debugSiblings, s.Bytes())
+		}
+	}
+
+	debugInputs := api.DebugVoteVerifierInputs{
+		InputHash:      inputHash.Bytes(),
+		Address:        ffAddress.Bytes(),
+		Commitment:     b.Commitment,
+		Nullifier:      b.Nullifier,
+		Weight:         b.CensusProof.Weight.Bytes(),
+		ProcessID:      ffProcessID.Bytes(),
+		CensusRoot:     root.Bytes(),
+		Ballot:         &b.EncryptedBallot,
+		CensusSiblings: debugSiblings,
+		EncryptionKeyX: process.EncryptionKey.X.Bytes(),
+		EncryptionKeyY: process.EncryptionKey.Y.Bytes(),
+		Msg:            b.BallotInputsHash,
+		PublicKeyX:     pubKey.X.Bytes(),
+		PublicKeyY:     pubKey.Y.Bytes(),
+		SignatureR:     b.Signature.R,
+		SignatureS:     b.Signature.S,
+	}
+	bDebugInputs, err := json.Marshal(debugInputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal debug inputs: %w", err)
+	}
+	if err := os.WriteFile("debug_inputs.json", bDebugInputs, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write debug inputs: %w", err)
+	}
+
 	// set the circuit assignment
 	assignment := voteverifier.VerifyVoteCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),

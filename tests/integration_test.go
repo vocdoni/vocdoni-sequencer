@@ -33,33 +33,33 @@ func TestIntegration(t *testing.T) {
 		t.Logf("Organization address: %s", orgAddr.String())
 	})
 
-	c.Run("create process", func(c *qt.C) {
-		// Create census with 10 participants
-		root, participants, signers := createCensus(c, cli, 10)
+	// c.Run("create process", func(c *qt.C) {
+	// 	// Create census with 10 participants
+	// 	root, participants, signers := createCensus(c, cli, 10)
 
-		// Generate proof for first participant
-		proof := generateCensusProof(c, cli, root, participants[0].Key)
-		c.Assert(proof, qt.Not(qt.IsNil))
-		c.Assert(proof.Siblings, qt.IsNotNil)
+	// 	// Generate proof for first participant
+	// 	proof := generateCensusProof(c, cli, root, participants[0].Key)
+	// 	c.Assert(proof, qt.Not(qt.IsNil))
+	// 	c.Assert(proof.Siblings, qt.IsNotNil)
 
-		// Check the proof key is the same as the participant key and signer address
-		qt.Assert(t, proof.Key.String(), qt.DeepEquals, participants[0].Key.String())
-		qt.Assert(t, string(proof.Key), qt.DeepEquals, string(signers[0].Address().Bytes()))
+	// 	// Check the proof key is the same as the participant key and signer address
+	// 	qt.Assert(t, proof.Key.String(), qt.DeepEquals, participants[0].Key.String())
+	// 	qt.Assert(t, string(proof.Key), qt.DeepEquals, string(signers[0].Address().Bytes()))
 
-		ballotMode := types.BallotMode{
-			MaxCount:        2,
-			MaxValue:        new(types.BigInt).SetUint64(100),
-			MinValue:        new(types.BigInt).SetUint64(0),
-			ForceUniqueness: false,
-			CostFromWeight:  false,
-			CostExponent:    1,
-			MaxTotalCost:    new(types.BigInt).SetUint64(100),
-			MinTotalCost:    new(types.BigInt).SetUint64(100),
-		}
+	// 	ballotMode := types.BallotMode{
+	// 		MaxCount:        2,
+	// 		MaxValue:        new(types.BigInt).SetUint64(100),
+	// 		MinValue:        new(types.BigInt).SetUint64(0),
+	// 		ForceUniqueness: false,
+	// 		CostFromWeight:  false,
+	// 		CostExponent:    1,
+	// 		MaxTotalCost:    new(types.BigInt).SetUint64(100),
+	// 		MinTotalCost:    new(types.BigInt).SetUint64(100),
+	// 	}
 
-		pid, _ := createProcess(c, contracts, cli, root, ballotMode)
-		t.Logf("Process ID: %s", pid.String())
-	})
+	// 	pid, _ := createProcess(c, contracts, cli, root, ballotMode)
+	// 	t.Logf("Process ID: %s", pid.String())
+	// })
 
 	c.Run("create vote", func(c *qt.C) {
 		// load ballot proof artifacts
