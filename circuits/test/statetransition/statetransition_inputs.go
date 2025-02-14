@@ -11,6 +11,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/statetransition"
 	aggregatortest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/aggregator"
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
@@ -36,7 +37,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
 	// compile aggregator circuit
-	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
+	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, &agPlaceholder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("aggregator compile: %w", err)
 	}
@@ -81,28 +82,28 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		agInputs.Process.EncryptionKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("start batch: %w", err)
 	}
 	for _, v := range agInputs.Votes {
 		if err := s.AddVote(&v); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, fmt.Errorf("add vote: %w", err)
 		}
 	}
 	if err := s.EndBatch(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("end batch: %w", err)
 	}
 	witness, err := GenerateWitnesses(s)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("generate witness: %w", err)
 	}
 	witness.AggregatorProof.Proof = proofInBW6761
 
 	// create final placeholder
-	circuitPlaceholder := statetransition.CircuitPlaceholder()
+	circuitPlaceholder := CircuitPlaceholder()
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](agVk)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator vk: %w", err)
 	}
 	circuitPlaceholder.AggregatorProof.VK = fixedVk
 	// // fill placeholder and witness with dummy circuits
@@ -138,4 +139,42 @@ func newState(processId, censusRoot, ballotMode, encryptionKey []byte) *state.St
 	}
 
 	return s
+}
+
+func CircuitPlaceholder() *statetransition.Circuit {
+	proof, err := DummyInnerProof(0)
+	if err != nil {
+		panic(err)
+	}
+	return CircuitPlaceholderWithProof(proof)
+}
+
+func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *statetransition.Circuit {
+	return &statetransition.Circuit{
+		AggregatorProof: *proof,
+	}
+}
+
+func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
+	_, _, proof, vk, err := dummy.Prove(
+		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
+		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
+	if err != nil {
+		return nil, err
+	}
+	// parse dummy proof and witness
+	dummyProof, err := stdgroth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
+	if err != nil {
+		return nil, fmt.Errorf("dummy proof value error: %w", err)
+	}
+	// set fixed dummy vk in the placeholders
+	dummyVK, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
+	if err != nil {
+		return nil, fmt.Errorf("dummy vk value error: %w", err)
+	}
+
+	return &circuits.InnerProofBW6761{
+		Proof: dummyProof,
+		VK:    dummyVK,
+	}, nil
 }
