@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/fxamacker/cbor/v2"
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 
@@ -69,23 +70,46 @@ func (g *G1) Unmarshal(buf []byte) error {
 }
 
 func (g *G1) MarshalJSON() ([]byte, error) {
-	points := &curve.PointEC{}
-	points.X = types.BigInt(*g.inner.X.BigInt(new(big.Int)))
-	points.Y = types.BigInt(*g.inner.Y.BigInt(new(big.Int)))
-	return json.Marshal(points)
+	x := types.BigInt(*g.inner.X.BigInt(new(big.Int)))
+	y := types.BigInt(*g.inner.Y.BigInt(new(big.Int)))
+	return json.Marshal([]types.BigInt{x, y})
 }
 
 func (g *G1) UnmarshalJSON(buf []byte) error {
-	points := &curve.PointEC{}
-	err := json.Unmarshal(buf, points)
-	if err != nil {
-		return err
-	}
 	if g.inner == nil {
 		g.inner = new(bn254.G1Affine)
 	}
-	g.inner.X.SetBigInt(points.X.MathBigInt())
-	g.inner.Y.SetBigInt(points.Y.MathBigInt())
+	var coords []types.BigInt
+	if err := json.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	g.inner.X.SetBigInt(coords[0].MathBigInt())
+	g.inner.Y.SetBigInt(coords[1].MathBigInt())
+	return nil
+}
+
+func (g *G1) MarshalCBOR() ([]byte, error) {
+	x := g.inner.X.BigInt(new(big.Int))
+	y := g.inner.Y.BigInt(new(big.Int))
+	return cbor.Marshal([]*big.Int{x, y})
+}
+
+func (g *G1) UnmarshalCBOR(buf []byte) error {
+	if g.inner == nil {
+		g.inner = new(bn254.G1Affine)
+	}
+	var coords []*big.Int
+	if err := cbor.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	g.inner.X.SetBigInt(coords[0])
+	g.inner.Y.SetBigInt(coords[1])
 	return nil
 }
 

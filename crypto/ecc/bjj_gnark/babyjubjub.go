@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	babyjubjub "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
+	"github.com/fxamacker/cbor/v2"
 	curve "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -113,26 +114,51 @@ func (p *BJJ) Unmarshal(buf []byte) error {
 	return p.inner.Unmarshal(buf)
 }
 
-// MarshalJson serializes the elliptic curve element into a JSON byte slice.
+// MarshalJSON serializes the elliptic curve element into a JSON byte slice.
 func (p *BJJ) MarshalJSON() ([]byte, error) {
-	points := &curve.PointEC{}
-	points.X = types.BigInt(*p.inner.X.BigInt(new(big.Int)))
-	points.Y = types.BigInt(*p.inner.Y.BigInt(new(big.Int)))
-	return json.Marshal(points)
+	x := types.BigInt(*p.inner.X.BigInt(new(big.Int)))
+	y := types.BigInt(*p.inner.Y.BigInt(new(big.Int)))
+	return json.Marshal([]types.BigInt{x, y})
 }
 
-// UnmarshalJson deserializes the elliptic curve element from a JSON byte slice.
+// UnmarshalJSON deserializes the elliptic curve element from a JSON byte slice.
 func (p *BJJ) UnmarshalJSON(buf []byte) error {
-	points := &curve.PointEC{}
-	err := json.Unmarshal(buf, points)
-	if err != nil {
-		return err
-	}
 	if p.inner == nil {
 		p.inner = new(babyjubjub.PointAffine)
 	}
-	p.inner.X.SetBigInt(points.X.MathBigInt())
-	p.inner.Y.SetBigInt(points.Y.MathBigInt())
+	var coords []types.BigInt
+	if err := json.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	p.inner.X.SetBigInt(coords[0].MathBigInt())
+	p.inner.Y.SetBigInt(coords[1].MathBigInt())
+	return nil
+}
+
+// MarshalCBOR serializes the elliptic curve element into a CBOR byte slice.
+func (p *BJJ) MarshalCBOR() ([]byte, error) {
+	x := p.inner.X.BigInt(new(big.Int))
+	y := p.inner.Y.BigInt(new(big.Int))
+	return cbor.Marshal([]*big.Int{x, y})
+}
+
+// UnmarshalCBOR deserializes the elliptic curve element from a CBOR byte slice.
+func (p *BJJ) UnmarshalCBOR(buf []byte) error {
+	if p.inner == nil {
+		p.inner = new(babyjubjub.PointAffine)
+	}
+	var coords []*big.Int
+	if err := cbor.Unmarshal(buf, &coords); err != nil {
+		return err
+	}
+	if len(coords) != 2 {
+		return fmt.Errorf("expected 2 coordinates, got %d", len(coords))
+	}
+	p.inner.X.SetBigInt(coords[0])
+	p.inner.Y.SetBigInt(coords[1])
 	return nil
 }
 

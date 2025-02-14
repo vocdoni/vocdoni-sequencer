@@ -1,10 +1,12 @@
 package elgamal
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bn254"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
@@ -131,13 +133,13 @@ func TestCiphertext_MarshalUnmarshal(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// Test marshaling
-	marshaled, err := encrypted.Marshal()
+	marshaled, err := json.Marshal(encrypted)
 	c.Assert(err, qt.IsNil)
 	c.Assert(marshaled, qt.Not(qt.IsNil))
 
 	// Test unmarshaling
 	unmarshaled := NewCiphertext(publicKey)
-	err = unmarshaled.Unmarshal(marshaled)
+	err = json.Unmarshal(marshaled, unmarshaled)
 	c.Assert(err, qt.IsNil)
 
 	// Compare points
@@ -181,4 +183,92 @@ func TestCiphertext_DeserializeError(t *testing.T) {
 	// Test with invalid length, should panic
 	c.Assert(cipher.Deserialize(make([]byte, 127)), // Should be 128
 		qt.ErrorMatches, "invalid input length.*")
+}
+
+func TestBallotMarshalCBOR(t *testing.T) {
+	c := qt.New(t)
+
+	// Create a test ciphertext for all curves
+	for _, curveType := range curves.Curves() {
+		curve := curves.New(curveType)
+		publicKey, _, err := GenerateKey(curve)
+		c.Assert(err, qt.IsNil)
+
+		msg := big.NewInt(42)
+		k := big.NewInt(789)
+
+		ballot := NewBallot(curve)
+		ballot, err = ballot.Encrypt([8]*big.Int{msg, msg, msg, msg, msg, msg, msg, msg}, publicKey, k)
+		c.Assert(err, qt.IsNil)
+
+		// Test marshaling
+		marshaled, err := cbor.Marshal(ballot)
+		c.Assert(err, qt.IsNil)
+		c.Assert(marshaled, qt.Not(qt.IsNil))
+
+		// Test unmarshaling
+		unmarshaled := Ballot{}
+		err = cbor.Unmarshal(marshaled, &unmarshaled)
+		c.Assert(err, qt.IsNil)
+
+		// Compare points
+		for i := 0; i < len(ballot.Ciphertexts); i++ {
+			x1, y1 := ballot.Ciphertexts[i].C1.Point()
+			x2, y2 := unmarshaled.Ciphertexts[i].C1.Point()
+			c.Assert(x1.Cmp(x2), qt.Equals, 0)
+			c.Assert(y1.Cmp(y2), qt.Equals, 0)
+
+			x1, y1 = ballot.Ciphertexts[i].C2.Point()
+			x2, y2 = unmarshaled.Ciphertexts[i].C2.Point()
+			c.Assert(x1.Cmp(x2), qt.Equals, 0)
+			c.Assert(y1.Cmp(y2), qt.Equals, 0)
+		}
+	}
+}
+
+func TestBallotMarshalJSON(t *testing.T) {
+	c := qt.New(t)
+
+	// Create a test ciphertext for all curves.
+	for _, curveType := range curves.Curves() {
+		curve := curves.New(curveType)
+		publicKey, _, err := GenerateKey(curve)
+		c.Assert(err, qt.IsNil)
+
+		msg := big.NewInt(42)
+		k := big.NewInt(789)
+
+		ballot := NewBallot(curve)
+		ballot, err = ballot.Encrypt(
+			[8]*big.Int{msg, msg, msg, msg, msg, msg, msg, msg},
+			publicKey,
+			k,
+		)
+		c.Assert(err, qt.IsNil)
+
+		// Test JSON marshaling.
+		marshaled, err := json.Marshal(ballot)
+		c.Assert(err, qt.IsNil)
+		c.Assert(marshaled, qt.Not(qt.IsNil))
+
+		// Test JSON unmarshaling.
+		unmarshaled := Ballot{}
+		err = json.Unmarshal(marshaled, &unmarshaled)
+		c.Assert(err, qt.IsNil)
+
+		// Compare points for each ciphertext.
+		for i := 0; i < len(ballot.Ciphertexts); i++ {
+			// Compare C1.
+			x1, y1 := ballot.Ciphertexts[i].C1.Point()
+			x2, y2 := unmarshaled.Ciphertexts[i].C1.Point()
+			c.Assert(x1.Cmp(x2), qt.Equals, 0)
+			c.Assert(y1.Cmp(y2), qt.Equals, 0)
+
+			// Compare C2.
+			x1, y1 = ballot.Ciphertexts[i].C2.Point()
+			x2, y2 = unmarshaled.Ciphertexts[i].C2.Point()
+			c.Assert(x1.Cmp(x2), qt.Equals, 0)
+			c.Assert(y1.Cmp(y2), qt.Equals, 0)
+		}
+	}
 }
