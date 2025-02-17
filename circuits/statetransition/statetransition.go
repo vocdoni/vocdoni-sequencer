@@ -99,7 +99,14 @@ func (circuit Circuit) CalculateAggregatorWitness(api frontend.API) (groth16.Wit
 	hashes := circuits.CalculateVotersHashes(api,
 		circuit.Process.VarsToEmulatedElementBN254(api),
 		circuit.ListVotesAsEmulated(api))
-	return hashes.ToWitnessBW6761(api)
+	witness, err := hashes.ToWitnessBW6761(api)
+	if err != nil {
+		circuits.FrontendError(api, "failed to calculate voters hashes sum: ", err)
+	}
+	witness.Public = append(witness.Public, emulated.Element[sw_bw6761.ScalarField]{
+		Limbs: []frontend.Variable{circuit.NumNewVotes, 0, 0, 0, 0, 0}, // ValidVotes
+	})
+	return witness, nil
 }
 
 func (circuit Circuit) VerifyAggregatorProof(api frontend.API) {

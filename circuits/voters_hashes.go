@@ -8,7 +8,6 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
-	"github.com/vocdoni/gnark-crypto-primitives/utils"
 )
 
 // VotersHashes is a struct that contains the hashes of the voters. It is used
@@ -96,58 +95,36 @@ func (vh VotersHashes) ToWitnessBLS12377(api frontend.API, idx int, valid fronte
 	return groth16.Witness[sw_bls12377.ScalarField]{Public: splitedHash}, nil
 }
 
-// ToWitnessBW6761 method calculates the witness for the i-th voter using the current
-// hashes. It receives the index of the desired voter hash and a valid bit as
-// frontend.Variable. It takes the hash of the i-th voter and,  after reduce it
-// in its field, splits it in 4 elements, each of bls12377 element has as first
-// limb each limb of the original bn254 hash. The valid bit is used to select
-// the limb of the hash to be used in the final element, between the valid limb
-// of the dummy one (1 if it is the first limb, 0 otherwise).
+// ToWitnessBW6761 method calculates the witness using the current
+// hashes.  It takes the sum of all hashes and,  after reduce it
+// in its field, splits it in 4 elements, each of bw6761 element has as first
+// limb each limb of the original bn254 hash.
 //
-//	  validWitness = {
+//	  witness = {
 //			Public: [
-//				[hashes[i].Limbs[0], 0, 0, 0],
-//	  			[hashes[i].Limbs[1], 0, 0, 0],
-//				[hashes[i].Limbs[2], 0, 0, 0],
-//				[hashes[i].Limbs[3], 0, 0, 0],
-//			],
-//	  }
-//	  dummyWitness = {
-//			Public: [
-//				[1, 0, 0, 0],
-//	  			[0, 0, 0, 0],
-//				[0, 0, 0, 0],
-//				[0, 0, 0, 0],
+//				[hash.Limbs[0], 0, 0, 0, 0, 0],
+//	  			[hash.Limbs[1], 0, 0, 0, 0, 0],
+//				[hash.Limbs[2], 0, 0, 0, 0, 0],
+//				[hash.Limbs[3], 0, 0, 0, 0, 0],
 //			],
 //	  }
 func (vh VotersHashes) ToWitnessBW6761(api frontend.API) (
 	groth16.Witness[sw_bw6761.ScalarField], error,
 ) {
-	// field, err := emulated.NewField[sw_bn254.ScalarField](api)
-	// if err != nil {
-	// 	FrontendError(api, "failed to create field", err)
-	// }
-	sumBN254 := vh.Sum(api)
-	sumVar, err := utils.PackScalarToVar(api, sumBN254)
+	field, err := emulated.NewField[sw_bn254.ScalarField](api)
 	if err != nil {
-		FrontendError(api, "failed to PackScalarToVar", err)
+		FrontendError(api, "failed to create field", err)
 	}
-	sumBW6761, err := utils.UnpackVarToScalar[sw_bw6761.ScalarField](api, sumVar)
-	if err != nil {
-		FrontendError(api, "failed to UnpackVarToScalar", err)
-	}
-
-	// reducedHash := field.Reduce(&sumBN254)
+	sumInEmulatedBN254 := vh.Sum(api)
+	reducedSum := field.Reduce(&sumInEmulatedBN254)
+	witness := groth16.Witness[sw_bw6761.ScalarField]{}
 	// split the hash in 4 elements, each of bw6761 element has as first
 	// limb each limb of the original bn254 hash, including the dummy elements
-	splitedHash := []emulated.Element[sw_bw6761.ScalarField]{
-		*sumBW6761,
+	for _, limb := range reducedSum.Limbs {
+		// store the new element with the final limb and 0 for the rest
+		witness.Public = append(witness.Public, emulated.Element[sw_bw6761.ScalarField]{
+			Limbs: []frontend.Variable{limb, 0, 0, 0, 0, 0},
+		})
 	}
-	// for _, limb := range reducedHash.Limbs {
-	// 	// store the new element with the final limb and 0 for the rest
-	// 	splitedHash = append(splitedHash, emulated.Element[sw_bw6761.ScalarField]{
-	// 		Limbs: []frontend.Variable{limb, 0, 0, 0},
-	// 	})
-	// }
-	return groth16.Witness[sw_bw6761.ScalarField]{Public: splitedHash}, nil
+	return witness, nil
 }
