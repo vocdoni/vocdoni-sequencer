@@ -368,18 +368,21 @@ func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist 
 			Address: address,
 		})
 	}
+	fmt.Println("start VoteVerifierInputsWithoutProof") // debug
 
 	// generate vote verifier inputs
 	vvInputs, _, _, err := voteverifiertest.VoteVerifierInputsWithoutProof(vvData, processId)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier inputs: %w", err)
 	}
+	fmt.Println("end VoteVerifierInputsWithoutProof") // debug
 
 	// compile vote verifier circuit
 	dummyCCS, err := frontend.Compile(circuits.VoteVerifierCurve.ScalarField(), r1cs.NewBuilder, dummy.PlaceholderWithConstraints(0))
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier compile: %w", err)
 	}
+	fmt.Println("end Compile") // debug
 
 	// compute public inputs hash
 	commonInputs := []*big.Int{vvInputs.ProcessID, vvInputs.CensusRoot}
@@ -412,6 +415,7 @@ func AggregatorInputsWithDummyProof(processId []byte, nValidVoters int, persist 
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("inputsHash final hash: %w", err)
 	}
+	fmt.Println("end Hashes") // debug
 
 	// init final assignments stuff
 	finalAssigments := aggregator.AggregatorCircuit{
