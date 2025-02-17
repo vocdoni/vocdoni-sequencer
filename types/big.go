@@ -1,22 +1,53 @@
 package types
 
 import (
+	"fmt"
 	"math/big"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
-// BigInt is a big.Int wrapper which marshals JSON to a string representation of the big number.
-// Note that a nil pointer value marshals as the empty string.
+// BigInt is a big.Int wrapper which marshals JSON to a string representation of
+// the big number. Note that a nil pointer value marshals as the empty string.
 type BigInt big.Int
 
+// MarshalText returns the decimal string representation of the big number.
+// If the receiver is nil, we return "0".
 func (i *BigInt) MarshalText() ([]byte, error) {
+	if i == nil {
+		return []byte("0"), nil
+	}
 	return (*big.Int)(i).MarshalText()
 }
 
+// UnmarshalText parses the text representation into the big number.
 func (i *BigInt) UnmarshalText(data []byte) error {
-	if err := (*big.Int)(i).UnmarshalText(data); err != nil {
-		panic(err)
+	if i == nil {
+		return fmt.Errorf("cannot unmarshal into nil BigInt")
 	}
-	return nil
+	return (*big.Int)(i).UnmarshalText(data)
+}
+
+// MarshalCBOR explicitly encodes BigInt as a CBOR text string.
+func (i *BigInt) MarshalCBOR() ([]byte, error) {
+	// get the textual representation.
+	txt, err := i.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	// encode that string as a CBOR text string.
+	return cbor.Marshal(string(txt))
+}
+
+// UnmarshalCBOR decodes a CBOR text string into BigInt.
+func (i *BigInt) UnmarshalCBOR(data []byte) error {
+	var s string
+	// decode the CBOR data into a string.
+	if err := cbor.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	// convert the string back into BigInt.
+	return i.UnmarshalText([]byte(s))
 }
 
 func (i *BigInt) GobEncode() ([]byte, error) {
