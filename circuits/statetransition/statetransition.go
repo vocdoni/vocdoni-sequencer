@@ -1,8 +1,6 @@
 package statetransition
 
 import (
-	"fmt"
-
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
@@ -11,7 +9,6 @@ import (
 	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
 	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/util"
 )
 
@@ -224,46 +221,4 @@ func (circuit Circuit) ListVotesAsEmulated(api frontend.API) []circuits.Emulated
 		list = append(list, v.Vote.ToEmulatedVote(api))
 	}
 	return list
-}
-
-func CircuitPlaceholder() *Circuit {
-	proof, vk, err := DummyInnerProof(0)
-	if err != nil {
-		panic(err)
-	}
-	return CircuitPlaceholderWithProof(proof, vk)
-}
-
-func CircuitPlaceholderWithProof(
-	proof *groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
-	vk *groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl],
-) *Circuit {
-	return &Circuit{
-		AggregatorProof: *proof,
-		AggregatorVK:    *vk,
-	}
-}
-
-func DummyInnerProof(inputsHash frontend.Variable) (
-	*groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
-	*groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl], error,
-) {
-	_, _, proof, vk, err := dummy.Prove(
-		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
-		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
-	if err != nil {
-		return nil, nil, err
-	}
-	// parse dummy proof and witness
-	dummyProof, err := groth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
-	if err != nil {
-		return nil, nil, fmt.Errorf("dummy proof value error: %w", err)
-	}
-	// set fixed dummy vk in the placeholders
-	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
-	if err != nil {
-		return nil, nil, fmt.Errorf("dummy vk value error: %w", err)
-	}
-
-	return &dummyProof, &dummyVK, nil
 }

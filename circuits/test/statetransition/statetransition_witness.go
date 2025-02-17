@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bw6761"
+	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 
@@ -11,7 +13,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/state"
 )
 
-func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
+func GenerateWitness(o *state.State) (*statetransition.Circuit, error) {
 	var err error
 	witness := &statetransition.Circuit{}
 
@@ -93,4 +95,19 @@ func GenerateWitnesses(o *state.State) (*statetransition.Circuit, error) {
 	}
 
 	return witness, nil
+}
+
+func CircuitPlaceholder() *statetransition.Circuit {
+	proof, vk := DummyAggProofPlaceholder()
+	return CircuitPlaceholderWithProof(proof, vk)
+}
+
+func CircuitPlaceholderWithProof(
+	proof *groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
+	vk *groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl],
+) *statetransition.Circuit {
+	return &statetransition.Circuit{
+		AggregatorProof: *proof,
+		AggregatorVK:    *vk,
+	}
 }
