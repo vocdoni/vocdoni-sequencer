@@ -1,6 +1,7 @@
 package aggregatortest
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func TestAggregatorCircuitWithDummy(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
+	fmt.Println("start") // debug
 	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 
 	_, placeholder, assignments, err := AggregatorInputsWithDummyProof(processId, 3, false)

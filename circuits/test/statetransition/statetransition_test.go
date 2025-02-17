@@ -1,6 +1,7 @@
 package statetransitiontest
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ func TestStateTransitionCircuit(t *testing.T) {
 	// inputs generation
 	now := time.Now()
 	processId := util.RandomBytes(20)
+	fmt.Println("start") // debug
 	_, placeholder, assignments, err := StateTransitionInputsForTest(processId, 3)
 	c.Assert(err, qt.IsNil)
 	c.Logf("inputs generation took %s", time.Since(now).String())

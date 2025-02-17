@@ -214,6 +214,7 @@ func VoteVerifierInputsWithoutProof(votersData []VoterTestData, processId []byte
 	ballots := []elgamal.Ballot{}
 	var finalProcessID *big.Int
 	for _, voter := range votersData {
+		fmt.Println("VoterWithoutProof") // debug
 		voterProof, err := ballottest.VoterWithoutProof(voter.Address.Bytes(), processId, ek)
 		if err != nil {
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, fmt.Errorf("ballotproof inputs: %w", err)
