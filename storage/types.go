@@ -35,7 +35,7 @@ type VerifiedBallot struct {
 
 type Ballot struct {
 	ProcessID        types.HexBytes                                        `json:"processId"`
-	VoterWeight      *big.Int                                              `json:"voterWeight"`
+	VoterWeight      types.HexBytes                                        `json:"voterWeight"`
 	EncryptedBallot  elgamal.Ballot                                        `json:"encryptedBallot"`
 	Nullifier        types.HexBytes                                        `json:"nullifier"`
 	Commitment       types.HexBytes                                        `json:"commitment"`

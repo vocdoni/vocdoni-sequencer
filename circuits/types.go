@@ -455,10 +455,10 @@ type EmulatedVote[F emulated.FieldParams] struct {
 
 // Serialize returns a slice with the vote parameters in order
 //
-//	EmulatedVote.Nullifier
-//	EmulatedVote.Ballot
 //	EmulatedVote.Address
 //	EmulatedVote.Commitment
+//	EmulatedVote.Nullifier
+//	EmulatedVote.Ballot
 func (z *EmulatedVote[F]) Serialize() []emulated.Element[F] {
 	list := []emulated.Element[F]{}
 	list = append(list, z.Address)

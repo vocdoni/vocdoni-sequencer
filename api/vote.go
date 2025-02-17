@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"math/big"
 	"net/http"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -67,7 +66,7 @@ func (a *API) newVote(w http.ResponseWriter, r *http.Request) {
 	// and published
 	if err := a.storage.PushBallot(&storage.Ballot{
 		ProcessID:        vote.ProcessID,
-		VoterWeight:      new(big.Int).SetBytes(vote.CensusProof.Value),
+		VoterWeight:      vote.CensusProof.Weight.Bytes(),
 		EncryptedBallot:  *vote.Ballot,
 		Nullifier:        vote.Nullifier,
 		Commitment:       vote.Commitment,

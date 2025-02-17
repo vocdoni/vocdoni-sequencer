@@ -32,13 +32,6 @@ type Ciphertext struct {
 	C2 ecc.Point `json:"c2"`
 }
 
-// AuxCiphertext is an auxiliary struct used for JSON and CBOR
-// marshalling/unmarshalling
-type AuxCiphertext struct {
-	C1 ecc.PointEC `json:"c1"`
-	C2 ecc.PointEC `json:"c2"`
-}
-
 // NewCiphertext creates a new Ciphertext on the same curve as the given Point.
 // The Point must be one on of the supported curves by crypto/ecc/curves package,
 // can be easily created with curves.New(type)

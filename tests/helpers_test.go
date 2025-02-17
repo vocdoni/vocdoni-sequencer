@@ -224,11 +224,10 @@ func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, c
 	return pid, encryptionKeys
 }
 
-func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKey,
-	address types.HexBytes, signer *ethereum.SignKeys,
-) api.Vote {
-	encKey := new(bjj.BJJ).SetPoint(encryptionKey.X, encryptionKey.Y)
-	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), encKey)
+func createVote(c *qt.C, pid *types.ProcessID, encKey *types.EncryptionKey, signer *ethereum.SignKeys) api.Vote {
+	bbjEncKey := new(bjj.BJJ).SetPoint(encKey.X, encKey.Y)
+	address := signer.Address().Bytes()
+	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), bbjEncKey)
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
@@ -237,8 +236,8 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
 	c.Assert(err, qt.IsNil)
 
-	c.Assert(os.WriteFile("debug_proof.json", []byte(votedata.Proof), 0644), qt.IsNil)
-	c.Assert(os.WriteFile("debug_pub_inputs.json", []byte(votedata.PubInputs), 0644), qt.IsNil)
+	c.Assert(os.WriteFile("debug_proof.json", []byte(votedata.Proof), 0o644), qt.IsNil)
+	c.Assert(os.WriteFile("debug_pub_inputs.json", []byte(votedata.PubInputs), 0o644), qt.IsNil)
 
 	circomProof, _, err := circuits.Circom2GnarkProof(votedata.Proof, votedata.PubInputs)
 	c.Assert(err, qt.IsNil)

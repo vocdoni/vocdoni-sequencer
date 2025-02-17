@@ -63,8 +63,6 @@ func (a *API) addCensusParticipants(w http.ResponseWriter, r *http.Request) {
 		}
 		keys = append(keys, leafKey)
 		values = append(values, arbo.BigIntToBytes(a.storage.CensusDB().HashLen(), p.Weight.MathBigInt()))
-		// keys = append(keys, crypto.BigToFF(arbo.BLS12377BaseField, new(big.Int).SetBytes(p.Key)).Bytes())
-		// values = append(values, p.Weight.Bytes())
 	}
 
 	// insert the keys and values into the tree
