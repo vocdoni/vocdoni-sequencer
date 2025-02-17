@@ -91,14 +91,14 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err := s.EndBatch(); err != nil {
 		return nil, nil, nil, err
 	}
-	witness, err := GenerateWitnesses(s)
+	witness, err := GenerateWitness(s)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	witness.AggregatorProof = proofInBW6761
 
 	// create final placeholder
-	circuitPlaceholder := statetransition.CircuitPlaceholder()
+	circuitPlaceholder := CircuitPlaceholder()
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](agVk)
 	if err != nil {

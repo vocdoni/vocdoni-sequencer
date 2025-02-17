@@ -38,6 +38,7 @@ func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 	if os.Getenv("RUN_CIRCUIT_TESTS") == "" || os.Getenv("RUN_CIRCUIT_TESTS") == "false" {
 		t.Skip("skipping circuit tests...")
 	}
+	logger.Set(zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "15:04:05"}).With().Timestamp().Logger())
 	assert := test.NewAssert(t)
 	assert.ProverSucceeded(
 		circuit,
@@ -47,7 +48,7 @@ func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 }
 
 func TestCircuitCompile(t *testing.T) {
-	testCircuitCompile(t, statetransition.CircuitPlaceholder())
+	testCircuitCompile(t, statetransitiontest.CircuitPlaceholder())
 }
 
 func TestCircuitProve(t *testing.T) {
@@ -57,7 +58,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(1, 10), // add vote 1
 			newMockVote(2, 20), // add vote 2
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
+		testCircuitProve(t, statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
 
 		debugLog(t, witness)
 	}
@@ -67,7 +68,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(3, 30),  // add vote 3
 			newMockVote(4, 40),  // add vote 4
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
+		testCircuitProve(t, statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
 
 		debugLog(t, witness)
 	}
@@ -86,13 +87,13 @@ func (circuit CircuitCalculateAggregatorWitness) Define(api frontend.API) error 
 }
 
 func TestCircuitCalculateAggregatorWitnessCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitCalculateAggregatorWitness{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitCalculateAggregatorWitness{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitCalculateAggregatorWitnessProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitCalculateAggregatorWitness{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -106,13 +107,13 @@ func (circuit CircuitAggregatorProof) Define(api frontend.API) error {
 }
 
 func TestCircuitAggregatorProofCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitAggregatorProof{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitAggregatorProof{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitAggregatorProofProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitAggregatorProof{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -126,13 +127,13 @@ func (circuit CircuitBallots) Define(api frontend.API) error {
 }
 
 func TestCircuitBallotsCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitBallots{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitBallots{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitBallotsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitBallots{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -146,13 +147,13 @@ func (circuit CircuitMerkleProofs) Define(api frontend.API) error {
 }
 
 func TestCircuitMerkleProofsCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitMerkleProofs{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitMerkleProofs{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitMerkleProofsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleProofs{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -166,13 +167,13 @@ func (circuit CircuitMerkleTransitions) Define(api frontend.API) error {
 }
 
 func TestCircuitMerkleTransitionsCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitMerkleTransitions{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitMerkleTransitions{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleTransitions{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 
 	debugLog(t, witness)
@@ -188,13 +189,13 @@ func (circuit CircuitLeafHashes) Define(api frontend.API) error {
 }
 
 func TestCircuitLeafHashesCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitLeafHashes{*statetransition.CircuitPlaceholder()})
+	testCircuitCompile(t, &CircuitLeafHashes{*statetransitiontest.CircuitPlaceholder()})
 }
 
 func TestCircuitLeafHashesProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitLeafHashes{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+		*statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 
 	debugLog(t, witness)
@@ -215,7 +216,7 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	witness, err := statetransitiontest.GenerateWitnesses(s)
+	witness, err := statetransitiontest.GenerateWitness(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +226,7 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	proof, vk, err := statetransition.DummyInnerProof(inputsHash)
+	proof, vk, err := statetransitiontest.DummyAggProof(inputsHash, s.BallotCount())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +236,10 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 }
 
 func newMockWitness(t *testing.T) *statetransition.Circuit {
-	return newMockTransitionWithVotes(t, newMockState(t), newMockVote(1, 10))
+	return newMockTransitionWithVotes(t, newMockState(t),
+		newMockVote(1, 10),
+		newMockVote(2, 20),
+	)
 }
 
 func newMockState(t *testing.T) *state.State {
