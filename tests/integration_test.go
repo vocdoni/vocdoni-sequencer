@@ -23,7 +23,7 @@ func TestIntegration(t *testing.T) {
 
 	// Setup
 	ctx := context.Background()
-	apiSrv, storage, contracts := NewTestService(t, ctx)
+	apiSrv, stg, contracts := NewTestService(t, ctx)
 	_, port := apiSrv.HostPort()
 	cli, err := NewTestClient(port)
 	c.Assert(err, qt.IsNil)
@@ -105,9 +105,8 @@ func TestIntegration(t *testing.T) {
 				c.Fatal("timeout waiting for vote to be processed")
 			default:
 				time.Sleep(time.Second)
-				log.Debug("waiting for vote to be processed")
-				if storage.CountVerifiedBallots(pid.Marshal()) == 0 {
-					continue
+				if stg.CountVerifiedBallots(pid.Marshal()) == 1 {
+					return
 				}
 			}
 		}
