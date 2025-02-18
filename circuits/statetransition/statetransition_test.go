@@ -57,7 +57,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(1, 10), // add vote 1
 			newMockVote(2, 20), // add vote 2
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof), witness)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
 
 		debugLog(t, witness)
 	}
@@ -67,7 +67,7 @@ func TestCircuitProve(t *testing.T) {
 			newMockVote(3, 30),  // add vote 3
 			newMockVote(4, 40),  // add vote 4
 		)
-		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof), witness)
+		testCircuitProve(t, statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK), witness)
 
 		debugLog(t, witness)
 	}
@@ -89,7 +89,7 @@ func TestCircuitCalculateAggregatorWitnessCompile(t *testing.T) {
 func TestCircuitCalculateAggregatorWitnessProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitCalculateAggregatorWitness{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -109,7 +109,7 @@ func TestCircuitAggregatorProofCompile(t *testing.T) {
 func TestCircuitAggregatorProofProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitAggregatorProof{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -129,7 +129,7 @@ func TestCircuitBallotsCompile(t *testing.T) {
 func TestCircuitBallotsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitBallots{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -149,7 +149,7 @@ func TestCircuitMerkleProofsCompile(t *testing.T) {
 func TestCircuitMerkleProofsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleProofs{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 }
 
@@ -169,7 +169,7 @@ func TestCircuitMerkleTransitionsCompile(t *testing.T) {
 func TestCircuitMerkleTransitionsProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitMerkleTransitions{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 
 	debugLog(t, witness)
@@ -191,7 +191,7 @@ func TestCircuitLeafHashesCompile(t *testing.T) {
 func TestCircuitLeafHashesProve(t *testing.T) {
 	witness := newMockWitness(t)
 	testCircuitProve(t, &CircuitLeafHashes{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof),
+		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
 	}, witness)
 
 	debugLog(t, witness)
@@ -222,11 +222,12 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	proof, err := statetransition.DummyInnerProof(inputsHash)
+	proof, vk, err := statetransition.DummyInnerProof(inputsHash)
 	if err != nil {
 		t.Fatal(err)
 	}
 	witness.AggregatorProof = *proof
+	witness.AggregatorVK = *vk
 	return witness
 }
 

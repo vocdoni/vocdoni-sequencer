@@ -52,7 +52,8 @@ type Circuit struct {
 	VotesProofs   VotesProofs
 	ResultsProofs ResultsProofs
 
-	AggregatorProof circuits.InnerProofBW6761
+	AggregatorProof groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine]
+	AggregatorVK    groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl] `gnark:"-"`
 }
 
 type Results struct {
@@ -98,7 +99,14 @@ func (circuit Circuit) CalculateAggregatorWitness(api frontend.API) (groth16.Wit
 	hashes := circuits.CalculateVotersHashes(api,
 		circuit.Process.VarsToEmulatedElementBN254(api),
 		circuit.ListVotesAsEmulated(api))
-	return hashes.ToWitnessBW6761(api)
+	witness, err := hashes.ToWitnessBW6761(api)
+	if err != nil {
+		circuits.FrontendError(api, "failed to calculate voters hashes sum: ", err)
+	}
+	witness.Public = append(witness.Public, emulated.Element[sw_bw6761.ScalarField]{
+		Limbs: []frontend.Variable{circuit.NumNewVotes, 0, 0, 0, 0, 0}, // ValidVotes
+	})
+	return witness, nil
 }
 
 func (circuit Circuit) VerifyAggregatorProof(api frontend.API) {
@@ -112,7 +120,7 @@ func (circuit Circuit) VerifyAggregatorProof(api frontend.API) {
 		circuits.FrontendError(api, "failed to create bw6761 verifier: ", err)
 	}
 	// verify the proof with the hash as input and the fixed verification key
-	if err := verifier.AssertProof(circuit.AggregatorProof.VK, circuit.AggregatorProof.Proof, witness); err != nil {
+	if err := verifier.AssertProof(circuit.AggregatorVK, circuit.AggregatorProof, witness); err != nil {
 		circuits.FrontendError(api, "failed to verify aggregated proof: ", err)
 	}
 }
@@ -219,39 +227,43 @@ func (circuit Circuit) ListVotesAsEmulated(api frontend.API) []circuits.Emulated
 }
 
 func CircuitPlaceholder() *Circuit {
-	proof, err := DummyInnerProof(0)
+	proof, vk, err := DummyInnerProof(0)
 	if err != nil {
 		panic(err)
 	}
-	return CircuitPlaceholderWithProof(proof)
+	return CircuitPlaceholderWithProof(proof, vk)
 }
 
-func CircuitPlaceholderWithProof(proof *circuits.InnerProofBW6761) *Circuit {
+func CircuitPlaceholderWithProof(
+	proof *groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
+	vk *groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl],
+) *Circuit {
 	return &Circuit{
 		AggregatorProof: *proof,
+		AggregatorVK:    *vk,
 	}
 }
 
-func DummyInnerProof(inputsHash frontend.Variable) (*circuits.InnerProofBW6761, error) {
+func DummyInnerProof(inputsHash frontend.Variable) (
+	*groth16.Proof[sw_bw6761.G1Affine, sw_bw6761.G2Affine],
+	*groth16.VerifyingKey[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl], error,
+) {
 	_, _, proof, vk, err := dummy.Prove(
 		dummy.NativePlaceholderWithConstraints(0), dummy.NativeAssignment(inputsHash),
 		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// parse dummy proof and witness
 	dummyProof, err := groth16.ValueOfProof[sw_bw6761.G1Affine, sw_bw6761.G2Affine](proof)
 	if err != nil {
-		return nil, fmt.Errorf("dummy proof value error: %w", err)
+		return nil, nil, fmt.Errorf("dummy proof value error: %w", err)
 	}
 	// set fixed dummy vk in the placeholders
 	dummyVK, err := groth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](vk)
 	if err != nil {
-		return nil, fmt.Errorf("dummy vk value error: %w", err)
+		return nil, nil, fmt.Errorf("dummy vk value error: %w", err)
 	}
 
-	return &circuits.InnerProofBW6761{
-		Proof: dummyProof,
-		VK:    dummyVK,
-	}, nil
+	return &dummyProof, &dummyVK, nil
 }

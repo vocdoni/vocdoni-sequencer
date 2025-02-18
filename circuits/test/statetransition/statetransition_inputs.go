@@ -95,7 +95,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	witness.AggregatorProof.Proof = proofInBW6761
+	witness.AggregatorProof = proofInBW6761
 
 	// create final placeholder
 	circuitPlaceholder := statetransition.CircuitPlaceholder()
@@ -104,7 +104,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	circuitPlaceholder.AggregatorProof.VK = fixedVk
+	circuitPlaceholder.AggregatorVK = fixedVk
 	// // fill placeholder and witness with dummy circuits
 	// if err := aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, agCCS, nValidVoters); err != nil {
 	// 	return nil, nil, nil, err
