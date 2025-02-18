@@ -90,6 +90,12 @@ type CensusProof struct {
 	Weight   *BigInt  `json:"weight"`
 }
 
+// Valid checks that the CensusProof is well-formed
+func (cp *CensusProof) Valid() bool {
+	return cp.Root != nil && cp.Key != nil && cp.Value != nil &&
+		cp.Siblings != nil && cp.Weight != nil
+}
+
 type OrganizationInfo struct {
 	ID          common.Address `json:"id,omitempty"      cbor:"0,keyasint,omitempty"`
 	Name        string         `json:"name"              cbor:"1,keyasint,omitempty"`

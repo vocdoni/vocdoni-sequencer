@@ -56,17 +56,17 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 					}
 					break
 				}
-				log.Debugf("new ballot to process for address %s", ballot.Address.String())
+				log.Debugw("new ballot to process", "address", ballot.Address.String())
 				// process the ballot
 				verifiedBallot, err := p.ProcessBallot(ballot)
 				if err != nil {
 					log.Errorf("failed to process ballot: %v", err)
 					break
 				}
-				log.Debugf("ballot processed for address %s", ballot.Address.String())
+				log.Debugw("ballot processed", "address", ballot.Address.String())
 				// store the verified ballot
 				if err := p.stg.MarkBallotDone(key, verifiedBallot); err != nil {
-					log.Errorf("failed to mark ballot done: %v", err)
+					log.Errorw(err, "failed to mark ballot done")
 				}
 			}
 			time.Sleep(1 * time.Second)
@@ -82,14 +82,17 @@ func (p *VoteProcessor) Stop() error {
 	return nil
 }
 
+// ProcessBallot method processes a ballot, generating a proof of its validity.
+// It gets the process information from the storage, transforms it to the
+// circuit types, and generates the proof using the gnark library. It returns
+// the verified ballot with the proof.
 func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallot, error) {
-	// decode the process id
-	pid := new(types.ProcessID)
-	if err := pid.Unmarshal(b.ProcessID); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal process id: %w", err)
+	// check if the ballot is valid
+	if !b.Valid() {
+		return nil, fmt.Errorf("invalid ballot")
 	}
 	// get the process metadata
-	process, err := p.stg.Process(pid)
+	process, err := p.stg.Process(new(types.ProcessID).SetBytes(b.ProcessID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get process metadata: %w", err)
 	}

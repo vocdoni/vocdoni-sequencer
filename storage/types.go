@@ -47,6 +47,17 @@ type Ballot struct {
 	PubKey           types.HexBytes                                        `json:"publicKey"`
 }
 
+// Valid method checks if the Ballot is valid. A ballot is valid if all its
+// components are valid. The BallotProof is not checked because it is a struct
+// that comes from a third-party library (gnark) and it should be checked by
+// the library itself.
+func (b *Ballot) Valid() bool {
+	return b.ProcessID != nil && b.VoterWeight != nil && b.Nullifier != nil &&
+		b.Commitment != nil && b.Address != nil && b.PubKey != nil &&
+		b.BallotInputsHash != nil && b.EncryptedBallot.Valid() &&
+		b.Signature.Valid() && b.CensusProof.Valid()
+}
+
 type AggregatorBallotBatch struct {
 	ProcessID types.HexBytes     `json:"processId"`
 	Proof     groth16.Proof      `json:"proof"`

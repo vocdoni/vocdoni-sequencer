@@ -97,17 +97,17 @@ func TestIntegration(t *testing.T) {
 		c.Log("Vote created", string(body))
 
 		// wait to process the vote
-		voteWaiter, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		voteWaiter, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer cancel()
 		for {
 			select {
 			case <-voteWaiter.Done():
 				c.Fatal("timeout waiting for vote to be processed")
 			default:
-				time.Sleep(time.Second)
 				if stg.CountVerifiedBallots(pid.Marshal()) == 1 {
 					return
 				}
+				time.Sleep(time.Second)
 			}
 		}
 	})
