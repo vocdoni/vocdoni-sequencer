@@ -63,7 +63,7 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 					log.Errorf("failed to process ballot: %v", err)
 					break
 				}
-				log.Debugf("ballot processed for address %s", ballot.Address)
+				log.Debugf("ballot processed for address %s", ballot.Address.String())
 				// store the verified ballot
 				if err := p.stg.MarkBallotDone(key, verifiedBallot); err != nil {
 					log.Errorf("failed to mark ballot done: %v", err)
@@ -93,14 +93,17 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get process metadata: %w", err)
 	}
+	// transform to circuit types
 	processID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), b.ProcessID.BigInt().MathBigInt())
 	root := arbo.BytesToBigInt(process.Census.CensusRoot)
+	ballotMode := circuits.BallotModeToCircuit(*process.BallotMode)
+	encryptionKey := circuits.EncryptionKeyToCircuit(*process.EncryptionKey)
 	// calculate inputs hash
 	hashInputs := []*big.Int{}
 	hashInputs = append(hashInputs, processID)
 	hashInputs = append(hashInputs, root)
-	hashInputs = append(hashInputs, circuits.MockBallotMode().Serialize()...)
-	hashInputs = append(hashInputs, circuits.EncryptionKeyToCircuit[*big.Int](*process.EncryptionKey).Serialize()...)
+	hashInputs = append(hashInputs, ballotMode.Serialize()...)
+	hashInputs = append(hashInputs, encryptionKey.Serialize()...)
 	hashInputs = append(hashInputs, b.Address.BigInt().MathBigInt())
 	hashInputs = append(hashInputs, b.Commitment.BigInt().MathBigInt())
 	hashInputs = append(hashInputs, b.Nullifier.BigInt().MathBigInt())
@@ -124,10 +127,6 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress voter public key: %w", err)
 	}
-
-	// write debug inputs to file to be used in the test
-	// writeForDebug(inputHash, processID, root, b, process, pubKey, siblings)
-
 	// set the circuit assignment
 	assignment := voteverifier.VerifyVoteCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),
@@ -139,15 +138,10 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 		},
 		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](b.VoterWeight.BigInt().MathBigInt()),
 		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
-			ID:         emulated.ValueOf[sw_bn254.ScalarField](processID),
-			CensusRoot: emulated.ValueOf[sw_bn254.ScalarField](root),
-			EncryptionKey: circuits.EncryptionKey[emulated.Element[sw_bn254.ScalarField]]{
-				PubKey: [2]emulated.Element[sw_bn254.ScalarField]{
-					emulated.ValueOf[sw_bn254.ScalarField](process.EncryptionKey.X),
-					emulated.ValueOf[sw_bn254.ScalarField](process.EncryptionKey.Y),
-				},
-			},
-			BallotMode: circuits.MockBallotModeEmulated(),
+			ID:            emulated.ValueOf[sw_bn254.ScalarField](processID),
+			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](root),
+			EncryptionKey: encryptionKey.BigIntsToEmulatedElementBN254(),
+			BallotMode:    ballotMode.BigIntsToEmulatedElementBN254(),
 		},
 		CensusSiblings: emulatedSiblings,
 		Msg:            emulated.ValueOf[emulated.Secp256k1Fr](crypto.SignatureHash(b.BallotInputsHash.BigInt().MathBigInt(), circuits.VoteVerifierCurve.ScalarField())),
@@ -176,42 +170,3 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 		Proof:           proof,
 	}, nil
 }
-
-// func writeForDebug(inputHash, processID, root *big.Int, b *storage.Ballot, p *types.Process, pk *ecdsa.PublicKey, s []*big.Int) {
-// 	debugSiblings := []types.HexBytes{}
-// 	for _, s := range circuits.BigIntArrayToN(s, circuits.CensusProofMaxLevels) {
-// 		if s.Int64() == 0 {
-// 			debugSiblings = append(debugSiblings, []byte{0})
-// 		} else {
-// 			debugSiblings = append(debugSiblings, s.Bytes())
-// 		}
-// 	}
-// 	debugInputs := api.DebugVoteVerifierInputs{
-// 		InputHash:      inputHash.Bytes(),
-// 		Address:        b.Address,
-// 		Commitment:     b.Commitment,
-// 		Nullifier:      b.Nullifier,
-// 		Weight:         b.VoterWeight,
-// 		ProcessID:      processID.Bytes(),
-// 		CensusRoot:     root.Bytes(),
-// 		Ballot:         &b.EncryptedBallot,
-// 		CensusSiblings: debugSiblings,
-// 		EncryptionKeyX: p.EncryptionKey.X.Bytes(),
-// 		EncryptionKeyY: p.EncryptionKey.Y.Bytes(),
-// 		Msg:            b.BallotInputsHash,
-// 		PublicKeyX:     pk.X.Bytes(),
-// 		PublicKeyY:     pk.Y.Bytes(),
-// 		SignatureR:     b.Signature.R,
-// 		SignatureS:     b.Signature.S,
-// 	}
-// 	bDebugInputs, err := json.MarshalIndent(debugInputs, "", "  ")
-// 	if err != nil {
-// 		log.Errorf("failed to marshal debug inputs: %v", err)
-// 		return
-// 	}
-// 	if err := os.WriteFile("debug_inputs.json", bDebugInputs, 0644); err != nil {
-// 		log.Errorf("failed to write debug inputs: %v", err)
-// 		return
-// 	}
-// 	fmt.Println(string(bDebugInputs))
-// }

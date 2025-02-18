@@ -76,7 +76,7 @@ func TestIntegration(t *testing.T) {
 			MaxCount:        uint8(mockMode.MaxCount.Uint64()),
 			ForceUniqueness: mockMode.ForceUniqueness.Uint64() == 1,
 			MaxValue:        (*types.BigInt)(mockMode.MaxValue),
-			MinValue:        (*types.BigInt)(mockMode.MaxValue),
+			MinValue:        (*types.BigInt)(mockMode.MinValue),
 			MaxTotalCost:    (*types.BigInt)(mockMode.MaxTotalCost),
 			MinTotalCost:    (*types.BigInt)(mockMode.MinTotalCost),
 			CostFromWeight:  mockMode.CostFromWeight.Uint64() == 1,
@@ -104,8 +104,9 @@ func TestIntegration(t *testing.T) {
 			case <-voteWaiter.Done():
 				c.Fatal("timeout waiting for vote to be processed")
 			default:
+				time.Sleep(time.Second)
+				log.Debug("waiting for vote to be processed")
 				if storage.CountVerifiedBallots(pid.Marshal()) == 0 {
-					time.Sleep(time.Second)
 					continue
 				}
 			}

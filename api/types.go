@@ -41,22 +41,3 @@ type Vote struct {
 	PublicKey        types.HexBytes        `json:"publicKey"`
 	Signature        types.BallotSignature `json:"signature"`
 }
-
-// type DebugVoteVerifierInputs struct {
-// 	InputHash      types.HexBytes   `json:"inputHash"`
-// 	Address        types.HexBytes   `json:"address"`
-// 	Commitment     types.HexBytes   `json:"commitment"`
-// 	Nullifier      types.HexBytes   `json:"nullifier"`
-// 	Weight         types.HexBytes   `json:"weight"`
-// 	ProcessID      types.HexBytes   `json:"processId"`
-// 	CensusRoot     types.HexBytes   `json:"censusRoot"`
-// 	Ballot         *elgamal.Ballot  `json:"ballot"`
-// 	CensusSiblings []types.HexBytes `json:"censusSiblings"`
-// 	EncryptionKeyX types.HexBytes   `json:"encryptionKeyX"`
-// 	EncryptionKeyY types.HexBytes   `json:"encryptionKeyY"`
-// 	Msg            types.HexBytes   `json:"msg"`
-// 	PublicKeyX     types.HexBytes   `json:"publicKeyX"`
-// 	PublicKeyY     types.HexBytes   `json:"public"`
-// 	SignatureR     types.HexBytes   `json:"signatureR"`
-// 	SignatureS     types.HexBytes   `json:"signatureS"`
-// }

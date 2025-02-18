@@ -58,6 +58,25 @@ func (bm BallotMode[T]) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// BigIntsToEmulatedElementBN254 casts BallotMode[*big.Int] into a
+// BallotMode[emulated.Element[sw_bn254.ScalarField]]
+func (bm BallotMode[T]) BigIntsToEmulatedElementBN254() BallotMode[emulated.Element[sw_bn254.ScalarField]] {
+	bmbi, ok := any(bm).(BallotMode[*big.Int])
+	if !ok {
+		return BallotMode[emulated.Element[sw_bn254.ScalarField]]{}
+	}
+	return BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+		MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxCount),
+		ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](bmbi.ForceUniqueness),
+		MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxValue),
+		MinValue:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MinValue),
+		MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxTotalCost),
+		MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](bmbi.MinTotalCost),
+		CostExp:         emulated.ValueOf[sw_bn254.ScalarField](bmbi.CostExp),
+		CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](bmbi.CostFromWeight),
+	}
+}
+
 // VarsToEmulatedElementBN254 casts BallotMode[frontend.Variable] into a BallotMode[emulated.Element[sw_bn254.ScalarField]]
 func (bm BallotMode[T]) VarsToEmulatedElementBN254(api frontend.API) BallotMode[emulated.Element[sw_bn254.ScalarField]] {
 	bmv, ok := any(bm).(BallotMode[frontend.Variable])
@@ -103,54 +122,16 @@ func DeserializeBallotMode(data []byte) (BallotMode[*big.Int], error) {
 
 // BallotModeToCircuit converts a BallotMode to a circuit BallotMode which can
 // be implemented with different base types.
-func BallotModeToCircuit[T *big.Int | emulated.Element[sw_bn254.ScalarField] | frontend.Variable](b types.BallotMode) BallotMode[T] {
-	var (
-		bMaxCount        = big.NewInt(int64(b.MaxCount))
-		bForceUniqueness = BoolToBigInt(b.ForceUniqueness)
-		bMaxValue        = b.MaxValue.MathBigInt()
-		bMinValue        = b.MinValue.MathBigInt()
-		bMaxTotalCost    = b.MaxTotalCost.MathBigInt()
-		bMinTotalCost    = b.MinTotalCost.MathBigInt()
-		bCostExp         = big.NewInt(int64(b.CostExponent))
-		bCostFromWeight  = BoolToBigInt(b.CostFromWeight)
-	)
-	var t T
-	switch any(t).(type) {
-	case *big.Int:
-		return BallotMode[T]{
-			MaxCount:        any(bMaxCount).(T),
-			ForceUniqueness: any(bForceUniqueness).(T),
-			MaxValue:        any(bMaxValue).(T),
-			MinValue:        any(bMinValue).(T),
-			MaxTotalCost:    any(bMaxTotalCost).(T),
-			MinTotalCost:    any(bMinTotalCost).(T),
-			CostExp:         any(bCostExp).(T),
-			CostFromWeight:  any(bCostFromWeight).(T),
-		}
-	case emulated.Element[sw_bn254.ScalarField]:
-		return BallotMode[T]{
-			MaxCount:        any(emulated.ValueOf[sw_bn254.ScalarField](bMaxCount)).(T),
-			ForceUniqueness: any(emulated.ValueOf[sw_bn254.ScalarField](bForceUniqueness)).(T),
-			MaxValue:        any(emulated.ValueOf[sw_bn254.ScalarField](bMaxValue)).(T),
-			MinValue:        any(emulated.ValueOf[sw_bn254.ScalarField](bMinValue)).(T),
-			MaxTotalCost:    any(emulated.ValueOf[sw_bn254.ScalarField](bMaxTotalCost)).(T),
-			MinTotalCost:    any(emulated.ValueOf[sw_bn254.ScalarField](bMinTotalCost)).(T),
-			CostExp:         any(emulated.ValueOf[sw_bn254.ScalarField](bCostExp)).(T),
-			CostFromWeight:  any(emulated.ValueOf[sw_bn254.ScalarField](bCostFromWeight)).(T),
-		}
-	case frontend.Variable:
-		return BallotMode[T]{
-			MaxCount:        any(frontend.Variable(bMaxCount)).(T),
-			ForceUniqueness: any(frontend.Variable(bForceUniqueness)).(T),
-			MaxValue:        any(frontend.Variable(bMaxValue)).(T),
-			MinValue:        any(frontend.Variable(bMinValue)).(T),
-			MaxTotalCost:    any(frontend.Variable(bMaxTotalCost)).(T),
-			MinTotalCost:    any(frontend.Variable(bMinTotalCost)).(T),
-			CostExp:         any(frontend.Variable(bCostExp)).(T),
-			CostFromWeight:  any(frontend.Variable(bCostFromWeight)).(T),
-		}
-	default:
-		return BallotMode[T]{}
+func BallotModeToCircuit(b types.BallotMode) BallotMode[*big.Int] {
+	return BallotMode[*big.Int]{
+		MaxCount:        big.NewInt(int64(b.MaxCount)),
+		ForceUniqueness: BoolToBigInt(b.ForceUniqueness),
+		MaxValue:        b.MaxValue.MathBigInt(),
+		MinValue:        b.MinValue.MathBigInt(),
+		MaxTotalCost:    b.MaxTotalCost.MathBigInt(),
+		MinTotalCost:    b.MinTotalCost.MathBigInt(),
+		CostExp:         big.NewInt(int64(b.CostExponent)),
+		CostFromWeight:  BoolToBigInt(b.CostFromWeight),
 	}
 }
 
@@ -260,33 +241,8 @@ func EncryptionKeyFromECCPoint(p ecc.Point) EncryptionKey[*big.Int] {
 	return EncryptionKey[*big.Int]{PubKey: [2]*big.Int{ekX, ekY}}
 }
 
-func EncryptionKeyToCircuit[T *big.Int | emulated.Element[sw_bn254.ScalarField] | frontend.Variable](k types.EncryptionKey) EncryptionKey[T] {
-	var t T
-	switch any(t).(type) {
-	case *big.Int:
-		return EncryptionKey[T]{
-			PubKey: [2]T{
-				any(k.X).(T),
-				any(k.Y).(T),
-			},
-		}
-	case emulated.Element[sw_bn254.ScalarField]:
-		return EncryptionKey[T]{
-			PubKey: [2]T{
-				any(emulated.ValueOf[sw_bn254.ScalarField](k.X)).(T),
-				any(emulated.ValueOf[sw_bn254.ScalarField](k.Y)).(T),
-			},
-		}
-	case frontend.Variable:
-		return EncryptionKey[T]{
-			PubKey: [2]T{
-				any(frontend.Variable(k.X)).(T),
-				any(frontend.Variable(k.Y)).(T),
-			},
-		}
-	default:
-		return EncryptionKey[T]{}
-	}
+func EncryptionKeyToCircuit(k types.EncryptionKey) EncryptionKey[*big.Int] {
+	return EncryptionKey[*big.Int]{PubKey: [2]*big.Int{k.X, k.Y}}
 }
 
 // Process is a struct that contains the common inputs for a process.
