@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/processor"
 	"github.com/vocdoni/vocdoni-z-sandbox/service"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
@@ -52,7 +54,7 @@ func NewTestClient(port int) (*client.HTTPclient, error) {
 	return client.New(fmt.Sprintf("http://127.0.0.1:%d", port))
 }
 
-func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *web3.Contracts) {
+func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *storage.Storage, *web3.Contracts) {
 	log.Infow("starting Geth docker compose")
 	compose, err := tc.NewDockerCompose("docker/docker-compose.yml")
 	qt.Assert(t, err, qt.IsNil)
@@ -75,6 +77,13 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 	kv := memdb.New()
 	stg := storage.New(kv)
 
+	voteProcessor := processor.NewVoteProcessor(stg)
+	voteProcessor.Start(ctx)
+	t.Cleanup(func() {
+		err := voteProcessor.Stop()
+		qt.Assert(t, err, qt.IsNil)
+	})
+
 	pm := service.NewProcessMonitor(contracts, stg, time.Second*2)
 	if err := pm.Start(ctx); err != nil {
 		log.Fatal(err)
@@ -85,7 +94,7 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *we
 	qt.Assert(t, err, qt.IsNil)
 	t.Cleanup(api.Stop)
 
-	return api, contracts
+	return api, stg, contracts
 }
 
 func createCensus(c *qt.C, cli *client.HTTPclient, size int) ([]byte, []*api.CensusParticipant, []*ethereum.SignKeys) {
@@ -215,11 +224,10 @@ func createProcess(c *qt.C, contracts *web3.Contracts, cli *client.HTTPclient, c
 	return pid, encryptionKeys
 }
 
-func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKey,
-	address types.HexBytes, signer *ethereum.SignKeys,
-) api.Vote {
-	encKey := new(bjj.BJJ).SetPoint(encryptionKey.X, encryptionKey.Y)
-	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), encKey)
+func createVote(c *qt.C, pid *types.ProcessID, encKey *types.EncryptionKey, signer *ethereum.SignKeys) api.Vote {
+	bbjEncKey := new(bjj.BJJ).SetPoint(encKey.X, encKey.Y)
+	address := signer.Address().Bytes()
+	votedata, err := ballotprooftest.BallotProofForTest(address, pid.Marshal(), bbjEncKey)
 	c.Assert(err, qt.IsNil)
 	// convert the circom inputs hash to the field of the curve used by the
 	// circuit as input for MIMC hash
@@ -227,6 +235,9 @@ func createVote(c *qt.C, pid *types.ProcessID, encryptionKey *types.EncryptionKe
 	// sign the inputs hash with the private key
 	rSign, sSign, err := ballotprooftest.SignECDSAForTest(&signer.Private, blsCircomInputsHash)
 	c.Assert(err, qt.IsNil)
+
+	c.Assert(os.WriteFile("debug_proof.json", []byte(votedata.Proof), 0o644), qt.IsNil)
+	c.Assert(os.WriteFile("debug_pub_inputs.json", []byte(votedata.PubInputs), 0o644), qt.IsNil)
 
 	circomProof, _, err := circuits.Circom2GnarkProof(votedata.Proof, votedata.PubInputs)
 	c.Assert(err, qt.IsNil)

@@ -9,6 +9,7 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/api"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
@@ -22,7 +23,7 @@ func TestIntegration(t *testing.T) {
 
 	// Setup
 	ctx := context.Background()
-	apiSrv, contracts := NewTestService(t, ctx)
+	apiSrv, stg, contracts := NewTestService(t, ctx)
 	_, port := apiSrv.HostPort()
 	cli, err := NewTestClient(port)
 	c.Assert(err, qt.IsNil)
@@ -61,15 +62,21 @@ func TestIntegration(t *testing.T) {
 	})
 
 	c.Run("create vote", func(c *qt.C) {
+		// load ballot proof artifacts
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
+		c.Assert(voteverifier.Artifacts.DownloadAll(ctx), qt.IsNil)
+
 		// create census with 10 participants
-		root, participants, signers := createCensus(c, cli, 10)
+		root, _, signers := createCensus(c, cli, 10)
 		// create process
 		mockMode := circuits.MockBallotMode()
 		ballotMode := types.BallotMode{
 			MaxCount:        uint8(mockMode.MaxCount.Uint64()),
 			ForceUniqueness: mockMode.ForceUniqueness.Uint64() == 1,
 			MaxValue:        (*types.BigInt)(mockMode.MaxValue),
-			MinValue:        (*types.BigInt)(mockMode.MaxValue),
+			MinValue:        (*types.BigInt)(mockMode.MinValue),
 			MaxTotalCost:    (*types.BigInt)(mockMode.MaxTotalCost),
 			MinTotalCost:    (*types.BigInt)(mockMode.MinTotalCost),
 			CostFromWeight:  mockMode.CostFromWeight.Uint64() == 1,
@@ -77,21 +84,31 @@ func TestIntegration(t *testing.T) {
 		}
 		pid, encryptionKey := createProcess(c, contracts, cli, root, ballotMode)
 		// generate a vote for the first participant
-		vote := createVote(c, pid, encryptionKey, participants[0].Key, signers[0])
+		vote := createVote(c, pid, encryptionKey, signers[0])
 		// generate census proof for first participant
-		censusProof := generateCensusProof(c, cli, root, participants[0].Key)
+		censusProof := generateCensusProof(c, cli, root, signers[0].Address().Bytes())
 		c.Assert(censusProof, qt.Not(qt.IsNil))
 		c.Assert(censusProof.Siblings, qt.IsNotNil)
 		vote.CensusProof = *censusProof
-
-		// load ballot proof artifacts
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
 
 		body, status, err := cli.Request("POST", vote, nil, api.VotesEndpoint)
 		c.Assert(err, qt.IsNil)
 		c.Assert(status, qt.Equals, 200)
 		c.Log("Vote created", string(body))
+
+		// wait to process the vote
+		voteWaiter, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		for {
+			select {
+			case <-voteWaiter.Done():
+				c.Fatal("timeout waiting for vote to be processed")
+			default:
+				if stg.CountVerifiedBallots(pid.Marshal()) == 1 {
+					return
+				}
+				time.Sleep(time.Second)
+			}
+		}
 	})
 }

@@ -10,11 +10,11 @@ const (
 	BallotProofVerificationKeyHash = "3e7a0b24250c6fea97c0950445cf104091c00bfd32796e8e8753955ab015429a"
 	// CircuitArtifacts constants for circuits/voteverifier package
 	VoteVerifierCircuitURL          = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.ccs"
-	VoteVerifierCircuitHash         = "e6e5e27a311c04ffe7894494e614f1cf28067df357b1d55b38855b8351e01f79"
+	VoteVerifierCircuitHash         = "e379df9c2e77c6a42938de98f79f5504527e89b390e95559372ca4e08a665c93"
 	VoteVerifierProvingKeyURL       = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.pk"
-	VoteVerifierProvingKeyHash      = "2575d26935cae94213c8921f9613f5deded5f815a857fb8813571da076d0d114"
+	VoteVerifierProvingKeyHash      = "ad44cd37c57098835bbf1c6ebd195a317a8fd1ce182c72010936c945c0142d12"
 	VoteVerifierVerificationKeyURL  = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/voteverifier.vk"
-	VoteVerifierVerificationKeyHash = "8d60c75eec1ef373d01b8d26b392796a5764be097148ff949ab2801ba0d56e8a"
+	VoteVerifierVerificationKeyHash = "a58a4917f3b7676f5e277250d90a1e6ec72af0fde207c322397c43819e1ece95"
 	// CircuitArtifacts constants for circuits/aggregator package
 	AgregatorCircuitURL           = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/aggregator.ccs"
 	AggregatorCircuitHash         = "e48d63c1c13cdc100b7c66b75fbc2a9d4b284a2998a1357b413dc1e3c618864d"

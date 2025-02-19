@@ -64,7 +64,7 @@ func (a *API) newProcess(w http.ResponseWriter, r *http.Request) {
 	defer st.Close()
 
 	if err := st.Initialize(p.CensusRoot,
-		circuits.BallotModeFromBM(p.BallotMode).Bytes(),
+		circuits.BallotModeToCircuit(p.BallotMode).Bytes(),
 		circuits.EncryptionKeyFromECCPoint(publicKey).Bytes()); err != nil {
 		ErrGenericInternalServerError.Withf("could not initialize state: %v", err).Write(w)
 		return

@@ -15,6 +15,12 @@ type BallotSignature struct {
 	S HexBytes `json:"s"`
 }
 
+// Valid method checks if the BallotSignature is valid. A signature is valid if
+// both R and S values are not nil.
+func (sig *BallotSignature) Valid() bool {
+	return sig.R != nil && sig.S != nil
+}
+
 // Bin returns the bytes of the binary representation of the signature, which
 // is build by appending the R and S values as byte slices.
 func (sig *BallotSignature) Bin() []byte {

@@ -58,6 +58,25 @@ func (bm BallotMode[T]) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// BigIntsToEmulatedElementBN254 casts BallotMode[*big.Int] into a
+// BallotMode[emulated.Element[sw_bn254.ScalarField]]
+func (bm BallotMode[T]) BigIntsToEmulatedElementBN254() BallotMode[emulated.Element[sw_bn254.ScalarField]] {
+	bmbi, ok := any(bm).(BallotMode[*big.Int])
+	if !ok {
+		return BallotMode[emulated.Element[sw_bn254.ScalarField]]{}
+	}
+	return BallotMode[emulated.Element[sw_bn254.ScalarField]]{
+		MaxCount:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxCount),
+		ForceUniqueness: emulated.ValueOf[sw_bn254.ScalarField](bmbi.ForceUniqueness),
+		MaxValue:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxValue),
+		MinValue:        emulated.ValueOf[sw_bn254.ScalarField](bmbi.MinValue),
+		MaxTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](bmbi.MaxTotalCost),
+		MinTotalCost:    emulated.ValueOf[sw_bn254.ScalarField](bmbi.MinTotalCost),
+		CostExp:         emulated.ValueOf[sw_bn254.ScalarField](bmbi.CostExp),
+		CostFromWeight:  emulated.ValueOf[sw_bn254.ScalarField](bmbi.CostFromWeight),
+	}
+}
+
 // VarsToEmulatedElementBN254 casts BallotMode[frontend.Variable] into a BallotMode[emulated.Element[sw_bn254.ScalarField]]
 func (bm BallotMode[T]) VarsToEmulatedElementBN254(api frontend.API) BallotMode[emulated.Element[sw_bn254.ScalarField]] {
 	bmv, ok := any(bm).(BallotMode[frontend.Variable])
@@ -101,7 +120,9 @@ func DeserializeBallotMode(data []byte) (BallotMode[*big.Int], error) {
 	}, nil
 }
 
-func BallotModeFromBM(b types.BallotMode) BallotMode[*big.Int] {
+// BallotModeToCircuit converts a BallotMode to a circuit BallotMode which can
+// be implemented with different base types.
+func BallotModeToCircuit(b types.BallotMode) BallotMode[*big.Int] {
 	return BallotMode[*big.Int]{
 		MaxCount:        big.NewInt(int64(b.MaxCount)),
 		ForceUniqueness: BoolToBigInt(b.ForceUniqueness),
@@ -218,6 +239,10 @@ func DeserializeEncryptionKey(data []byte) (EncryptionKey[*big.Int], error) {
 func EncryptionKeyFromECCPoint(p ecc.Point) EncryptionKey[*big.Int] {
 	ekX, ekY := p.Point()
 	return EncryptionKey[*big.Int]{PubKey: [2]*big.Int{ekX, ekY}}
+}
+
+func EncryptionKeyToCircuit(k types.EncryptionKey) EncryptionKey[*big.Int] {
+	return EncryptionKey[*big.Int]{PubKey: [2]*big.Int{k.X, k.Y}}
 }
 
 // Process is a struct that contains the common inputs for a process.
@@ -386,10 +411,10 @@ type EmulatedVote[F emulated.FieldParams] struct {
 
 // Serialize returns a slice with the vote parameters in order
 //
-//	EmulatedVote.Nullifier
-//	EmulatedVote.Ballot
 //	EmulatedVote.Address
 //	EmulatedVote.Commitment
+//	EmulatedVote.Nullifier
+//	EmulatedVote.Ballot
 func (z *EmulatedVote[F]) Serialize() []emulated.Element[F] {
 	list := []emulated.Element[F]{}
 	list = append(list, z.Address)

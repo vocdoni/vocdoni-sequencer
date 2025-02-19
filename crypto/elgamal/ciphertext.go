@@ -21,7 +21,8 @@ const (
 	SerializedBallotSize = circuits.FieldsPerBallot * sizeCiphertext
 )
 
-// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and C2.Y coords
+// BigIntsPerCiphertext is 4 since each Ciphertext has C1.X, C1.Y, C2.X and
+// C2.Y coords
 const BigIntsPerCiphertext = 4
 
 // Ciphertext represents an ElGamal encrypted message with homomorphic properties.

@@ -10,6 +10,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc"
+	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/curves"
 )
 
 type Ballot struct {
@@ -27,6 +28,24 @@ func NewBallot(curve ecc.Point) *Ballot {
 		z.Ciphertexts[i] = NewCiphertext(curve)
 	}
 	return z
+}
+
+// Valid method checks if the Ballot is valid. A ballot is valid if all its
+// Ciphertexts are valid (not nil) and the CurveType is supported.
+func (z *Ballot) Valid() bool {
+	for _, c := range z.Ciphertexts {
+		if c == nil {
+			return false
+		}
+	}
+	validCurve := false
+	for _, curve := range curves.Curves() {
+		if z.CurveType == curve {
+			validCurve = true
+			break
+		}
+	}
+	return validCurve
 }
 
 // Encrypt encrypts a message using the public key provided as elliptic curve point.

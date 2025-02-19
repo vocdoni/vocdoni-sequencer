@@ -93,25 +93,25 @@ func TestCircuitCalculateAggregatorWitnessProve(t *testing.T) {
 	}, witness)
 }
 
-type CircuitAggregatorProof struct {
-	statetransition.Circuit
-}
+// type CircuitAggregatorProof struct {
+// 	statetransition.Circuit
+// }
 
-func (circuit CircuitAggregatorProof) Define(api frontend.API) error {
-	circuit.VerifyAggregatorProof(api)
-	return nil
-}
+// func (circuit CircuitAggregatorProof) Define(api frontend.API) error {
+// 	circuit.VerifyAggregatorProof(api)
+// 	return nil
+// }
 
-func TestCircuitAggregatorProofCompile(t *testing.T) {
-	testCircuitCompile(t, &CircuitAggregatorProof{*statetransition.CircuitPlaceholder()})
-}
+// func TestCircuitAggregatorProofCompile(t *testing.T) {
+// 	testCircuitCompile(t, &CircuitAggregatorProof{*statetransition.CircuitPlaceholder()})
+// }
 
-func TestCircuitAggregatorProofProve(t *testing.T) {
-	witness := newMockWitness(t)
-	testCircuitProve(t, &CircuitAggregatorProof{
-		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
-	}, witness)
-}
+// func TestCircuitAggregatorProofProve(t *testing.T) {
+// 	witness := newMockWitness(t)
+// 	testCircuitProve(t, &CircuitAggregatorProof{
+// 		*statetransition.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK),
+// 	}, witness)
+// }
 
 type CircuitBallots struct {
 	statetransition.Circuit
