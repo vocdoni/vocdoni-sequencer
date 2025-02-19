@@ -32,8 +32,7 @@ func GenerateWitness(o *state.State) (*statetransition.Circuit, error) {
 		CostExp:         o.Process.BallotMode.CostExp,
 		CostFromWeight:  o.Process.BallotMode.CostFromWeight,
 	}
-	witness.Process.EncryptionKey.PubKey[0] = o.Process.EncryptionKey.PubKey[0]
-	witness.Process.EncryptionKey.PubKey[1] = o.Process.EncryptionKey.PubKey[1]
+	witness.Process.EncryptionKey = o.Process.EncryptionKey.AsVar()
 
 	for i, v := range o.PaddedVotes() {
 		witness.Votes[i].Nullifier = arbo.BytesToBigInt(v.Nullifier)

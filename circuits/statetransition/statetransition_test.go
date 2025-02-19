@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/logger"
@@ -47,6 +48,81 @@ func testCircuitProve(t *testing.T, circuit, witness frontend.Circuit) {
 		test.WithBackends(backend.GROTH16))
 }
 
+func testCompileAndGenerateSolidityAssets(t *testing.T, c, w frontend.Circuit) {
+	assert := test.NewAssert(t)
+	// compile the circuit
+	ccs, err := frontend.Compile(circuits.StateTransitionCurve.ScalarField(), r1cs.NewBuilder, c)
+	assert.NoError(err)
+	// generate witness
+	witness, err := frontend.NewWitness(w, circuits.StateTransitionCurve.ScalarField())
+	assert.NoError(err)
+	// get public witness
+	pubWitness, err := witness.Public()
+	assert.NoError(err)
+	// generate proving and verifying keys
+	pk, vk, err := groth16.Setup(ccs)
+	assert.NoError(err)
+	// generate proof
+	proof, err := groth16.Prove(ccs, pk, witness)
+	assert.NoError(err)
+	// generate solidity verifier
+	solfd, err := os.Create("statetransition_verifier.sol")
+	assert.NoError(err)
+	defer solfd.Close()
+	// write verifier
+	err = vk.ExportSolidity(solfd)
+	assert.NoError(err)
+	// write proof
+	prooffd, err := os.Create("statetransition_proof")
+	assert.NoError(err)
+	defer prooffd.Close()
+	_, err = proof.WriteTo(prooffd)
+	assert.NoError(err)
+	// write public witness
+	pubWitnessfd, err := os.Create("statetransition_public_witness")
+	assert.NoError(err)
+	defer pubWitnessfd.Close()
+	_, err = pubWitness.WriteTo(pubWitnessfd)
+	assert.NoError(err)
+	// generate also the json of the public witness
+	schema, err := frontend.NewSchema(w)
+	assert.NoError(err)
+	jsonWitness, err := pubWitness.ToJSON(schema)
+	assert.NoError(err)
+	pubWitnessJSONfd, err := os.Create("statetransition_public_witness.json")
+	assert.NoError(err)
+	defer pubWitnessJSONfd.Close()
+	_, err = pubWitnessJSONfd.Write(jsonWitness)
+	assert.NoError(err)
+}
+
+func TestCircuit2Solidity(t *testing.T) {
+	if os.Getenv("RELEASE_SOLIDITY") == "" || os.Getenv("RELEASE_SOLIDITY") == "false" {
+		t.Skip("skipping circuit tests...")
+	}
+
+	// WARNING: Some parts of the circuit makes that the witness cannot be
+	// generated. To make it works we need to avoid the inclusion of the
+	// aggregator proof (at least the dummy one) in the witness, and skip the
+	// following circuit functions:
+	//  - VerifyAggregatorProof
+	//  - VerifyLeafHashes
+	//  - VerifyBallots
+
+	s := newMockState(t)
+
+	witness := newMockTransitionWithVotes(t, s, false,
+		newMockVote(1, 10),  // add vote 1
+		newMockVote(2, 20),  // add vote 2
+		newMockVote(1, 100), // overwrite vote 1
+		newMockVote(3, 30),  // add vote 3
+		newMockVote(4, 40),  // add vote 4
+	)
+
+	circuit := statetransitiontest.CircuitPlaceholderWithProof(&witness.AggregatorProof, &witness.AggregatorVK)
+	testCompileAndGenerateSolidityAssets(t, circuit, witness)
+}
+
 func TestCircuitCompile(t *testing.T) {
 	testCircuitCompile(t, statetransitiontest.CircuitPlaceholder())
 }
@@ -54,7 +130,7 @@ func TestCircuitCompile(t *testing.T) {
 func TestCircuitProve(t *testing.T) {
 	s := newMockState(t)
 	{
-		witness := newMockTransitionWithVotes(t, s,
+		witness := newMockTransitionWithVotes(t, s, true,
 			newMockVote(1, 10), // add vote 1
 			newMockVote(2, 20), // add vote 2
 		)
@@ -63,7 +139,7 @@ func TestCircuitProve(t *testing.T) {
 		debugLog(t, witness)
 	}
 	{
-		witness := newMockTransitionWithVotes(t, s,
+		witness := newMockTransitionWithVotes(t, s, true,
 			newMockVote(1, 100), // overwrite vote 1
 			newMockVote(3, 30),  // add vote 3
 			newMockVote(4, 40),  // add vote 4
@@ -201,7 +277,7 @@ func TestCircuitLeafHashesProve(t *testing.T) {
 	debugLog(t, witness)
 }
 
-func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vote) *statetransition.Circuit {
+func newMockTransitionWithVotes(t *testing.T, s *state.State, withProof bool, votes ...*state.Vote) *statetransition.Circuit {
 	if err := s.StartBatch(); err != nil {
 		t.Fatal(err)
 	}
@@ -221,22 +297,25 @@ func newMockTransitionWithVotes(t *testing.T, s *state.State, votes ...*state.Vo
 		t.Fatal(err)
 	}
 
-	inputsHash, err := s.AggregatorWitnessHash()
-	if err != nil {
-		t.Fatal(err)
+	if withProof {
+		inputsHash, err := s.AggregatorWitnessHash()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		proof, vk, err := statetransitiontest.DummyAggProof(inputsHash, s.BallotCount())
+		if err != nil {
+			t.Fatal(err)
+		}
+		witness.AggregatorProof = *proof
+		witness.AggregatorVK = *vk
 	}
 
-	proof, vk, err := statetransitiontest.DummyAggProof(inputsHash, s.BallotCount())
-	if err != nil {
-		t.Fatal(err)
-	}
-	witness.AggregatorProof = *proof
-	witness.AggregatorVK = *vk
 	return witness
 }
 
 func newMockWitness(t *testing.T) *statetransition.Circuit {
-	return newMockTransitionWithVotes(t, newMockState(t),
+	return newMockTransitionWithVotes(t, newMockState(t), true,
 		newMockVote(1, 10),
 		newMockVote(2, 20),
 	)
