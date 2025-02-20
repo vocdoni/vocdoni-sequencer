@@ -31,7 +31,7 @@ func TestVerifySingleVoteCircuit(t *testing.T) {
 	now := time.Now()
 	assert.SolvingSucceeded(&placeholder, &assignments[0],
 		test.WithCurves(ecc.BLS12_377),
-		test.WithBackends(backend.GROTH16))
+		test.WithBackends(backend.PLONK))
 	fmt.Println("proving tooks", time.Since(now))
 }
 
