@@ -58,7 +58,8 @@ func CalculateVotersHashes(api frontend.API,
 	// initialize the hashes of the voters
 	votersHashes := [VotesPerBatch]emulated.Element[sw_bn254.ScalarField]{}
 	for i := 0; i < VotesPerBatch; i++ {
-		votersHashes[i] = VoterHashFn(api, VoteVerifierInputs(api, process, votes[i])...)
+		vinputs := VoteVerifierInputs(api, process, votes[i])
+		votersHashes[i] = VoterHashFn(api, vinputs...)
 	}
 	return VotersHashes{votersHashes}
 }

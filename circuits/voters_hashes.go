@@ -46,6 +46,11 @@ func (vh VotersHashes) AssertSumIsEqual(api frontend.API, expected emulated.Elem
 	if err := hFn.Write(vh.Hashes[:]...); err != nil {
 		FrontendError(api, "failed to write inputs to emulated MiMC hash function", err)
 	}
+	// sumPacked, err := utils.PackScalarToVar(api, hFn.Sum())
+	// if err != nil {
+	// 	FrontendError(api, "failed to pack voter hash", err)
+	// }
+	// api.Println(sumPacked)
 	hFn.AssertSumIsEqual(expected)
 }
 

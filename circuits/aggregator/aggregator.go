@@ -32,6 +32,7 @@ import (
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/vocdoni/gnark-crypto-primitives/utils"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
@@ -94,6 +95,11 @@ func (c AggregatorCircuit) checkProofs(api frontend.API, hashes circuits.VotersH
 func (c AggregatorCircuit) Define(api frontend.API) error {
 	// calculate the voters hashes
 	hashes := circuits.CalculateVotersHashes(api, c.Process, c.Votes[:])
+	expPacked, err := utils.PackScalarToVar(api, c.InputsHash)
+	if err != nil {
+		circuits.FrontendError(api, "failed to pack voter hash", err)
+	}
+	api.Println(expPacked)
 	// check the inputs hash matches the calculated one from the voters hashes
 	hashes.AssertSumIsEqual(api, c.InputsHash)
 	// check all the proofs are valid and match the voters hashes as inputs
