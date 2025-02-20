@@ -24,7 +24,6 @@ import (
 	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 	"github.com/vocdoni/vocdoni-z-sandbox/crypto/ethereum"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
-	"github.com/vocdoni/vocdoni-z-sandbox/processor"
 	"github.com/vocdoni/vocdoni-z-sandbox/service"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
@@ -77,12 +76,11 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *st
 	kv := memdb.New()
 	stg := storage.New(kv)
 
-	voteProcessor := processor.NewVoteProcessor(stg)
-	voteProcessor.Start(ctx)
-	t.Cleanup(func() {
-		err := voteProcessor.Stop()
-		qt.Assert(t, err, qt.IsNil)
-	})
+	vp := service.NewVoteProcessor(stg)
+	if err := vp.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+	t.Cleanup(vp.Stop)
 
 	pm := service.NewProcessMonitor(contracts, stg, time.Second*2)
 	if err := pm.Start(ctx); err != nil {

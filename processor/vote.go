@@ -21,6 +21,8 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
+// VoteProcessor is a processor that processes ballots, generating proofs of
+// their validity.
 type VoteProcessor struct {
 	stg    *storage.Storage
 	ctx    context.Context
@@ -41,35 +43,41 @@ func NewVoteProcessor(stg *storage.Storage) *VoteProcessor {
 // storage. It will stop processing ballots when the context is cancelled.
 func (p *VoteProcessor) Start(ctx context.Context) error {
 	p.ctx, p.cancel = context.WithCancel(ctx)
-	// run the verifier in background until its context is cancelled
+	ticker := time.NewTicker(time.Second)
+
 	go func() {
+		defer ticker.Stop()
 		for {
-			select {
-			case <-p.ctx.Done():
-				return
-			default:
-				// get the next ballot
-				ballot, key, err := p.stg.NextBallot()
-				if err != nil {
-					if err != storage.ErrNoMoreElements {
-						log.Errorf("failed to get next ballot: %v", err)
+			// Try to fetch the next ballot.
+			ballot, key, err := p.stg.NextBallot()
+			if err != nil {
+				// Log errors other than "no work".
+				if err != storage.ErrNoMoreElements {
+					log.Errorw(err, "failed to get next ballot")
+				} else {
+					// If no ballot is available, wait for the next tick or context cancellation.
+					select {
+					case <-ticker.C:
+					case <-p.ctx.Done():
+						return
 					}
-					break
 				}
-				log.Debugw("new ballot to process", "address", ballot.Address.String())
-				// process the ballot
-				verifiedBallot, err := p.ProcessBallot(ballot)
-				if err != nil {
-					log.Errorf("failed to process ballot: %v", err)
-					break
-				}
-				log.Debugw("ballot processed", "address", ballot.Address.String())
-				// store the verified ballot
-				if err := p.stg.MarkBallotDone(key, verifiedBallot); err != nil {
-					log.Errorw(err, "failed to mark ballot done")
-				}
+				continue
 			}
-			time.Sleep(1 * time.Second)
+
+			log.Debugw("new ballot to process", "address", ballot.Address.String())
+			startTime := time.Now()
+
+			verifiedBallot, err := p.ProcessBallot(ballot)
+			if err != nil {
+				log.Warnw("marking ballot as invalid", "address", ballot.Address.String(), "error", err.Error())
+				continue
+			}
+
+			log.Debugw("ballot processed", "address", ballot.Address.String(), "took", time.Since(startTime).String())
+			if err := p.stg.MarkBallotDone(key, verifiedBallot); err != nil {
+				log.Errorw(err, "failed to mark ballot done")
+			}
 		}
 	}()
 	return nil
@@ -130,16 +138,23 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress voter public key: %w", err)
 	}
+
+	// transform the inputs to big Ints
+	address := b.Address.BigInt().MathBigInt()
+	commitment := b.Commitment.BigInt().MathBigInt()
+	nullifier := b.Nullifier.BigInt().MathBigInt()
+	voterWeight := b.VoterWeight.BigInt().MathBigInt()
+
 	// set the circuit assignment
 	assignment := voteverifier.VerifyVoteCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),
 		Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
-			Address:    emulated.ValueOf[sw_bn254.ScalarField](b.Address.BigInt().MathBigInt()),
-			Commitment: emulated.ValueOf[sw_bn254.ScalarField](b.Commitment.BigInt().MathBigInt()),
-			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](b.Nullifier.BigInt().MathBigInt()),
+			Address:    emulated.ValueOf[sw_bn254.ScalarField](address),
+			Commitment: emulated.ValueOf[sw_bn254.ScalarField](commitment),
+			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](nullifier),
 			Ballot:     *b.EncryptedBallot.ToGnarkEmulatedBN254(),
 		},
-		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](b.VoterWeight.BigInt().MathBigInt()),
+		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](voterWeight),
 		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
 			ID:            emulated.ValueOf[sw_bn254.ScalarField](processID),
 			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](root),
@@ -158,18 +173,21 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 		},
 		CircomProof: b.BallotProof,
 	}
+
 	// generate the final proof
 	proof, err := assignment.Prove()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
+
 	return &storage.VerifiedBallot{
 		ProcessID:       b.ProcessID,
-		VoterWeight:     b.CensusProof.Weight.MathBigInt(),
-		Nullifier:       b.Nullifier,
-		Commitment:      b.Commitment,
+		VoterWeight:     voterWeight,
+		Nullifier:       nullifier,
+		Commitment:      commitment,
 		EncryptedBallot: b.EncryptedBallot,
-		Address:         b.Address,
+		Address:         address,
 		Proof:           proof,
+		InputsHash:      inputHash,
 	}, nil
 }
