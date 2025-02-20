@@ -62,7 +62,7 @@ func TestBallotQueue(t *testing.T) {
 	// Mark the first ballot done, provide a verified ballot
 	verified1 := &VerifiedBallot{
 		ProcessID:   processID.Marshal(),
-		Nullifier:   b1.Nullifier,
+		Nullifier:   b1.Nullifier.BigInt().MathBigInt(),
 		VoterWeight: big.NewInt(42),
 	}
 	c.Assert(st.MarkBallotDone(b1key, verified1), qt.IsNil)
@@ -84,7 +84,7 @@ func TestBallotQueue(t *testing.T) {
 	// Mark second ballot done as well
 	verified2 := &VerifiedBallot{
 		ProcessID:   processID.Marshal(),
-		Nullifier:   b2.Nullifier,
+		Nullifier:   b2.Nullifier.BigInt().MathBigInt(),
 		VoterWeight: big.NewInt(24),
 	}
 	c.Assert(st.MarkBallotDone(b2key, verified2), qt.IsNil)

@@ -138,16 +138,23 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress voter public key: %w", err)
 	}
+
+	// transform the inputs to big Ints
+	address := b.Address.BigInt().MathBigInt()
+	commitment := b.Commitment.BigInt().MathBigInt()
+	nullifier := b.Nullifier.BigInt().MathBigInt()
+	voterWeight := b.VoterWeight.BigInt().MathBigInt()
+
 	// set the circuit assignment
 	assignment := voteverifier.VerifyVoteCircuit{
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),
 		Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
-			Address:    emulated.ValueOf[sw_bn254.ScalarField](b.Address.BigInt().MathBigInt()),
-			Commitment: emulated.ValueOf[sw_bn254.ScalarField](b.Commitment.BigInt().MathBigInt()),
-			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](b.Nullifier.BigInt().MathBigInt()),
+			Address:    emulated.ValueOf[sw_bn254.ScalarField](address),
+			Commitment: emulated.ValueOf[sw_bn254.ScalarField](commitment),
+			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](nullifier),
 			Ballot:     *b.EncryptedBallot.ToGnarkEmulatedBN254(),
 		},
-		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](b.VoterWeight.BigInt().MathBigInt()),
+		UserWeight: emulated.ValueOf[sw_bn254.ScalarField](voterWeight),
 		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
 			ID:            emulated.ValueOf[sw_bn254.ScalarField](processID),
 			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](root),
@@ -166,18 +173,21 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 		},
 		CircomProof: b.BallotProof,
 	}
+
 	// generate the final proof
 	proof, err := assignment.Prove()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
+
 	return &storage.VerifiedBallot{
 		ProcessID:       b.ProcessID,
-		VoterWeight:     b.CensusProof.Weight.MathBigInt(),
-		Nullifier:       b.Nullifier,
-		Commitment:      b.Commitment,
+		VoterWeight:     voterWeight,
+		Nullifier:       nullifier,
+		Commitment:      commitment,
 		EncryptedBallot: b.EncryptedBallot,
-		Address:         b.Address,
+		Address:         address,
 		Proof:           proof,
+		InputsHash:      inputHash,
 	}, nil
 }

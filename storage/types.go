@@ -26,10 +26,11 @@ type EncryptionKeys struct {
 type VerifiedBallot struct {
 	ProcessID       types.HexBytes `json:"processId"`
 	VoterWeight     *big.Int       `json:"voterWeight"`
-	Nullifier       types.HexBytes `json:"nullifier"`
-	Commitment      types.HexBytes `json:"commitment"`
+	Nullifier       *big.Int       `json:"nullifier"`
+	Commitment      *big.Int       `json:"commitment"`
 	EncryptedBallot elgamal.Ballot `json:"encryptedBallot"`
-	Address         types.HexBytes `json:"address"`
+	Address         *big.Int       `json:"address"`
+	InputsHash      *big.Int       `json:"inputsHash"`
 	Proof           groth16.Proof  `json:"proof"`
 }
 
