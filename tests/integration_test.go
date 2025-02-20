@@ -11,11 +11,15 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
+	"github.com/vocdoni/vocdoni-z-sandbox/service"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
 func init() {
 	log.Init(log.LogLevelDebug, "stdout", nil)
+	if err := service.DownloadArtifacts(20 * time.Minute); err != nil {
+		log.Errorw(err, "failed to download artifacts")
+	}
 }
 
 func TestIntegration(t *testing.T) {
@@ -63,7 +67,7 @@ func TestIntegration(t *testing.T) {
 
 	c.Run("create vote", func(c *qt.C) {
 		// load ballot proof artifacts
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
 		c.Assert(voteverifier.Artifacts.DownloadAll(ctx), qt.IsNil)
