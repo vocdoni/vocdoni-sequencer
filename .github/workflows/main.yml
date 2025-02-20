@@ -18,6 +18,7 @@ jobs:
     steps:
       - name: Print github env vars
         run: |
+          echo "HOME: $HOME"
           echo github.event_name: ${{ github.event_name }}
           echo github.ref: ${{ github.ref }}
           echo github.ref_name: ${{ github.ref_name }}
@@ -27,8 +28,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # By default, actions/checkout does a shallow clone with depth=1.
-          # For job_go_checks, we can keep that.
           fetch-depth: 1
 
       - name: Set up Go environment
@@ -68,12 +67,11 @@ jobs:
           staticcheck -debug.version
           staticcheck ./... 2> staticcheck-stderr
 
-      - name: Check staticcheck stderr (this step isn't needed because we are using actions/setup-go@v5 on GitHub hosted runner)
+      - name: Check staticcheck stderr
         run: |
           if cat staticcheck-stderr | grep "matched no packages" ; then
             echo "staticcheck step did nothing, due to https://github.com/vocdoni/vocdoni-node/issues/444"
             echo "Please re-run job."
-            # seize the opportunity to fix the underlying problem: a permissions error in ~/.cache
             epoch=$(date +%s)
             if [ -d ~/.cache ] && find ~/.cache -not -user "$(id --user)" -print0 | grep -qz . ; then
               echo "~/.cache had broken permissions, moving it away... (cache will be rebuilt with usage)"
@@ -83,36 +81,40 @@ jobs:
           fi
 
   job_go_test:
-    # We want to run on a self-hosted runner with labels: self-hosted, z
     runs-on: [self-hosted, z]
     env:
-      LOG_PANIC_ON_INVALIDCHARS: true # check that log lines contain no invalid chars
+      LOG_PANIC_ON_INVALIDCHARS: true
+      LOG_LEVEL: debug
+      DAVINCI_ARTIFACTS_DIR: ~/.cache/davinci-artifacts
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Ensure we have enough history for HEAD^
           fetch-depth: 2
 
+      - name: Cache circuit artifacts
+        uses: actions/cache@v3
+        with:
+          # Cache the artifact directory so tests don't force re-downloads.
+          path: ${{ env.DAVINCI_ARTIFACTS_DIR }}
+          key: ${{ runner.name }}-circuits-artifacts-v1
+          restore-keys: |
+            ${{ runner.os }}-circuits-artifacts-
+
       - uses: benjlevesque/short-sha@v3.0
-        # sets env.SHA to the first 7 chars of github.sha
 
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache: false
 
-      # Step to detect changes in /circuits
       - name: Check if /circuits changed
         id: check_circuits
         run: |
-          # Decide what to compare against based on event type
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For PRs, compare HEAD with base branch (fetching base if needed)
             git fetch origin ${{ github.base_ref }} --depth=1
             DIFF_TARGET="origin/${{ github.base_ref }}"
           else
-            # For pushes, attempt HEAD^
-            # If HEAD^ doesn't exist (e.g., only 1 commit), fallback to HEAD
             if git rev-parse --quiet --verify HEAD^ >/dev/null; then
               DIFF_TARGET="HEAD^"
             else
@@ -150,7 +152,6 @@ jobs:
 
       - name: Run Go test
         if: steps.go-test-race.outcome == 'skipped'
-        # quicker, non-race test in case it's a PR or push to dev
         env:
           RUN_CIRCUIT_TESTS: ${{ env.RUN_CIRCUIT_TESTS }}
         run: go test ./... -timeout=1h
