@@ -25,6 +25,7 @@ require (
 	github.com/vocdoni/contracts-z v0.0.0-20250124164653-964d70f468a8
 	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250210155802-bbf571616e03
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
+	golang.org/x/sync v0.10.0
 )
 
 require (
@@ -237,7 +238,6 @@ require (
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
