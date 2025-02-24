@@ -83,8 +83,10 @@ func (vh VotersHashes) ToWitnessBLS12377(api frontend.API, idx int, valid fronte
 	reducedHash := field.Reduce(&vh.Hashes[idx])
 	// split the hash in 4 elements, each of bls12377 element has as first
 	// limb each limb of the original bn254 hash, including the dummy elements
+	splitedHash := []emulated.Element[sw_bls12377.ScalarField]{
+		{Limbs: []frontend.Variable{valid, 0, 0, 0}},
+	}
 	dummyLimbs := []frontend.Variable{1, 0, 0, 0}
-	splitedHash := []emulated.Element[sw_bls12377.ScalarField]{}
 	for i, limb := range reducedHash.Limbs {
 		finalLimb := api.Select(valid, limb, dummyLimbs[i])
 		// store the new element with the final limb and 0 for the rest

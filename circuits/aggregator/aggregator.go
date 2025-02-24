@@ -47,9 +47,8 @@ type AggregatorCircuit struct {
 	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
 	// real vk and dummy is used for no valid proofs in the scenario where there
 	// are less valid votes than MaxVotes)
-	Proofs               [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	BaseVerificationKey  groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
-	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
+	Proofs          [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
+	VerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
 // checkProofs circuit method verifies each voter proof with the provided
@@ -67,25 +66,14 @@ func (c AggregatorCircuit) checkProofs(api frontend.API, hashes circuits.VotersH
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
 	validProofs := bits.ToBinary(api, c.ValidVotes)
-	for i := 0; i < len(c.Proofs); i++ {
-		// switch the verification key between the base and the dummy one if
-		// the proof is valid or not
-		vk, err := verifier.SwitchVerificationKey(validProofs[i],
-			[]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{
-				c.DummyVerificationKey,
-				c.BaseVerificationKey,
-			},
-		)
-		if err != nil {
-			circuits.FrontendError(api, "failed to switch verification key", err)
-		}
+	for i := range len(c.Proofs) {
 		// calculate the witness for the i-th voter
 		calculatedWitness, err := hashes.ToWitnessBLS12377(api, i, validProofs[i])
 		if err != nil {
 			circuits.FrontendError(api, "failed to calculate witness", err)
 		}
 		// verify the proof
-		if err := verifier.AssertProof(vk, c.Proofs[i], calculatedWitness); err != nil {
+		if err := verifier.AssertProof(c.VerificationKey, c.Proofs[i], calculatedWitness, groth16.WithCompleteArithmetic()); err != nil {
 			circuits.FrontendError(api, "failed to verify proof", err)
 		}
 	}

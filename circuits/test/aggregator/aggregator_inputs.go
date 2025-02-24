@@ -163,7 +163,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 ) {
 	// generate users accounts and census
 	vvData := []voteverifiertest.VoterTestData{}
-	for i := 0; i < nValidVoters; i++ {
+	for range nValidVoters {
 		privKey, pubKey, address, err := ballottest.GenECDSAaccountForTest()
 		if err != nil {
 			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("generate accounts: %w", err)
@@ -219,17 +219,6 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		if err != nil {
 			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("convert voteverifier proof: %w", err)
 		}
-		// convert the public inputs to the circuit public inputs type
-		publicWitness, err := fullWitness.Public()
-		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("convert voteverifier public inputs: %w", err)
-		}
-		err = groth16.Verify(proof, vvVk, publicWitness, stdgroth16.GetNativeVerifierOptions(
-			circuits.AggregatorCurve.ScalarField(),
-			circuits.VoteVerifierCurve.ScalarField()))
-		if err != nil {
-			return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier verify: %w", err)
-		}
 		/*
 			TODO: uncomment this block when the LocalInputsForTest function is fixed
 			if persist {
@@ -251,7 +240,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	nullifiers := circuits.BigIntArrayToN(vvInputs.Nullifiers, circuits.VotesPerBatch)
 	commitments := circuits.BigIntArrayToN(vvInputs.Commitments, circuits.VotesPerBatch)
 	hashInputs := []*big.Int{}
-	for i := 0; i < circuits.VotesPerBatch; i++ {
+	for i := range circuits.VotesPerBatch {
 		if i < nValidVoters {
 			hashInputs = append(hashInputs, vvInputs.InputsHashes[i])
 		} else {
@@ -294,6 +283,10 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 			Ballot:     *vvInputs.Ballots[i].ToGnarkEmulatedBN254(),
 		}
 	}
+	// fill assignments with dummy values
+	if err := finalAssigments.FillWithDummy(vvCCS, vvPk, ballottest.TestCircomVerificationKey, nValidVoters); err != nil {
+		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
+	}
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vvVk)
 	if err != nil {
@@ -301,15 +294,12 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	}
 	// create final placeholder
 	finalPlaceholder := aggregator.AggregatorCircuit{
-		Proofs:              [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
-		BaseVerificationKey: fixedVk,
+		Proofs:          [circuits.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{},
+		VerificationKey: fixedVk,
 	}
-	// fill placeholder and witness with dummy circuits
-	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters, persist)
-	if err != nil {
-		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, fmt.Errorf("voteverifier dummy fill: %w", err)
+	for i := range circuits.VotesPerBatch {
+		finalPlaceholder.Proofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](vvCCS)
 	}
-
 	// TODO: drop this compat-code when previous circuits are also refactored and can do Votes = vvInputs.Votes
 	votes := []state.Vote{}
 	for i := 0; i < nValidVoters; i++ {
@@ -323,9 +313,8 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	res := AggregatorTestResults{
 		InputsHash: inputsHash,
 		Process: circuits.Process[*big.Int]{
-			ID:         vvInputs.ProcessID,
-			CensusRoot: vvInputs.CensusRoot,
-			// BallotMode:    circuits.BallotMode{},
+			ID:            vvInputs.ProcessID,
+			CensusRoot:    vvInputs.CensusRoot,
 			EncryptionKey: vvInputs.EncryptionPubKey,
 		},
 		Votes: votes[:],

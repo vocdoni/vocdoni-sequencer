@@ -11,6 +11,8 @@ import (
 	"github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
 	ballottest "github.com/vocdoni/vocdoni-z-sandbox/circuits/test/ballotproof"
+	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
+	bjj "github.com/vocdoni/vocdoni-z-sandbox/crypto/ecc/bjj_gnark"
 )
 
 func TestVerifySingleVoteCircuit(t *testing.T) {
@@ -32,6 +34,19 @@ func TestVerifySingleVoteCircuit(t *testing.T) {
 	assert.SolvingSucceeded(&placeholder, &assignments[0],
 		test.WithCurves(ecc.BLS12_377),
 		test.WithBackends(backend.GROTH16))
+	fmt.Println("proving tooks", time.Since(now))
+}
+
+func TestVerifyNoValidVoteCircuit(t *testing.T) {
+	c := qt.New(t)
+	placeholder, err := voteverifier.DummyPlaceholder(ballottest.TestCircomVerificationKey)
+	c.Assert(err, qt.IsNil)
+	assignment, err := voteverifier.DummyAssignment(ballottest.TestCircomVerificationKey, new(bjj.BJJ).New())
+	c.Assert(err, qt.IsNil)
+	// generate proof
+	assert := test.NewAssert(t)
+	now := time.Now()
+	assert.SolvingSucceeded(placeholder, assignment, test.WithCurves(ecc.BLS12_377), test.WithBackends(backend.GROTH16))
 	fmt.Println("proving tooks", time.Since(now))
 }
 
