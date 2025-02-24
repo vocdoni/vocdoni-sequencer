@@ -2,11 +2,11 @@ module github.com/vocdoni/vocdoni-z-sandbox
 
 go 1.23.2
 
-replace github.com/consensys/gnark => github.com/lucasmenendez/gnark v0.5.2-0.20250131151401-59fb979789bd
+replace github.com/consensys/gnark => github.com/vocdoni/gnark-no-assert v0.0.0-20250224124649-620c3ec1644d
 
 require (
 	github.com/consensys/gnark v0.11.1-0.20241210204654-a1e66c1d6b4d
-	github.com/consensys/gnark-crypto v0.16.0
+	github.com/consensys/gnark-crypto v0.16.1-0.20250205153847-10a243d332ca
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/frankban/quicktest v1.14.6
 	github.com/fxamacker/cbor/v2 v2.7.0
@@ -23,7 +23,7 @@ require (
 	github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4
 	github.com/vocdoni/contracts-z v0.0.0-20250124164653-964d70f468a8
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250210155802-bbf571616e03
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250224104040-dc49009f3e9e
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
 	golang.org/x/sync v0.10.0
 )
