@@ -231,109 +231,96 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// downloadAndStore downloads the content of the file from the URL provided,
-// checks the hash of the content, logs the progress every 10 seconds, and stores it locally.
-// If the file already exists and its hash matches, it does nothing.
+// downloadAndStore downloads a file from a URL and stores it in the local cache.
 func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) error {
-	// Validate the file URL.
 	if _, err := url.Parse(fileUrl); err != nil {
 		return fmt.Errorf("error parsing the file URL provided: %w", err)
 	}
 
-	// Build the destination path.
+	// Destination file paths
 	path := filepath.Join(BaseDir, hex.EncodeToString(expectedHash))
+	partialPath := path + ".partial"
 	parentDir := filepath.Dir(path)
 	if _, err := os.Stat(parentDir); err != nil {
 		return fmt.Errorf("destination path parent folder does not exist")
 	}
 
-	// Check if the file already exists.
-	if _, err := os.Stat(path); err == nil {
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("error opening existing artifact file: %w", err)
-		}
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
-			return fmt.Errorf("error computing hash of existing artifact file: %w", err)
-		}
-		f.Close()
-		if bytes.Equal(h.Sum(nil), expectedHash) {
-			log.Debugw("artifact already downloaded and verified", "url", fileUrl, "path", path)
-			return nil
-		}
-		log.Warnw("artifact file exists but hash mismatch, re-downloading", "url", fileUrl, "path", path)
+	// Check if a partial download exists
+	var startByte int64 = 0
+	if info, err := os.Stat(partialPath); err == nil {
+		startByte = info.Size()
 	}
 
-	// Create the HTTP request.
+	// Create the HTTP request with a Range header for resuming
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileUrl, nil)
 	if err != nil {
 		return fmt.Errorf("error creating the file request: %w", err)
 	}
+	if startByte > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startByte))
+	}
 
-	// Execute the request.
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("error performing the request: %w", err)
 	}
-	defer func() {
-		if err := res.Body.Close(); err != nil {
-			log.Warnf("error closing body response: %v", err)
-		}
-	}()
+	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
+	// Handle response codes
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("error downloading file %s: http status: %d", fileUrl, res.StatusCode)
 	}
 
-	// Create the destination file (os.Create will truncate an existing file).
-	fd, err := os.Create(path)
+	// Open file in append mode if resuming, otherwise create new file
+	var fileMode int
+	if startByte > 0 && res.StatusCode == http.StatusPartialContent {
+		fileMode = os.O_APPEND | os.O_WRONLY
+	} else {
+		fileMode = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	}
+
+	fd, err := os.OpenFile(partialPath, fileMode, 0o644)
 	if err != nil {
-		return fmt.Errorf("error creating the artifact file: %w", err)
+		return fmt.Errorf("error opening artifact file: %w", err)
 	}
 	defer fd.Close()
 
-	// Create a SHA256 hasher.
+	// Create a SHA256 hasher for integrity check
 	hasher := sha256.New()
-
-	// Wrap the response body with the progressReader.
-	pr := &progressReader{
-		reader:        res.Body,
-		contentLength: res.ContentLength,
+	if startByte > 0 {
+		// Hash existing content to continue validation
+		existingFile, err := os.Open(partialPath)
+		if err == nil {
+			io.Copy(hasher, existingFile)
+			existingFile.Close()
+		}
 	}
 
-	// Write to both the file and the hasher without loading the entire content into memory.
+	// Wrap the response body with a progress tracker
+	pr := &progressReader{
+		reader:        res.Body,
+		contentLength: res.ContentLength + startByte,
+	}
+
 	mw := io.MultiWriter(fd, hasher)
 
-	// Launch the copy in a separate goroutine.
+	// Copy data in a goroutine
 	done := make(chan error, 1)
 	go func() {
 		_, err := io.Copy(mw, pr)
 		done <- err
 	}()
 
-	// Set up a ticker to log progress every 10 seconds.
+	// Log progress every 10 seconds
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	// Loop until copy is finished, logging progress periodically.
 	for {
 		select {
 		case err := <-done:
 			if err != nil {
 				return fmt.Errorf("error copying data to file: %w", err)
 			}
-			// Log final progress.
-			total := atomic.LoadInt64(&pr.total)
-			downloadedMiB := float64(total) / (1024 * 1024)
-			var percentage float64
-			if pr.contentLength > 0 {
-				percentage = (float64(total) / float64(pr.contentLength)) * 100
-			}
-			log.Debugw("download artifacts completed", "url", fileUrl,
-				"downloaded", fmt.Sprintf("%.2fMiB", downloadedMiB),
-				"progress", fmt.Sprintf("%.2f%%", percentage))
 			goto finished
 		case <-ticker.C:
 			total := atomic.LoadInt64(&pr.total)
@@ -347,12 +334,17 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 				"progress", fmt.Sprintf("%.2f%%", percentage))
 		}
 	}
-finished:
 
-	// Compare the computed hash with the expected one.
+finished:
 	computedHash := hasher.Sum(nil)
 	if !bytes.Equal(computedHash, expectedHash) {
-		return fmt.Errorf("hash for artifact %s mismatch: expected %x, got %x", fileUrl, expectedHash, computedHash)
+		os.Remove(partialPath) // Delete invalid file
+		return fmt.Errorf("hash mismatch: expected %x, got %x", expectedHash, computedHash)
+	}
+
+	// Rename .partial file to final destination
+	if err := os.Rename(partialPath, path); err != nil {
+		return fmt.Errorf("error renaming file: %w", err)
 	}
 
 	return nil
