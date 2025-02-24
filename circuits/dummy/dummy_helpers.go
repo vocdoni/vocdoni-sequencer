@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark-crypto/kzg"
 	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/scs"
 	stdplonk "github.com/consensys/gnark/std/recursion/plonk"
-	"github.com/consensys/gnark/test/unsafekzg"
 )
 
-func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, plonk.Proof, plonk.VerifyingKey, error) {
-	ccs, pk, vk, err := CompileAndSetup(placeholder, field)
+func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool, srs, srsLagrange kzg.SRS) (constraint.ConstraintSystem, witness.Witness, plonk.Proof, plonk.VerifyingKey, error) {
+	ccs, pk, vk, err := CompileAndSetup(placeholder, field, srs, srsLagrange)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("init error: %w", err)
 	}
@@ -54,14 +54,10 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 	return ccs, publicWitness, proof, vk, nil
 }
 
-func CompileAndSetup(placeholder frontend.Circuit, field *big.Int) (constraint.ConstraintSystem, plonk.ProvingKey, plonk.VerifyingKey, error) {
+func CompileAndSetup(placeholder frontend.Circuit, field *big.Int, srs, srsLagrange kzg.SRS) (constraint.ConstraintSystem, plonk.ProvingKey, plonk.VerifyingKey, error) {
 	ccs, err := frontend.Compile(field, scs.NewBuilder, placeholder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile error: %w", err)
-	}
-	srs, srsLagrange, err := unsafekzg.NewSRS(ccs)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("srs error: %w", err)
 	}
 	pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
 	if err != nil {

@@ -185,11 +185,11 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	c, l, err := unsafekzg.NewSRS(vvCCS)
+	srs, srsLagrange, err := unsafekzg.NewSRS(vvCCS)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
-	vvPk, vvVk, err := plonk.Setup(vvCCS, c, l)
+	vvPk, vvVk, err := plonk.Setup(vvCCS, srs, srsLagrange)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
@@ -316,7 +316,7 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 		BaseVerificationKey: baseVk,
 	}
 	// fill placeholder and witness with dummy circuits
-	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters, persist)
+	finalPlaceholder, finalAssigments, err = aggregator.FillWithDummyFixed(finalPlaceholder, finalAssigments, vvCCS, nValidVoters, persist, srs, srsLagrange)
 	if err != nil {
 		return AggregatorTestResults{}, aggregator.AggregatorCircuit{}, aggregator.AggregatorCircuit{}, err
 	}
@@ -334,9 +334,8 @@ func AggregatorInputsForTest(processId []byte, nValidVoters int, persist bool) (
 	res := AggregatorTestResults{
 		InputsHash: inputsHash,
 		Process: circuits.Process[*big.Int]{
-			ID:         vvInputs.ProcessID,
-			CensusRoot: vvInputs.CensusRoot,
-			// BallotMode:    circuits.BallotMode{},
+			ID:            vvInputs.ProcessID,
+			CensusRoot:    vvInputs.CensusRoot,
 			EncryptionKey: vvInputs.EncryptionPubKey,
 		},
 		Votes: votes[:],

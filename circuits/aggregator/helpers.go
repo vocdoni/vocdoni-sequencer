@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark-crypto/kzg"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
@@ -31,7 +32,7 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 	return maxNum.Sub(maxNum, big.NewInt(1))
 }
 
-func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
+func RecursiveDummy(main constraint.ConstraintSystem, persist bool, srs, srsLagrange kzg.SRS) (
 	constraint.ConstraintSystem,
 	stdplonk.BaseVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine],
 	stdplonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine],
@@ -46,7 +47,7 @@ func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
 
 	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
 		dummy.Placeholder(main), dummy.Assignment(1),
-		circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField(), persist)
+		circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField(), persist, srs, srsLagrange)
 	if err != nil {
 		return nil, nilBaseVk, nilVk, nilProof, nilWitness, err
 	}
@@ -76,10 +77,10 @@ func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool) (
+func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool, srs, srsLagrange kzg.SRS) (
 	AggregatorCircuit, AggregatorCircuit, error,
 ) {
-	dummyCCS, _, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist)
+	dummyCCS, _, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist, srs, srsLagrange)
 	if err != nil {
 		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
