@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark-crypto/kzg"
+	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/consensys/gnark/frontend/cs/scs"
+	stdplonk "github.com/consensys/gnark/std/recursion/plonk"
 )
 
-func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
-	ccs, pk, vk, err := CompileAndSetup(placeholder, field)
+func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool, srs, srsLagrange kzg.SRS) (constraint.ConstraintSystem, witness.Witness, plonk.Proof, plonk.VerifyingKey, error) {
+	ccs, pk, vk, err := CompileAndSetup(placeholder, field, srs, srsLagrange)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("init error: %w", err)
 	}
@@ -21,7 +22,7 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("full witness error: %w", err)
 	}
-	proof, err := groth16.Prove(ccs, pk, fullWitness, stdgroth16.GetNativeProverOptions(outer, field))
+	proof, err := plonk.Prove(ccs, pk, fullWitness, stdplonk.GetNativeProverOptions(outer, field))
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("proof error: %w", err)
 	}
@@ -29,7 +30,7 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("pub witness error: %w", err)
 	}
-	if err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(outer, field)); err != nil {
+	if err = plonk.Verify(proof, vk, publicWitness, stdplonk.GetNativeVerifierOptions(outer, field)); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("verify error: %w", err)
 	}
 	/*
@@ -53,12 +54,12 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 	return ccs, publicWitness, proof, vk, nil
 }
 
-func CompileAndSetup(placeholder frontend.Circuit, field *big.Int) (constraint.ConstraintSystem, groth16.ProvingKey, groth16.VerifyingKey, error) {
-	ccs, err := frontend.Compile(field, r1cs.NewBuilder, placeholder)
+func CompileAndSetup(placeholder frontend.Circuit, field *big.Int, srs, srsLagrange kzg.SRS) (constraint.ConstraintSystem, plonk.ProvingKey, plonk.VerifyingKey, error) {
+	ccs, err := frontend.Compile(field, scs.NewBuilder, placeholder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile error: %w", err)
 	}
-	pk, vk, err := groth16.Setup(ccs)
+	pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("setup error: %w", err)
 	}

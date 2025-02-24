@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark-crypto/kzg"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/emulated"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	stdplonk "github.com/consensys/gnark/std/recursion/plonk"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 )
@@ -31,38 +32,44 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 	return maxNum.Sub(maxNum, big.NewInt(1))
 }
 
-func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
+func RecursiveDummy(main constraint.ConstraintSystem, persist bool, srs, srsLagrange kzg.SRS) (
 	constraint.ConstraintSystem,
-	stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT],
-	stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine],
-	stdgroth16.Witness[sw_bls12377.ScalarField],
+	stdplonk.BaseVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine],
+	stdplonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine],
+	stdplonk.Proof[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine],
+	stdplonk.Witness[sw_bls12377.ScalarField],
 	error,
 ) {
-	nilVk := stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{}
-	nilProof := stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
-	nilWitness := stdgroth16.Witness[sw_bls12377.ScalarField]{}
+	nilBaseVk := stdplonk.BaseVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
+	nilVk := stdplonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine]{}
+	nilProof := stdplonk.Proof[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
+	nilWitness := stdplonk.Witness[sw_bls12377.ScalarField]{}
 
 	dummyCCS, pubWitness, proof, vk, err := dummy.Prove(
 		dummy.Placeholder(main), dummy.Assignment(1),
-		circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField(), persist)
+		circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField(), persist, srs, srsLagrange)
 	if err != nil {
-		return nil, nilVk, nilProof, nilWitness, err
+		return nil, nilBaseVk, nilVk, nilProof, nilWitness, err
 	}
 	// set fixed dummy vk in the placeholders
-	dummyVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](vk)
+	baseDummyVk, err := stdplonk.ValueOfBaseVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine](vk)
 	if err != nil {
-		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("fix dummy vk error: %w", err)
+		return nil, nilBaseVk, nilVk, nilProof, nilWitness, fmt.Errorf("fix base dummy vk error: %w", err)
+	}
+	dummyVk, err := stdplonk.ValueOfCircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine](vk)
+	if err != nil {
+		return nil, nilBaseVk, nilVk, nilProof, nilWitness, fmt.Errorf("fix dummy vk error: %w", err)
 	}
 	// parse dummy proof and witness
-	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+	dummyProof, err := stdplonk.ValueOfProof[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
 	if err != nil {
-		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("dummy proof value error: %w", err)
+		return nil, nilBaseVk, nilVk, nilProof, nilWitness, fmt.Errorf("dummy proof value error: %w", err)
 	}
-	dummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
+	dummyWitness, err := stdplonk.ValueOfWitness[sw_bls12377.ScalarField](pubWitness)
 	if err != nil {
-		return nil, nilVk, nilProof, nilWitness, fmt.Errorf("dummy witness value error: %w", err)
+		return nil, nilBaseVk, nilVk, nilProof, nilWitness, fmt.Errorf("dummy witness value error: %w", err)
 	}
-	return dummyCCS, dummyVk, dummyProof, dummyWitness, nil
+	return dummyCCS, baseDummyVk, dummyVk, dummyProof, dummyWitness, nil
 }
 
 // FillWithDummyFixed function fills the placeholder and the assignments
@@ -70,10 +77,10 @@ func RecursiveDummy(main constraint.ConstraintSystem, persist bool) (
 // constraint.ConstraintSystem provided. It starts to fill from the index
 // provided and fixes the dummy verification key. Returns an error if
 // something fails.
-func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool) (
+func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constraint.ConstraintSystem, fromIdx int, persist bool, srs, srsLagrange kzg.SRS) (
 	AggregatorCircuit, AggregatorCircuit, error,
 ) {
-	dummyCCS, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist)
+	dummyCCS, _, dummyVk, dummyProof, _, err := RecursiveDummy(main, persist, srs, srsLagrange)
 	if err != nil {
 		return AggregatorCircuit{}, AggregatorCircuit{}, err
 	}
@@ -83,7 +90,7 @@ func FillWithDummyFixed(placeholder, assignments AggregatorCircuit, main constra
 	dummyValue := emulated.ValueOf[sw_bn254.ScalarField](0)
 	// fill placeholders and assignments dummy values
 	for i := range assignments.Proofs {
-		placeholder.Proofs[i] = stdgroth16.PlaceholderProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
+		placeholder.Proofs[i] = stdplonk.PlaceholderProof[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyCCS)
 		if i >= fromIdx {
 			assignments.Votes[i].Nullifier = dummyValue
 			assignments.Votes[i].Commitment = dummyValue

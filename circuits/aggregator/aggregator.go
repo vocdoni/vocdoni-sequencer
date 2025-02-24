@@ -31,7 +31,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/math/emulated"
-	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/consensys/gnark/std/recursion/plonk"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
@@ -47,9 +47,10 @@ type AggregatorCircuit struct {
 	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
 	// real vk and dummy is used for no valid proofs in the scenario where there
 	// are less valid votes than MaxVotes)
-	Proofs               [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	BaseVerificationKey  groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
-	DummyVerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
+	Proofs               [circuits.VotesPerBatch]plonk.Proof[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine]
+	BaseVerificationKey  plonk.BaseVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine] `gnark:"-"`
+	VerificationKey      plonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine]                    `gnark:"-"`
+	DummyVerificationKey plonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine]                    `gnark:"-"`
 }
 
 // checkProofs circuit method verifies each voter proof with the provided
@@ -60,31 +61,31 @@ type AggregatorCircuit struct {
 // but it assert that all the proofs are valid.
 func (c AggregatorCircuit) checkProofs(api frontend.API, hashes circuits.VotersHashes) {
 	// initialize the verifier of the BLS12-377 curve
-	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
+	verifier, err := plonk.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create BLS12-377 verifier", err)
 	}
-	// verify each proof with the provided public inputs and the fixed
-	// verification key
-	validProofs := bits.ToBinary(api, c.ValidVotes)
+	// decode the valid proofs indicators from the binary representation
+	// take only the first len(c.Proofs) bits to avoid length mismatch
+	validProofs := bits.ToBinary(api, c.ValidVotes)[:len(c.Proofs)]
+	// calculate the witness for each voter and verify each proof with it
 	for i := 0; i < len(c.Proofs); i++ {
-		// switch the verification key between the base and the dummy one if
-		// the proof is valid or not
-		vk, err := verifier.SwitchVerificationKey(validProofs[i],
-			[]groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]{
-				c.DummyVerificationKey,
-				c.BaseVerificationKey,
-			},
-		)
-		if err != nil {
-			circuits.FrontendError(api, "failed to switch verification key", err)
-		}
+		api.Println("Checking proof", i)
+		api.Println("Valid proof?", validProofs[i])
 		// calculate the witness for the i-th voter
 		calculatedWitness, err := hashes.ToWitnessBLS12377(api, i, validProofs[i])
 		if err != nil {
 			circuits.FrontendError(api, "failed to calculate witness", err)
 		}
-		// verify the proof
+		// switch the verification key to the dummy one if the proof is not valid
+		vk, err := verifier.SwitchVerificationKey(c.BaseVerificationKey, validProofs[i],
+			[]plonk.CircuitVerifyingKey[sw_bls12377.ScalarField, sw_bls12377.G1Affine]{
+				c.DummyVerificationKey, c.VerificationKey, 
+			})
+		if err != nil {
+			circuits.FrontendError(api, "failed to switch verification key", err)
+		}
+		// verify the proof with the calculated witness and the verification key
 		if err := verifier.AssertProof(vk, c.Proofs[i], calculatedWitness); err != nil {
 			circuits.FrontendError(api, "failed to verify proof", err)
 		}

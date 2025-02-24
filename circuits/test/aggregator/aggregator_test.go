@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/consensys/gnark/backend"
-	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	stdplonk "github.com/consensys/gnark/std/recursion/plonk"
 	"github.com/consensys/gnark/test"
 	qt "github.com/frankban/quicktest"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
@@ -28,8 +28,8 @@ func TestAggregatorCircuit(t *testing.T) {
 	now = time.Now()
 	assert := test.NewAssert(t)
 	assert.SolvingSucceeded(&placeholder, &assignments,
-		test.WithCurves(circuits.AggregatorCurve), test.WithBackends(backend.GROTH16),
-		test.WithProverOpts(stdgroth16.GetNativeProverOptions(
+		test.WithCurves(circuits.AggregatorCurve), test.WithBackends(backend.PLONK),
+		test.WithProverOpts(stdplonk.GetNativeProverOptions(
 			circuits.StateTransitionCurve.ScalarField(),
 			circuits.AggregatorCurve.ScalarField())))
 	c.Logf("proving tooks %s", time.Since(now).String())

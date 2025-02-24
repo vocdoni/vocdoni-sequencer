@@ -7,6 +7,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/consensys/gnark/std/recursion/plonk"
 	"github.com/vocdoni/gnark-crypto-primitives/emulated/bn254/twistededwards/mimc7"
 )
 
@@ -74,7 +75,7 @@ func (vh VotersHashes) AssertSumIsEqual(api frontend.API, expected emulated.Elem
 //			],
 //	  }
 func (vh VotersHashes) ToWitnessBLS12377(api frontend.API, idx int, valid frontend.Variable) (
-	groth16.Witness[sw_bls12377.ScalarField], error,
+	plonk.Witness[sw_bls12377.ScalarField], error,
 ) {
 	field, err := emulated.NewField[sw_bn254.ScalarField](api)
 	if err != nil {
@@ -92,7 +93,7 @@ func (vh VotersHashes) ToWitnessBLS12377(api frontend.API, idx int, valid fronte
 			Limbs: []frontend.Variable{finalLimb, 0, 0, 0},
 		})
 	}
-	return groth16.Witness[sw_bls12377.ScalarField]{Public: splitedHash}, nil
+	return plonk.Witness[sw_bls12377.ScalarField]{Public: splitedHash}, nil
 }
 
 // ToWitnessBW6761 method calculates the witness using the current
