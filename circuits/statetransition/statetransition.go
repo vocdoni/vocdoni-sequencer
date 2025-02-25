@@ -87,7 +87,7 @@ type Vote struct {
 
 // Define declares the circuit's constraints
 func (circuit Circuit) Define(api frontend.API) error {
-	// circuit.VerifyAggregatorProof(api)
+	circuit.VerifyAggregatorProof(api)
 	circuit.VerifyMerkleProofs(api, HashFn)
 	circuit.VerifyMerkleTransitions(api, HashFn)
 	circuit.VerifyLeafHashes(api, HashFn)
