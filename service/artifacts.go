@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/ballotproof"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits/dummy"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
 	"golang.org/x/sync/errgroup"
 )
@@ -23,9 +22,5 @@ func DownloadArtifacts(timeout time.Duration) error {
 	g.Go(func() error {
 		return ballotproof.Artifacts.DownloadAll(ctx)
 	})
-	g.Go(func() error {
-		return dummy.DummyArtifacts.DownloadAll(ctx)
-	})
-
 	return g.Wait()
 }
