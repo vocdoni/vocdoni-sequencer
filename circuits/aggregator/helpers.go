@@ -6,9 +6,7 @@ import (
 
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/voteverifier"
@@ -97,32 +95,43 @@ func EncodeProofsSelector(nValidProofs int) *big.Int {
 // 	return placeholder, assignments, nil
 // }
 
+// FillWithDummy function fills the assignments provided with a dummy proofs
+// and witnesses compiled for the main constraint.ConstraintSystem provided and
+// the proving key. It generates dummy proofs using the inner verification key
+// provided. It starts to fill from the index provided. Returns an error if
+// something fails.
 func (assignments *AggregatorCircuit) FillWithDummy(mainCCS constraint.ConstraintSystem,
-	mainPk groth16.ProvingKey, innerVk []byte, fromIdx int) error {
+	mainPk groth16.ProvingKey, innerVk []byte, fromIdx int,
+) error {
 	// get dummy proof witness
 	dummyWitness, err := voteverifier.DummyWitness(innerVk, new(bjj.BJJ).New())
 	if err != nil {
 		return fmt.Errorf("dummy witness error: %w", err)
 	}
 	// generate dummy proof
-	proof, err := groth16.Prove(mainCCS, mainPk, dummyWitness, stdgroth16.GetNativeProverOptions(circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField()))
+	dummyProof, err := groth16.Prove(mainCCS, mainPk, dummyWitness, stdgroth16.GetNativeProverOptions(circuits.AggregatorCurve.ScalarField(), circuits.VoteVerifierCurve.ScalarField()))
 	if err != nil {
 		return fmt.Errorf("proof error: %w", err)
 	}
+	// get dummy public witness
+	dummyPublicWitness, err := dummyWitness.Public()
+	if err != nil {
+		return fmt.Errorf("dummy witness value error: %w", err)
+	}
 	// prepare dummy proof to recursion
-	dummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](proof)
+	recursiveDummyProof, err := stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](dummyProof)
 	if err != nil {
 		return fmt.Errorf("dummy proof value error: %w", err)
 	}
-	// set some dummy values in others assignments variables
-	dummyValue := emulated.ValueOf[sw_bn254.ScalarField](0)
+	// prepare dummy witness to recursion
+	recursiveDummyWitness, err := stdgroth16.ValueOfWitness[sw_bls12377.ScalarField](dummyPublicWitness)
+	if err != nil {
+		return fmt.Errorf("dummy witness value error: %w", err)
+	}
 	// fill placeholders and assignments dummy values
 	for i := fromIdx; i < len(assignments.Proofs); i++ {
-		assignments.Votes[i].Nullifier = dummyValue
-		assignments.Votes[i].Commitment = dummyValue
-		assignments.Votes[i].Address = dummyValue
-		assignments.Votes[i].Ballot = *circuits.NewEmulatedBallot[sw_bn254.ScalarField]()
-		assignments.Proofs[i] = dummyProof
+		assignments.Proofs[i] = recursiveDummyProof
+		assignments.Witnesses[i] = recursiveDummyWitness
 	}
 	return nil
 }

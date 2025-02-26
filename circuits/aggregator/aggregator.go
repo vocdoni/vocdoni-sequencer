@@ -27,64 +27,47 @@ package aggregator
 
 import (
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/math/bits"
-	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
 type AggregatorCircuit struct {
-	// InputsHash frontend.Variable `gnark:",public"`
-	InputsHash emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
-	ValidVotes frontend.Variable                      `gnark:",public"`
-	// The following variables are priv-public inputs, so should be hashed and
-	// compared with the InputsHash. All the variables should be hashed in the
-	// same order as they are defined here.
-	Process circuits.Process[emulated.Element[sw_bn254.ScalarField]]
-	Votes   [circuits.VotesPerBatch]circuits.EmulatedVote[sw_bn254.ScalarField]
-	// Inner proofs (from VerifyVoteCircuit) and verification keys (base is the
-	// real vk and dummy is used for no valid proofs in the scenario where there
-	// are less valid votes than MaxVotes)
+	ValidProofs     frontend.Variable `gnark:",public"`
 	Proofs          [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
+	Witnesses       [circuits.VotesPerBatch]groth16.Witness[sw_bls12377.ScalarField]
 	VerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-// checkProofs circuit method verifies each voter proof with the provided
-// verification keys and public inputs. The verification keys should contain
-// the dummy circuit and the main circuit verification keys in that particular
-// order. The dummy circuit verification key is used to verify the proofs that
-// are not from valid voters. As circuit method, it does not return any value,
-// but it assert that all the proofs are valid.
-func (c AggregatorCircuit) checkProofs(api frontend.API, hashes circuits.VotersHashes) {
+func (c AggregatorCircuit) Define(api frontend.API) error {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
 		circuits.FrontendError(api, "failed to create BLS12-377 verifier", err)
 	}
+	// initialize the variables to count the number of valid votes
+	validVotes := frontend.Variable(0)
+	// only the first n proofs can be valid, so we need to store if the previous
+	// proof was valid to stop counting after the first invalid one
+	lastValidVote := frontend.Variable(1)
 	// verify each proof with the provided public inputs and the fixed
 	// verification key
-	validProofs := bits.ToBinary(api, c.ValidVotes)
 	for i := range len(c.Proofs) {
-		// calculate the witness for the i-th voter
-		calculatedWitness, err := hashes.ToWitnessBLS12377(api, i, validProofs[i])
-		if err != nil {
-			circuits.FrontendError(api, "failed to calculate witness", err)
-		}
+		// if the proof is valid, the first limb of the first input in the
+		// witness should be 1, otherwise it should be 0
+		// but only accepts the n first valid proofs so, to update the
+		// number of valid votes correctly, we add the result of the AND
+		// operation between the last valid vote and the current vote
+		isValid := api.And(lastValidVote, c.Witnesses[i].Public[0].Limbs[0])
+		lastValidVote = isValid
+		// count the number of valid votes
+		validVotes = api.Add(validVotes, isValid)
 		// verify the proof
-		if err := verifier.AssertProof(c.VerificationKey, c.Proofs[i], calculatedWitness, groth16.WithCompleteArithmetic()); err != nil {
+		if err := verifier.AssertProof(c.VerificationKey, c.Proofs[i], c.Witnesses[i], groth16.WithCompleteArithmetic()); err != nil {
 			circuits.FrontendError(api, "failed to verify proof", err)
 		}
 	}
-}
-
-func (c AggregatorCircuit) Define(api frontend.API) error {
-	// calculate the voters hashes
-	hashes := circuits.CalculateVotersHashes(api, c.Process, c.Votes[:])
-	// check the inputs hash matches the calculated one from the voters hashes
-	hashes.AssertSumIsEqual(api, c.InputsHash)
-	// check all the proofs are valid and match the voters hashes as inputs
-	c.checkProofs(api, hashes)
+	// check that the number of valid votes is the expected
+	api.AssertIsEqual(c.ValidProofs, validVotes)
 	return nil
 }
