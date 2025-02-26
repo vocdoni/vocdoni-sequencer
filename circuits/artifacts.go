@@ -11,12 +11,18 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
+
+// CheckHashes is a flag that determines if the hashes of the artifacts should
+// be checked when they are loaded or downloaded. It can be set to false by
+// setting the DAVINCI_CHECK_HASHES environment variable to false or 0.
+var CheckHashes = true
 
 // BaseDir is the path where the artifact cache is expected to be found. If the
 // artifacts are not found there, they will be downloaded and stored. It can be
@@ -25,6 +31,15 @@ import (
 var BaseDir string
 
 func init() {
+	// if the DAVINCI_CHECK_HASHES environment variable is set to false or 0,
+	// the hashes of the artifacts will not be checked
+	if checkHashes := os.Getenv("DAVINCI_CHECK_HASHES"); checkHashes != "" {
+		if strings.ToLower(checkHashes) == "false" || checkHashes == "0" {
+			CheckHashes = false
+		}
+	}
+	// if the DAVINCI_ARTIFACTS_DIR environment variable is set, it will be used
+	// as the BaseDir, otherwise it will use the user home directory
 	if dir := os.Getenv("DAVINCI_ARTIFACTS_DIR"); dir != "" {
 		BaseDir = dir
 	} else {
@@ -206,15 +221,16 @@ func load(hash []byte) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("error reading file %s: %w", path, err)
 	}
-
-	// check if the hash of the content matches the expected hash
-	hasher := sha256.New()
-	hasher.Write(content)
-	fileHash := hasher.Sum(nil)
-	if !bytes.Equal(fileHash, hash) {
-		return nil, fmt.Errorf("hash mismatch for file %s: expected %x, got %x", path, hash, fileHash)
+	// check if the hash of the content matches the expected hash, but only if
+	// the CheckHashes variable is set to true
+	if CheckHashes {
+		hasher := sha256.New()
+		hasher.Write(content)
+		fileHash := hasher.Sum(nil)
+		if !bytes.Equal(fileHash, hash) {
+			return nil, fmt.Errorf("hash mismatch for file %s: expected %x, got %x", path, hash, fileHash)
+		}
 	}
-
 	return content, nil
 }
 
@@ -236,7 +252,6 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 	if _, err := url.Parse(fileUrl); err != nil {
 		return fmt.Errorf("error parsing the file URL provided: %w", err)
 	}
-
 	// Destination file paths
 	path := filepath.Join(BaseDir, hex.EncodeToString(expectedHash))
 	partialPath := path + ".partial"
@@ -244,13 +259,11 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 	if _, err := os.Stat(parentDir); err != nil {
 		return fmt.Errorf("destination path parent folder does not exist")
 	}
-
 	// Check if a partial download exists
 	var startByte int64 = 0
 	if info, err := os.Stat(partialPath); err == nil {
 		startByte = info.Size()
 	}
-
 	// Create the HTTP request with a Range header for resuming
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileUrl, nil)
 	if err != nil {
@@ -259,18 +272,16 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 	if startByte > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startByte))
 	}
-
+	// Perform the request
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error performing the request: %w", err)
 	}
 	defer res.Body.Close()
-
 	// Handle response codes
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("error downloading file %s: http status: %d", fileUrl, res.StatusCode)
 	}
-
 	// Open file in append mode if resuming, otherwise create new file
 	var fileMode int
 	if startByte > 0 && res.StatusCode == http.StatusPartialContent {
@@ -278,13 +289,12 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 	} else {
 		fileMode = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 	}
-
+	// Open the file for writing
 	fd, err := os.OpenFile(partialPath, fileMode, 0o644)
 	if err != nil {
 		return fmt.Errorf("error opening artifact file: %w", err)
 	}
 	defer fd.Close()
-
 	// Create a SHA256 hasher for integrity check
 	hasher := sha256.New()
 	if startByte > 0 {
@@ -295,26 +305,23 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 			existingFile.Close()
 		}
 	}
-
 	// Wrap the response body with a progress tracker
 	pr := &progressReader{
 		reader:        res.Body,
 		contentLength: res.ContentLength + startByte,
 	}
-
+	// Create a multi-writer to write to the file and hash at the same time
 	mw := io.MultiWriter(fd, hasher)
-
 	// Copy data in a goroutine
 	done := make(chan error, 1)
 	go func() {
 		_, err := io.Copy(mw, pr)
 		done <- err
 	}()
-
 	// Log progress every 10 seconds
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-
+	// Wait for the download to finish logging progress every 10 seconds
 	for {
 		select {
 		case err := <-done:
@@ -334,18 +341,20 @@ func downloadAndStore(ctx context.Context, expectedHash []byte, fileUrl string) 
 				"progress", fmt.Sprintf("%.2f%%", percentage))
 		}
 	}
-
+	// When the download is finished, check the hash (only if the CheckHashes
+	// variable is set to true) and rename the file
 finished:
-	computedHash := hasher.Sum(nil)
-	if !bytes.Equal(computedHash, expectedHash) {
-		os.Remove(partialPath) // Delete invalid file
-		return fmt.Errorf("hash mismatch: expected %x, got %x", expectedHash, computedHash)
+	if CheckHashes {
+		computedHash := hasher.Sum(nil)
+		// If the hash does not match, delete the file and return an error
+		if !bytes.Equal(computedHash, expectedHash) {
+			os.Remove(partialPath) // Delete invalid file
+			return fmt.Errorf("hash mismatch: expected %x, got %x", expectedHash, computedHash)
+		}
 	}
-
 	// Rename .partial file to final destination
 	if err := os.Rename(partialPath, path); err != nil {
 		return fmt.Errorf("error renaming file: %w", err)
 	}
-
 	return nil
 }
