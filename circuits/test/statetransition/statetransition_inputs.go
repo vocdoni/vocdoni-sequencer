@@ -31,12 +31,12 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters, false)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
 	// compile aggregator circuit
-	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, &agPlaceholder)
+	agCCS, err := frontend.Compile(circuits.AggregatorCurve.ScalarField(), r1cs.NewBuilder, agPlaceholder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("aggregator compile: %w", err)
 	}

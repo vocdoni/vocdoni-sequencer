@@ -92,7 +92,7 @@ func DummyAggProof(inputsHash, validVotes frontend.Variable) (
 ) {
 	_, _, proof, vk, err := dummy.Prove(
 		DummyAggPlaceholderWithConstraints(0), DummyAggAssignment(inputsHash, validVotes),
-		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField(), false)
+		circuits.StateTransitionCurve.ScalarField(), circuits.AggregatorCurve.ScalarField())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -19,10 +19,4 @@ const (
 	AggregatorProvingKeyHash        = "ea2239e379fd3c591e6ab51998423280505f26724bc1dd4f90e306aea0da972c"
 	AggregatorVerificationKeyURL    = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/653f4704878fdc66e762d7ada61c5882496883526622d94b0d043db99617ed44.vk"
 	AggregatorVerificationKeyHash   = "653f4704878fdc66e762d7ada61c5882496883526622d94b0d043db99617ed44"
-	DummyCircuitURL                 = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/dummy.ccs"
-	DummyCircuitHash                = "8f664d05cdd01567e947e2ffdb7a4f3e5ccf762c51c8746214008f263a5f3ca9"
-	DummyProvingKeyURL              = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/dummy.pk"
-	DummyProvingKeyHash             = "28daf4ee70e83add8c5c45f2b6b73239286c336e0fbddd09f4ad0b4cf43f4dba"
-	DummyVerificationKeyURL         = "https://circuits.ams3.cdn.digitaloceanspaces.com/dev/dummy.vk"
-	DummyVerificationKeyHash        = "ca3506ea5faa5dcf500a04896123f6018b8839b27e7c7fff8abfa873ca041f9c"
 )

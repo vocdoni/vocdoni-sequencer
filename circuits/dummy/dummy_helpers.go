@@ -12,7 +12,7 @@ import (
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 )
 
-func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int, persist bool) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
+func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.Int) (constraint.ConstraintSystem, witness.Witness, groth16.Proof, groth16.VerifyingKey, error) {
 	ccs, pk, vk, err := CompileAndSetup(placeholder, field)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("init error: %w", err)
@@ -32,24 +32,6 @@ func Prove(placeholder, assignment frontend.Circuit, outer *big.Int, field *big.
 	if err = groth16.Verify(proof, vk, publicWitness, stdgroth16.GetNativeVerifierOptions(outer, field)); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("verify error: %w", err)
 	}
-	/*
-			TODO: uncomment this block when the LocalInputsForTest function is fixed
-		if persist {
-			// persist the dummy verification key
-			if err := circuits.StoreVerificationKey(vk, "dummy"); err != nil {
-				log.Printf("error storing dummy vk: %v", err)
-			}
-			// persist the dummy proof
-			if err := circuits.StoreProof(proof, "dummy"); err != nil {
-				log.Printf("error storing dummy proof: %v", err)
-			}
-			// persist the dummy public witness
-			log.Println("storing dummy public witness")
-			if err := circuits.StoreWitness(fullWitness, "dummy"); err != nil {
-				log.Printf("error storing dummy public witness: %v", err)
-			}
-		}
-	*/
 	return ccs, publicWitness, proof, vk, nil
 }
 
