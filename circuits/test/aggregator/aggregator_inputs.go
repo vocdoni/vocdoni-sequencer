@@ -7,8 +7,11 @@ import (
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
+	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/iden3/go-iden3-crypto/mimc7"
 	"github.com/vocdoni/arbo"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
@@ -88,11 +91,34 @@ func AggregatorInputsForTest(processId []byte, nValidVotes int) (
 			return nil, nil, nil, err
 		}
 	}
+	witnessesHashInputs := []*big.Int{}
+	for i := range circuits.VotesPerBatch {
+		if i < nValidVotes {
+			// append 1 to the inputs to hash to include the valid vote indicator
+			// before the inputs hash
+			witnessesHashInputs = append(witnessesHashInputs, big.NewInt(1), vvInputs.InputsHashes[i])
+		} else {
+			// append 0 to the inputs to hash to include the valid vote indicator
+			// before the dummy input hash (1)
+			witnessesHashInputs = append(witnessesHashInputs, big.NewInt(0), big.NewInt(1))
+		}
+	}
+	// the expected number of hash inputs is the number of votes plus the
+	// number of public inputs of the vote verifier circuit (valid vote
+	// indicator and inputs hash)
+	if len(witnessesHashInputs) != circuits.VotesPerBatch*2 {
+		return nil, nil, nil, fmt.Errorf("unexpected number of hash inputs: %d", len(witnessesHashInputs))
+	}
+	witnessesHash, err := mimc7.Hash(witnessesHashInputs, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	// init final assignments stuff
 	finalAssigments := &aggregator.AggregatorCircuit{
-		ValidProofs: nValidVotes,
-		Proofs:      proofs,
-		Witnesses:   witnesses,
+		ValidProofs:   nValidVotes,
+		WitnessesHash: emulated.ValueOf[sw_bn254.ScalarField](witnessesHash),
+		Proofs:        proofs,
+		Witnesses:     witnesses,
 	}
 	// fill assignments with dummy values
 	if err := finalAssigments.FillWithDummy(vvCCS, vvPk, ballottest.TestCircomVerificationKey, nValidVotes); err != nil {
