@@ -7,64 +7,16 @@ package aggregator
 
 import (
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/vocdoni/gnark-crypto-primitives/hash/bn254/mimc7"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 )
 
 type AggregatorCircuit struct {
-	ValidProofs     frontend.Variable                      `gnark:",public"`
-	WitnessesHash   emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
+	ValidProofs     frontend.Variable `gnark:",public"`
 	Proofs          [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	Witnesses       [circuits.VotesPerBatch]groth16.Witness[sw_bls12377.ScalarField]
+	Witnesses       [circuits.VotesPerBatch]groth16.Witness[sw_bls12377.ScalarField]                 `gnark:",public"`
 	VerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
-}
-
-// checkWitnessesHash checks that the hash of the witnesses is the expected
-// value. The hash of the witnesses is calculated using the MiMC7 hash function
-// over emulated.Element[sw_bn254.ScalarField] inputs. The expected number of
-// inputs is the number of votes times 2, where each vote has two public inputs
-// (valid vote indicator and inputs hash).
-func (c AggregatorCircuit) checkWitnessesHash(api frontend.API) {
-	// initialize the hash function
-	hFn, err := mimc7.NewMiMC(api)
-	if err != nil {
-		circuits.FrontendError(api, "failed to create MiMC hash function", err)
-		return
-	}
-	// To build the hash of the witnesses, we expect to have two public inputs
-	// per proof:
-	//  - the first one should be an emulated frontend.Variable wich indicates
-	//    if the proof is valid or not.
-	//    (Original: 1 or 0, Emulated: [1 0 0 0] or [0 0 0 0])
-	//  - the second one should be the hash of the inputs of the vote verifier
-	//    circuit as emulated emulated.Element[sw_bn254.ScalarField]. As
-	//    emulated emulated.Element, each original limb of the hash should be
-	//    represented as a slice of 4 elements, the first limb contains the
-	//    original value and the rest are zeros.
-	//    (Original: [1 2 3 4], Emulated: [[1 0 0 0] [2 0 0 0] [3 0 0 0] [4 0 0 0])
-	// The hash function expect emulated.Element[sw_bn254.ScalarField] as inputs
-	// so we need to convert the public inputs to the expected type, keeping the
-	// the first public input as is and reconstructing the second one grouping
-	// each first limb in a slice of 4 elements.
-	for _, w := range c.Witnesses {
-		// check that the number of public inputs is the expected
-		api.AssertIsEqual(len(w.Public), 5)
-		// include the valid vote indicator in the hash
-		hFn.Write(emulated.Element[sw_bn254.ScalarField]{Limbs: w.Public[0].Limbs})
-		// reconstruct the hash of the inputs of the vote verifier circuit
-		inputsHashLimbs := emulated.Element[sw_bn254.ScalarField]{Limbs: []frontend.Variable{}}
-		for _, pub := range w.Public[1:] {
-			inputsHashLimbs.Limbs = append(inputsHashLimbs.Limbs, pub.Limbs[0])
-		}
-		// include the inputs hash in the hash
-		hFn.Write(inputsHashLimbs)
-	}
-	// check that the hash of the witnesses is the expected
-	hFn.AssertSumIsEqual(c.WitnessesHash)
 }
 
 // checkProofs checks that the proofs are valid and that the number of valid
@@ -110,8 +62,6 @@ func (c AggregatorCircuit) checkProofs(api frontend.API) {
 }
 
 func (c AggregatorCircuit) Define(api frontend.API) error {
-	// check the hash of the witnesses
-	c.checkWitnessesHash(api)
 	// check the proofs
 	c.checkProofs(api)
 	return nil
