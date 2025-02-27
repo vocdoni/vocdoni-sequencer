@@ -7,15 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/recursion/groth16"
-	"github.com/iden3/go-iden3-crypto/mimc7"
-	"github.com/vocdoni/arbo"
-	"github.com/vocdoni/vocdoni-z-sandbox/circuits"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
-	"github.com/vocdoni/vocdoni-z-sandbox/crypto"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
@@ -116,10 +110,11 @@ func (p *AggregateProcessor) Stop() error {
 
 func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
 	// get process metadata
-	process, err := p.stg.Process(new(types.ProcessID).SetBytes(pid))
-	if err != nil {
-		return fmt.Errorf("failed to get process metadata: %w", err)
-	}
+	/*	process, err := p.stg.Process(new(types.ProcessID).SetBytes(pid))
+		if err != nil {
+			return fmt.Errorf("failed to get process metadata: %w", err)
+		}
+	*/
 
 	ballots, keys, err := p.stg.PullVerifiedBallots(pid, types.VotesPerBatch)
 	if err != nil {
@@ -131,11 +126,11 @@ func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
 	}
 
 	// get the shared parameters from the process description
-	processID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), pid.BigInt().MathBigInt())
-	censusRoot := arbo.BytesToBigInt(process.Census.CensusRoot)
-	ballotMode := circuits.BallotModeToCircuit(*process.BallotMode)
-	encryptionKey := circuits.EncryptionKeyToCircuit(*process.EncryptionKey)
-
+	/*	processID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), pid.BigInt().MathBigInt())
+		censusRoot := arbo.BytesToBigInt(process.Census.CensusRoot)
+		ballotMode := circuits.BallotModeToCircuit(*process.BallotMode)
+		encryptionKey := circuits.EncryptionKeyToCircuit(*process.EncryptionKey)
+	*/
 	// construct the proof array and the inputs hash
 	proofs := [types.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
 	hashInputs := []*big.Int{}
@@ -144,38 +139,21 @@ func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
 		if err != nil {
 			return fmt.Errorf("failed to transform proof for recursion: %w", err)
 		}
-		// TODO: DUMMY PROOFS
 		hashInputs = append(hashInputs, ballots[i].InputsHash)
 	}
 
 	// compute the inputs hash
-	inputsHash, err := mimc7.Hash(hashInputs, nil)
-	if err != nil {
-		return fmt.Errorf("failed to hash inputs: %w", err)
-	}
-
+	/*	inputsHash, err := mimc7.Hash(hashInputs, nil)
+		if err != nil {
+			return fmt.Errorf("failed to hash inputs: %w", err)
+		}
+	*/
 	// final assignments
 	assignment := aggregator.AggregatorCircuit{
-		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
-		ValidVotes: aggregator.EncodeProofsSelector(len(ballots)),
-		Process: circuits.Process[emulated.Element[sw_bn254.ScalarField]]{
-			ID:            emulated.ValueOf[sw_bn254.ScalarField](processID),
-			CensusRoot:    emulated.ValueOf[sw_bn254.ScalarField](censusRoot),
-			BallotMode:    ballotMode.BigIntsToEmulatedElementBN254(),
-			EncryptionKey: encryptionKey.BigIntsToEmulatedElementBN254(),
-		},
-		Proofs: proofs,
+		Proofs:      proofs,
+		ValidProofs: len(proofs),
 	}
-
-	// set voters final witness
-	for i := 0; i < len(ballots); i++ {
-		assignment.Votes[i] = circuits.EmulatedVote[sw_bn254.ScalarField]{
-			Nullifier:  emulated.ValueOf[sw_bn254.ScalarField](ballots[i].Nullifier),
-			Commitment: emulated.ValueOf[sw_bn254.ScalarField](ballots[i].Commitment),
-			Address:    emulated.ValueOf[sw_bn254.ScalarField](ballots[i].Address),
-			Ballot:     *ballots[i].EncryptedBallot.ToGnarkEmulatedBN254(),
-		}
-	}
+	//assignment.FillWithDummy()
 
 	// generate the zkSnark proof
 	proof, err := assignment.Prove()

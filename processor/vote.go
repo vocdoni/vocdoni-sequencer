@@ -147,6 +147,7 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 
 	// set the circuit assignment
 	assignment := voteverifier.VerifyVoteCircuit{
+		IsValid:    1,
 		InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputHash),
 		Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{
 			Address:    emulated.ValueOf[sw_bn254.ScalarField](address),

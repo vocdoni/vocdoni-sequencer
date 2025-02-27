@@ -31,7 +31,7 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 	*StateTransitionTestResults, *statetransition.Circuit, *statetransition.Circuit, error,
 ) {
 	// generate aggregator circuit and inputs
-	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters, false)
+	agInputs, agPlaceholder, agWitness, err := aggregatortest.AggregatorInputsForTest(processId, nValidVoters)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("aggregator inputs: %w", err)
 	}
@@ -81,28 +81,28 @@ func StateTransitionInputsForTest(processId []byte, nValidVoters int) (
 		agInputs.Process.EncryptionKey.Bytes())
 
 	if err := s.StartBatch(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("start batch: %w", err)
 	}
 	for _, v := range agInputs.Votes {
 		if err := s.AddVote(&v); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, fmt.Errorf("add vote: %w", err)
 		}
 	}
 	if err := s.EndBatch(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("end batch: %w", err)
 	}
-	witness, err := GenerateWitnesses(s)
+	witness, err := GenerateWitness(s)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("generate witness: %w", err)
 	}
 	witness.AggregatorProof = proofInBW6761
 
 	// create final placeholder
-	circuitPlaceholder := statetransition.CircuitPlaceholder()
+	circuitPlaceholder := CircuitPlaceholder()
 	// fix the vote verifier verification key
 	fixedVk, err := stdgroth16.ValueOfVerifyingKeyFixed[sw_bw6761.G1Affine, sw_bw6761.G2Affine, sw_bw6761.GTEl](agVk)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("aggregator vk: %w", err)
 	}
 	circuitPlaceholder.AggregatorVK = fixedVk
 	// // fill placeholder and witness with dummy circuits

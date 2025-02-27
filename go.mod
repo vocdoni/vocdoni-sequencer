@@ -2,11 +2,11 @@ module github.com/vocdoni/vocdoni-z-sandbox
 
 go 1.23.2
 
-replace github.com/consensys/gnark => github.com/lucasmenendez/gnark v0.5.2-0.20250131151401-59fb979789bd
+replace github.com/consensys/gnark => github.com/vocdoni/gnark-no-assert v0.0.0-20250227125709-fb44612f3d6d
 
 require (
 	github.com/consensys/gnark v0.11.1-0.20241210204654-a1e66c1d6b4d
-	github.com/consensys/gnark-crypto v0.16.0
+	github.com/consensys/gnark-crypto v0.16.1-0.20250217214835-5ed804970f85
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/frankban/quicktest v1.14.6
 	github.com/fxamacker/cbor/v2 v2.7.0
@@ -18,14 +18,14 @@ require (
 	github.com/iden3/go-rapidsnark/witness v0.0.6
 	github.com/pressly/goose/v3 v3.21.1
 	github.com/rs/zerolog v1.33.0
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/testcontainers/testcontainers-go/modules/compose v0.35.0
 	github.com/vocdoni/arbo v0.0.0-20241217102805-a7c0c5f8c359
 	github.com/vocdoni/circom2gnark v1.0.1-0.20241204100355-b93800bd88a4
 	github.com/vocdoni/contracts-z v0.0.0-20250124164653-964d70f468a8
-	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250210155802-bbf571616e03
+	github.com/vocdoni/gnark-crypto-primitives v0.0.2-0.20250224104040-dc49009f3e9e
 	go.vocdoni.io/dvote v1.10.2-0.20241024102542-c1ce6d744bc5
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 )
 
 require (
@@ -234,13 +234,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/term v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/genproto v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240515191416-fc5f0ca64291 // indirect

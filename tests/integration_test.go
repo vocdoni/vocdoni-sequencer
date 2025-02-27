@@ -67,10 +67,8 @@ func TestIntegration(t *testing.T) {
 
 	c.Run("create vote", func(c *qt.C) {
 		// load ballot proof artifacts
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		c.Assert(ballotproof.Artifacts.DownloadAll(ctx), qt.IsNil)
-		c.Assert(voteverifier.Artifacts.DownloadAll(ctx), qt.IsNil)
+		c.Assert(ballotproof.Artifacts.LoadAll(), qt.IsNil)
+		c.Assert(voteverifier.Artifacts.LoadAll(), qt.IsNil)
 
 		// create census with 10 participants
 		root, _, signers := createCensus(c, cli, 10)

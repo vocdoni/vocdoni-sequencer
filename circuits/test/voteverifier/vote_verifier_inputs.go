@@ -129,6 +129,7 @@ func VoteVerifierInputsForTest(votersData []VoterTestData, processId []byte) (
 			return VoteVerifierTestResults{}, voteverifier.VerifyVoteCircuit{}, nil, err
 		}
 		assignments = append(assignments, voteverifier.VerifyVoteCircuit{
+			IsValid:    1,
 			InputsHash: emulated.ValueOf[sw_bn254.ScalarField](inputsHash),
 			// circom inputs
 			Vote: circuits.EmulatedVote[sw_bn254.ScalarField]{

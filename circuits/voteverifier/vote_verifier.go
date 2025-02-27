@@ -69,6 +69,7 @@ import (
 )
 
 type VerifyVoteCircuit struct {
+	IsValid frontend.Variable `gnark:",public"`
 	// Single public input that is the hash of all the public inputs
 	InputsHash emulated.Element[sw_bn254.ScalarField] `gnark:",public"`
 	// The following variables are priv-public inputs, so should be hashed
@@ -150,7 +151,10 @@ func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 	if err := h.Write(circuits.VoteVerifierInputs(api, c.Process, c.Vote)...); err != nil {
 		circuits.FrontendError(api, "failed to hash inputs", err)
 	}
-	h.AssertSumIsEqual(c.InputsHash)
+	flag := h.AssertSumIsEqualFlag(c.InputsHash)
+	// if the inputs are valid, ensure that the result of the comparison is 1,
+	// otherwise, the result does not matter so force it to be 1
+	api.AssertIsEqual(api.Select(c.IsValid, flag, 1), 1)
 }
 
 // verifySigForAddress circuit method verifies the signature provided with the
@@ -162,7 +166,10 @@ func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 func (c VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	// check the signature of the circom inputs hash provided as Secp256k1
 	// emulated element
-	c.PublicKey.Verify(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
+	validSign := c.PublicKey.SignIsValid(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
+	// if the inputs are valid, ensure that thre result of the verification
+	// is 1, otherwise, the result does not matter so force it to be 1
+	api.AssertIsEqual(api.Select(c.IsValid, validSign, 1), 1)
 	// derive the address from the public key and check it matches the provided
 	// address
 	derivedAddr, err := address.DeriveAddress(api, c.PublicKey)
@@ -176,6 +183,9 @@ func (c VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to convert emulated address to var", err)
 	}
+	// if the proof is not valid force the derived address to be equal to the
+	// provided address
+	derivedAddr = api.Select(c.IsValid, derivedAddr, address)
 	api.AssertIsEqual(address, derivedAddr)
 }
 
@@ -190,12 +200,16 @@ func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create BN254 verifier", err)
 	}
-	if err := verifier.AssertProof(c.CircomVerificationKey, c.CircomProof,
+	validProof, err := verifier.ProofIsValid(c.CircomVerificationKey, c.CircomProof,
 		c.circomWitness(api), groth16.WithCompleteArithmetic(),
-	); err != nil {
+	)
+	if err != nil {
 		circuits.FrontendError(api, "failed to verify circom proof", err)
 		api.AssertIsEqual(0, 1)
 	}
+	// if the inputs are valid, ensure that the result of the verification is 1,
+	// otherwise, the result does not matter so force it to be 1
+	api.AssertIsEqual(api.Select(c.IsValid, validProof, 1), 1)
 }
 
 // verifyCensusProof circuit method verifies the census proof provided by the
@@ -223,9 +237,10 @@ func (c VerifyVoteCircuit) verifyCensusProof(api frontend.API) {
 	}
 	// verify the census proof using the derived address and the user weight
 	// provided as leaf key-value, adn the root and siblings provided
-	if err := arbo.CheckInclusionProof(api, utils.MiMCHasher, key, value, root, siblings); err != nil {
-		circuits.FrontendError(api, "failed to check census proof", err)
-	}
+	flag := arbo.CheckInclusionProofFlag(api, utils.MiMCHasher, key, value, root, siblings)
+	// if the inputs are valid, ensure that the result of the verification is 1,
+	// otherwise, the result does not matter so force it to be 1
+	api.AssertIsEqual(api.Select(c.IsValid, flag, 1), 1)
 }
 
 func (c VerifyVoteCircuit) Define(api frontend.API) error {
