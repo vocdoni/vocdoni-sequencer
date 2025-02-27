@@ -32,3 +32,16 @@ func TestStateTransitionCircuit(t *testing.T) {
 	)
 	c.Logf("proving took %s", time.Since(now).String())
 }
+
+func TestFullIntegrationExportSolidity(t *testing.T) {
+	c := qt.New(t)
+	// inputs generation
+	now := time.Now()
+	processID := util.RandomBytes(20)
+	_, placeholder, assignments, err := StateTransitionInputsForTest(processID, 3)
+	c.Assert(err, qt.IsNil)
+	c.Logf("inputs generation took %s", time.Since(now).String())
+	CircuitExportSolidity(t,
+		placeholder,
+		assignments)
+}
