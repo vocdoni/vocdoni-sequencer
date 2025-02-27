@@ -166,10 +166,10 @@ func (c VerifyVoteCircuit) checkInputsHash(api frontend.API) {
 func (c VerifyVoteCircuit) verifySigForAddress(api frontend.API) {
 	// check the signature of the circom inputs hash provided as Secp256k1
 	// emulated element
-	flag := c.PublicKey.VerifyFlag(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
+	validSign := c.PublicKey.SignIsValid(api, sw_emulated.GetCurveParams[emulated.Secp256k1Fp](), &c.Msg, &c.Signature)
 	// if the inputs are valid, ensure that thre result of the verification
 	// is 1, otherwise, the result does not matter so force it to be 1
-	api.AssertIsEqual(api.Select(c.IsValid, flag, 1), 1)
+	api.AssertIsEqual(api.Select(c.IsValid, validSign, 1), 1)
 	// derive the address from the public key and check it matches the provided
 	// address
 	derivedAddr, err := address.DeriveAddress(api, c.PublicKey)
@@ -200,7 +200,7 @@ func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	if err != nil {
 		circuits.FrontendError(api, "failed to create BN254 verifier", err)
 	}
-	flag, err := verifier.AssertProofFlag(c.CircomVerificationKey, c.CircomProof,
+	validProof, err := verifier.ProofIsValid(c.CircomVerificationKey, c.CircomProof,
 		c.circomWitness(api), groth16.WithCompleteArithmetic(),
 	)
 	if err != nil {
@@ -209,7 +209,7 @@ func (c VerifyVoteCircuit) verifyCircomProof(api frontend.API) {
 	}
 	// if the inputs are valid, ensure that the result of the verification is 1,
 	// otherwise, the result does not matter so force it to be 1
-	api.AssertIsEqual(api.Select(c.IsValid, flag, 1), 1)
+	api.AssertIsEqual(api.Select(c.IsValid, validProof, 1), 1)
 }
 
 // verifyCensusProof circuit method verifies the census proof provided by the
