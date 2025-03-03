@@ -1,28 +1,8 @@
 // aggregator package contains the Gnark circuit defiinition that aggregates
 // some votes and proves the validity of the aggregation. The circuit checks
 // every single verification proof generating a single proof for the whole
-// aggregation. Every voter proof should use the same values for the following
-// inputs:
-//   - MaxCount
-//   - ForceUniqueness
-//   - MaxValue
-//   - MinValue
-//   - MaxTotalCost
-//   - MinTotalCost
-//   - CostExp
-//   - CostFromWeight
-//   - EncryptionPubKey
-//   - ProcessId
-//   - CensusRoot
-//
-// All these values are common for the same process.
-//
-// The circuit also checks the other inputs that are unique for each voter:
-//   - Nullifier
-//   - Commitment
-//   - Address
-//   - Ballot
-//   - VerifyProof (generated with the VerifyVoteCircuit)
+// aggregation. It also checks that the number of valid votes and that the
+// hash of the witnesses is the expected.
 package aggregator
 
 import (
@@ -35,11 +15,21 @@ import (
 type AggregatorCircuit struct {
 	ValidProofs     frontend.Variable `gnark:",public"`
 	Proofs          [circuits.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
-	Witnesses       [circuits.VotesPerBatch]groth16.Witness[sw_bls12377.ScalarField]
+	Witnesses       [circuits.VotesPerBatch]groth16.Witness[sw_bls12377.ScalarField]                 `gnark:",public"`
 	VerificationKey groth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT] `gnark:"-"`
 }
 
-func (c AggregatorCircuit) Define(api frontend.API) error {
+// checkProofs checks that the proofs are valid and that the number of valid
+// proofs is the expected. The verification of the proofs is done using the
+// provided verification key and the public inputs of the witnesses. The number
+// of valid proofs is calculated by counting the number of valid votes. A vote
+// is considered valid if the first limb of the first public input in the
+// witness is 1, otherwise it is considered invalid. The number of valid votes
+// is calculated by adding the result of the AND operation between the last
+// valid vote and the current vote. The number of valid votes is the expected
+// number of valid proofs. Only the first n proofs can be valid, so the
+// counting stops after the first invalid proof.
+func (c AggregatorCircuit) checkProofs(api frontend.API) {
 	// initialize the verifier of the BLS12-377 curve
 	verifier, err := groth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
@@ -69,5 +59,10 @@ func (c AggregatorCircuit) Define(api frontend.API) error {
 	}
 	// check that the number of valid votes is the expected
 	api.AssertIsEqual(c.ValidProofs, validVotes)
+}
+
+func (c AggregatorCircuit) Define(api frontend.API) error {
+	// check the proofs
+	c.checkProofs(api)
 	return nil
 }
