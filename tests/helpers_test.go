@@ -76,7 +76,7 @@ func NewTestService(t *testing.T, ctx context.Context) (*service.APIService, *st
 	kv := memdb.New()
 	stg := storage.New(kv)
 
-	vp := service.NewProcessor(stg, time.Second*10)
+	vp := service.NewSequencer(stg, time.Second*10)
 	if err := vp.Start(ctx); err != nil {
 		log.Fatal(err)
 	}
