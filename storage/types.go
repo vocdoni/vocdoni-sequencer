@@ -26,10 +26,11 @@ type EncryptionKeys struct {
 type VerifiedBallot struct {
 	ProcessID       types.HexBytes `json:"processId"`
 	VoterWeight     *big.Int       `json:"voterWeight"`
-	Nullifier       types.HexBytes `json:"nullifier"`
-	Commitment      types.HexBytes `json:"commitment"`
+	Nullifier       *big.Int       `json:"nullifier"`
+	Commitment      *big.Int       `json:"commitment"`
 	EncryptedBallot elgamal.Ballot `json:"encryptedBallot"`
-	Address         types.HexBytes `json:"address"`
+	Address         *big.Int       `json:"address"`
+	InputsHash      *big.Int       `json:"inputsHash"`
 	Proof           groth16.Proof  `json:"proof"`
 }
 
@@ -59,13 +60,13 @@ func (b *Ballot) Valid() bool {
 }
 
 type AggregatorBallotBatch struct {
-	ProcessID types.HexBytes     `json:"processId"`
-	Proof     groth16.Proof      `json:"proof"`
-	Ballots   []AggregatorBallot `json:"ballots"`
+	ProcessID types.HexBytes      `json:"processId"`
+	Proof     groth16.Proof       `json:"proof"`
+	Ballots   []*AggregatorBallot `json:"ballots"`
 }
 type AggregatorBallot struct {
-	Nullifier       types.HexBytes     `json:"nullifiers"`
-	Commitment      types.HexBytes     `json:"commitments"`
-	Address         types.HexBytes     `json:"address"`
-	EncryptedBallot elgamal.Ciphertext `json:"encryptedBallots"`
+	Nullifier       *big.Int       `json:"nullifiers"`
+	Commitment      *big.Int       `json:"commitments"`
+	Address         *big.Int       `json:"address"`
+	EncryptedBallot elgamal.Ballot `json:"encryptedBallot"`
 }
