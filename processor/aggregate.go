@@ -1,45 +1,26 @@
 package processor
 
 import (
-	"context"
 	"fmt"
-	"math/big"
-	"sync"
 	"time"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
-	"github.com/consensys/gnark/std/recursion/groth16"
+	"github.com/consensys/gnark/std/math/emulated"
+	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/vocdoni/vocdoni-z-sandbox/circuits/aggregator"
 	"github.com/vocdoni/vocdoni-z-sandbox/log"
 	"github.com/vocdoni/vocdoni-z-sandbox/storage"
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-// AggregateProcessor is a processor that takes verified ballots and aggregates	them into a single proof.
-type AggregateProcessor struct {
-	stg      *storage.Storage
-	ctx      context.Context
-	cancel   context.CancelFunc
-	pids     map[string]time.Time
-	pidsLock sync.RWMutex
-
-	//maxTimeWindow is the maximum time window to wait for a batch to be processed.
-	maxTimeWindow time.Duration
-}
-
-// NewAggregateProcessor creates a new aggregate processor.
-func NewAggregateProcessor(stg *storage.Storage, batchTimeWindow time.Duration) *AggregateProcessor {
-	return &AggregateProcessor{
-		stg:           stg,
-		maxTimeWindow: batchTimeWindow,
-		pids:          make(map[string]time.Time),
-	}
-}
-
 // AddProcessID adds a process ID to the processor. Only those ballots which
 // belong to the process IDs added to the processor will be processed.
 // If the process ID is already added, it will be ignored.
-func (p *AggregateProcessor) AddProcessID(pid []byte) {
+func (p *Processor) AddProcessID(pid []byte) {
 	p.pidsLock.Lock()
 	defer p.pidsLock.Unlock()
 	if _, ok := p.pids[string(pid)]; ok {
@@ -48,16 +29,16 @@ func (p *AggregateProcessor) AddProcessID(pid []byte) {
 	p.pids[string(pid)] = time.Now()
 }
 
-// DelProcessID removes a process ID from the processor.
-func (p *AggregateProcessor) DelProcessID(pid []byte) {
+// DelProcessID removes a process ID from the processor. If the
+// process ID is not present, it will be ignored.
+func (p *Processor) DelProcessID(pid []byte) {
 	p.pidsLock.Lock()
 	defer p.pidsLock.Unlock()
 	delete(p.pids, string(pid))
 }
 
-// Start method starts the processor.
-func (p *AggregateProcessor) Start(ctx context.Context) error {
-	p.ctx, p.cancel = context.WithCancel(ctx)
+// startAggregateProcessor starts the aggregate processor.
+func (p *Processor) startAggregateProcessor() error {
 	ticker := time.NewTicker(time.Second * 10)
 
 	go func() {
@@ -78,8 +59,8 @@ func (p *AggregateProcessor) Start(ctx context.Context) error {
 				default:
 					continue
 				}
-				log.Debugw("new batch to process", "processID", pid, "lastUpdate", lastUpdate.String())
-				if err := p.ProcessBatch([]byte(pid)); err != nil {
+				log.Debugw("new batch to aggregate", "processID", pid, "lastUpdate", lastUpdate.String())
+				if err := p.aggregateBatch([]byte(pid)); err != nil {
 					log.Errorw(err, "failed to process batch")
 					continue
 				}
@@ -101,21 +82,7 @@ func (p *AggregateProcessor) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop method cancels the context of the vote processor, stopping the
-// processing of ballots.
-func (p *AggregateProcessor) Stop() error {
-	p.cancel()
-	return nil
-}
-
-func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
-	// get process metadata
-	/*	process, err := p.stg.Process(new(types.ProcessID).SetBytes(pid))
-		if err != nil {
-			return fmt.Errorf("failed to get process metadata: %w", err)
-		}
-	*/
-
+func (p *Processor) aggregateBatch(pid types.HexBytes) error {
 	ballots, keys, err := p.stg.PullVerifiedBallots(pid, types.VotesPerBatch)
 	if err != nil {
 		return fmt.Errorf("failed to pull verified ballots: %w", err)
@@ -125,38 +92,45 @@ func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
 		return nil
 	}
 
-	// get the shared parameters from the process description
-	/*	processID := crypto.BigToFF(circuits.BallotProofCurve.ScalarField(), pid.BigInt().MathBigInt())
-		censusRoot := arbo.BytesToBigInt(process.Census.CensusRoot)
-		ballotMode := circuits.BallotModeToCircuit(*process.BallotMode)
-		encryptionKey := circuits.EncryptionKeyToCircuit(*process.EncryptionKey)
-	*/
-	// construct the proof array and the inputs hash
-	proofs := [types.VotesPerBatch]groth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
-	hashInputs := []*big.Int{}
+	proofs := [types.VotesPerBatch]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]{}
+	proofsInputHash := [types.VotesPerBatch]emulated.Element[sw_bn254.ScalarField]{}
+	aggBallots := []*storage.AggregatorBallot{}
 	for i := 0; i < len(ballots); i++ {
-		proofs[i], err = groth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ballots[i].Proof)
+		proofs[i], err = stdgroth16.ValueOfProof[sw_bls12377.G1Affine, sw_bls12377.G2Affine](ballots[i].Proof)
 		if err != nil {
 			return fmt.Errorf("failed to transform proof for recursion: %w", err)
 		}
-		hashInputs = append(hashInputs, ballots[i].InputsHash)
+		proofsInputHash[i] = emulated.ValueOf[sw_bn254.ScalarField](ballots[i].InputsHash)
+		aggBallots = append(aggBallots, &storage.AggregatorBallot{
+			Nullifier:       ballots[i].Nullifier,
+			Commitment:      ballots[i].Commitment,
+			Address:         ballots[i].Address,
+			EncryptedBallot: ballots[i].EncryptedBallot,
+		})
+
 	}
 
-	// compute the inputs hash
-	/*	inputsHash, err := mimc7.Hash(hashInputs, nil)
-		if err != nil {
-			return fmt.Errorf("failed to hash inputs: %w", err)
-		}
-	*/
 	// final assignments
 	assignment := aggregator.AggregatorCircuit{
-		Proofs:      proofs,
-		ValidProofs: len(proofs),
+		ValidProofs:        len(ballots),
+		Proofs:             proofs,
+		ProofsInputsHashes: proofsInputHash,
 	}
-	//assignment.FillWithDummy()
 
-	// generate the zkSnark proof
-	proof, err := assignment.Prove()
+	// fill the remaining empty ballot slots with dummy proofs
+	if len(ballots) < types.VotesPerBatch {
+		if err := assignment.FillWithDummy(p.voteCcs, p.voteProvingKey, p.ballotVerifyingKeyCircomJSON, len(ballots)); err != nil {
+			return fmt.Errorf("failed to fill with dummy proofs: %w", err)
+		}
+	}
+
+	// calculate the witness with the assignment
+	witness, err := frontend.NewWitness(assignment, ecc.BW6_761.ScalarField())
+	if err != nil {
+		return fmt.Errorf("failed to create witness: %w", err)
+	}
+	// generate the final proof
+	proof, err := groth16.Prove(p.aggregateCcs, p.aggregateProvingKey, witness)
 	if err != nil {
 		return fmt.Errorf("failed to generate aggregate proof: %w", err)
 	}
@@ -165,7 +139,7 @@ func (p *AggregateProcessor) ProcessBatch(pid types.HexBytes) error {
 	abb := storage.AggregatorBallotBatch{
 		ProcessID: pid,
 		Proof:     proof,
-		Ballots:   nil, // TODO
+		Ballots:   aggBallots,
 	}
 
 	if err := p.stg.PushBallotBatch(&abb); err != nil {

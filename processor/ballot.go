@@ -1,11 +1,13 @@
 package processor
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/math/emulated"
 	gnarkecdsa "github.com/consensys/gnark/std/signature/ecdsa"
@@ -21,28 +23,11 @@ import (
 	"github.com/vocdoni/vocdoni-z-sandbox/types"
 )
 
-// VoteProcessor is a processor that processes ballots, generating proofs of
-// their validity.
-type VoteProcessor struct {
-	stg    *storage.Storage
-	ctx    context.Context
-	cancel context.CancelFunc
-}
-
-// NewVoteProcessor creates a new VoteProcessor instance with the given storage
-// instance.
-func NewVoteProcessor(stg *storage.Storage) *VoteProcessor {
-	return &VoteProcessor{
-		stg: stg,
-	}
-}
-
-// Start method starts the vote processor. It will process ballots in the
+// startBallotProcessor method starts the vote processor. It will process ballots in the
 // background. It iterates over the ballots available in the storage and
 // generates proofs of the validity of the ballots, storing them back in the
 // storage. It will stop processing ballots when the context is cancelled.
-func (p *VoteProcessor) Start(ctx context.Context) error {
-	p.ctx, p.cancel = context.WithCancel(ctx)
+func (p *Processor) startBallotProcessor() error {
 	ticker := time.NewTicker(time.Second)
 
 	go func() {
@@ -68,7 +53,7 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 			log.Debugw("new ballot to process", "address", ballot.Address.String())
 			startTime := time.Now()
 
-			verifiedBallot, err := p.ProcessBallot(ballot)
+			verifiedBallot, err := p.processBallot(ballot)
 			if err != nil {
 				log.Warnw("marking ballot as invalid", "address", ballot.Address.String(), "error", err.Error())
 				continue
@@ -83,18 +68,11 @@ func (p *VoteProcessor) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop method cancels the context of the vote processor, stopping the
-// processing of ballots.
-func (p *VoteProcessor) Stop() error {
-	p.cancel()
-	return nil
-}
-
-// ProcessBallot method processes a ballot, generating a proof of its validity.
+// processBallot method processes a ballot, generating a proof of its validity.
 // It gets the process information from the storage, transforms it to the
 // circuit types, and generates the proof using the gnark library. It returns
 // the verified ballot with the proof.
-func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallot, error) {
+func (p *Processor) processBallot(b *storage.Ballot) (*storage.VerifiedBallot, error) {
 	// check if the ballot is valid
 	if !b.Valid() {
 		return nil, fmt.Errorf("invalid ballot")
@@ -175,8 +153,13 @@ func (p *VoteProcessor) ProcessBallot(b *storage.Ballot) (*storage.VerifiedBallo
 		CircomProof: b.BallotProof,
 	}
 
+	// calculate the witness with the assignment
+	witness, err := frontend.NewWitness(assignment, ecc.BLS12_377.ScalarField())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create witness: %w", err)
+	}
 	// generate the final proof
-	proof, err := assignment.Prove()
+	proof, err := groth16.Prove(p.voteCcs, p.voteProvingKey, witness)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
